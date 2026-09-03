@@ -73,7 +73,7 @@ if [[ -z "$NM_TOOL" || ! -x "$NM_TOOL" ]]; then
   exit 2
 fi
 
-WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/mactician-gles-audit.XXXXXX")
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/tftmac-gles-audit.XXXXXX")
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 extract_exports() {

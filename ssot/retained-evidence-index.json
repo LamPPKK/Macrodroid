@@ -1,0 +1,24 @@
+{
+  "schema": 2,
+  "policy": "Decision relevance, not age. Preserve current playable baseline, package/runtime authority, promoted configuration evidence, current unresolved-failure evidence, and final native acceptance evidence. Superseded raw runs may be compacted only after their decision is represented durably.",
+  "protectedEvidence": [
+    "ssot/runtime-authority.json",
+    "ssot/storage-reclamation.json",
+    "Vendor/AndroidEmulator/SOURCE.json",
+    "ssot/TFTMAC_PERFORMANCE_LAB.sql",
+    "ssot/TFTMAC_ENGINEERING_MAP.sql"
+  ],
+  "rawPruningThisGate": "NONE_REQUIRED",
+  "reason": "The approved first cleanup does not require age-based deletion. The dominant abandoned storage target has been reclaimed; raw telemetry remains bounded by decision relevance and may be pruned later only when superseded evidence is compacted.",
+  "externalPrivateEvidence": [
+    {
+      "id": "capture-2026-08-31T22-30-26.086Z-8df607d7-a34a-4e2a-b00d-739aa3143200",
+      "classification": "PRIVATE_LOCAL_CAPTURE_METADATA_ONLY",
+      "databaseFileName": "TFTMAC_NATIVE_RUNTIME.sqlite",
+      "byteCount": 63897600,
+      "sha256": "c1ef9c9ffe591a297cb86660e3ccfea7e9aeb593f22100e4e732b2fc77d4ee77",
+      "retentionReason": "Current Build 8 automatic graphics-run evidence; raw database remains private and is not added to this repository.",
+      "rawDatabaseCommitted": false
+    }
+  ]
+}

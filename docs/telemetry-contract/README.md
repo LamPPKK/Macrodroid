@@ -1,13 +1,7 @@
-# Telemetry schema v2 contract
+# Historical telemetry schema v2 fixtures
 
-These JSON files are the canonical public wire examples for Mactician telemetry,
-including the legacy first-session event, the fresh activation snapshot, the
-anonymous daily-active heartbeat and per-session summary, and consented extended
-diagnostics.
-The Swift tests verify the encoded key sets and the private API repository keeps
-byte-identical copies for its HTTP contract tests. Run
-`scripts/verify-telemetry-contract.command` before a server or launcher release.
+These JSON files are retained only as historical contract fixtures from the retired launcher. They are not part of TFTMAC's current runtime telemetry path.
 
-Schema v2 intentionally contains no installation identifier, account identity,
-network address, host name, serial number, MAC address, or game logs. Unknown
-fields are rejected by the server.
+Current TFTMAC diagnostics are local-first and raw-first as documented in `docs/telemetry.md`. No remote telemetry service is required for current runtime or acceptance.
+
+The retained fixture schemas intentionally contain no installation identifier, account identity, network address, host name, serial number, MAC address, or game logs.

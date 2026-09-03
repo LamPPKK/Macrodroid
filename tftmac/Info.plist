@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>TFTMAC</string>
+    <key>CFBundleExecutable</key>
+    <string>TFTMAC</string>
+    <key>CFBundleIconFile</key>
+    <string>TFTMAC.icns</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.flashls1.tftmac</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>TFTMAC</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>2.3.0</string>
+    <key>CFBundleVersion</key>
+    <string>8</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.games</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>15.0</string>
+    <key>LSSupportsGameMode</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>TFTMAC uses the Android emulator runtime stored on MAC MINI M4.</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>TFTMAC. Teamfight Tactics and Riot Games are property of their respective owners.</string>
+</dict>
+</plist>

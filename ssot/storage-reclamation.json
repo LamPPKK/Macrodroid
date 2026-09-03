@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "observedAt": "2026-08-30T04:06:34.933Z",
+  "buildRoot": "/Volumes/MAC MINI M4/TFTMAC/Build",
+  "reclaimRoot": "/Volumes/MAC MINI M4/TFTMAC/Build.reclaiming",
+  "runtimeRoot": "/Volumes/MAC MINI M4/TFTMAC/Runtime",
+  "quiescence": {
+    "liveBuildUsers": []
+  },
+  "buildBytesBefore": 141198893056,
+  "runtimeBytesBefore": 31927107584,
+  "dfBefore": "Filesystem   1024-blocks      Used Available Capacity  Mounted on\n/dev/disk7s1   999678976 796053660 203420880    80%    /Volumes/MAC MINI M4",
+  "state": "COMPLETE",
+  "completedAt": "2026-08-30T04:08:07.738Z",
+  "buildBytesAfter": 0,
+  "reclaimedBytes": 141198893056,
+  "runtimeBytesAfter": 31926767616,
+  "runtimeAllocatedByteDelta": -339968,
+  "runtimeIntegrity": {
+    "emulatorPresent": true,
+    "adbPresent": true,
+    "avdPresent": true,
+    "installedProtoSHA256": "1d62c6bcad5f06621f90ec2bf26c661ba769ccd0f1416b5314d25a68e04eee5f",
+    "frozenProtoMatch": true
+  },
+  "dfAfter": "Filesystem   1024-blocks      Used Available Capacity  Mounted on\n/dev/disk7s1   999678976 658048080 341426460    66%    /Volumes/MAC MINI M4",
+  "result": "PASS"
+}

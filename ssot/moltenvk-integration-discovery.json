@@ -1,0 +1,21 @@
+{
+  "schema": 2,
+  "observedAt": "2026-08-28T04:03:25.795Z",
+  "branchAuthority": "emu-master-dev",
+  "authorityType": "resolved-manifest-prebuilt",
+  "authorityPath": "prebuilts/android-emulator",
+  "authorityCommit": "fb26612eb84576adb974fe7f18a49d263072116f",
+  "qemuCommit": "ae9d18d2b6261179fbd57fffec720a04f7bfb053",
+  "qemuEvidencePath": "external/qemu/android/build/cmake/config/emu-vulkan-config.cmake",
+  "evidence": [
+    {
+      "line": 58,
+      "text": "\"${PREBUILT_ROOT}/icds/libMoltenVK.dylib>lib64/vulkan/libMoltenVK.dylib\""
+    },
+    {
+      "line": 59,
+      "text": "\"${PREBUILT_ROOT}/icds/MoltenVK_icd.json>lib64/vulkan/MoltenVK_icd.json\""
+    }
+  ],
+  "pass": true
+}

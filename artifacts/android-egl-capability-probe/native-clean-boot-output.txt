@@ -1,4 +1,4 @@
-Mactician native gfxstream GLES capability probe
+Retired-donor native gfxstream GLES capability probe
 UTC date: 2026-08-11
 Emulator: 37.1.11.0 build 15917651
 AVD: TftPBE, cold boot, GuestAngle disabled, host GPU

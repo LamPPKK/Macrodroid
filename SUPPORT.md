@@ -1,24 +1,17 @@
 # Support
 
-Mactician is maintained on a best-effort basis without a service-level
-agreement. Support focuses on the latest Mactician release. TFT and Android
-Emulator updates can temporarily break compatibility with a pinned release.
+TFTMAC is maintained on a best-effort basis for the current Apple Silicon build and stock Android runtime.
 
-Use [GitHub Issues](https://github.com/tweet9ra/mactician/issues) for reproducible
-Mactician bugs and feature requests. Personal
-messages are not a support channel, and feature requests are not guaranteed to
-be implemented.
+For a useful bug report include:
 
-A useful bug report includes:
-
-- launcher version and build number;
-- macOS version, Mac model, and Apple chip;
-- whether this was a fresh install, update, or existing installation;
-- selected resolution, UI scale, RAM, vCPU, and game language;
+- TFTMAC commit/version;
+- macOS version and Mac model/chip;
+- whether the stock emulator and AVD already existed;
+- package version and installer authority when relevant;
 - expected and actual behavior;
 - minimal reproduction steps;
-- a small, sanitized diagnostic excerpt.
+- a small sanitized diagnostic excerpt.
 
-Do not publish credentials, tokens, private Android data, complete game logs,
-full AVD images, or unfiltered crash memory. For security-sensitive reports,
-follow [SECURITY.md](SECURITY.md) instead of opening a public issue.
+Do not publish credentials, tokens, Google or Riot account identifiers, private Android data, full AVD images, unfiltered game logs, or crash-memory dumps.
+
+Security-sensitive reports should follow [SECURITY.md](SECURITY.md).

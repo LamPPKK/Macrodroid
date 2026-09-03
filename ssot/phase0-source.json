@@ -1,0 +1,31 @@
+{
+  "schema": 2,
+  "status": "RETIRED_SOURCE_BUILD_EVIDENCE",
+  "observedAt": "2026-08-28T04:03:27.389Z",
+  "aemuBranch": "emu-master-dev",
+  "manifestSHA256": "28865cd8a162178ba462b296f5714b6b7b6916e0cafcddfc0c5e44aa03f8e8d3",
+  "commits": {
+    "qemu": "ae9d18d2b6261179fbd57fffec720a04f7bfb053",
+    "aemu": "3c1ced8a369417db591eb7cd083af5bb2c317975",
+    "gfxstream": "d047a57228332d995d36600792fa9ccc26cf8ae6",
+    "angle": "901e32aa9923b05c3a2af846f8a28fc79c93d0be",
+    "moltenvkPrebuilt": "fb26612eb84576adb974fe7f18a49d263072116f"
+  },
+  "guestAnglePass": true,
+  "moltenVKIntegration": {
+    "authority": "prebuilts/android-emulator",
+    "commit": "fb26612eb84576adb974fe7f18a49d263072116f"
+  },
+  "moltenVKReference": {
+    "tag": "v1.4.2",
+    "commit": "db66022459ffb663aa2b50f6b018bc2e124f5edf"
+  },
+  "generality": {
+    "glesCTSTag": "opengl-es-cts-3.2.14.1",
+    "glesCTSCommit": "067e8832315e79817ede1c4863804e440f5d1c80",
+    "vulkanCTSTag": "vulkan-cts-1.4.6.1",
+    "vulkanCTSCommit": "5c8aae22885448d70a2873e94a93b24b49505c32",
+    "vulkanSamplesCommit": "89dd3af22d41f9244eeab6e0650460112285c0e1"
+  },
+  "executionPolicy": "Historical source authority only. Normal TFTMAC operation must not recreate or execute the retired source-build laboratory."
+}

@@ -1,140 +1,79 @@
-# Building
+# Building TFTMAC
 
 ## Requirements
 
-- Apple Silicon Mac with macOS 12.0 or later
-- Xcode Command Line Tools (`xcrun swiftc`, `xcrun clang`, `codesign`, `plutil`)
-- zsh, `jq`, `rg`, `curl`, `tar`, `zip`, `unzip`, `shasum`, and `xmllint`
-- Node.js only for `scripts/login-tft-from-keychain.command`
-- Four exact unmodified TFT `18.1-5392842` APK splits in a private local
-  directory; names, sizes, and hashes are in
-  `launcher/Resources/release-manifest.json`
+- Apple Silicon Mac
+- macOS 15 or later
+- Xcode 26.6
+- zsh
+- Node.js 24
+- `jq` and `ripgrep`
 
-Production binaries target `arm64-apple-macosx12.0`. Unit-test binaries target
-the current macOS host architecture so CI can run on either Intel or Apple
-Silicon runners; production and release targets remain Apple Silicon-only.
+The working stock Android runtime is external to the repository and is not rebuilt during normal native application compilation.
 
-## Sparkle preparation
+## Build
 
-`scripts/prepare-sparkle.command` downloads Sparkle 2.9.4 from its upstream
-GitHub release into `launcher/.build/`, verifies SHA-256
-`ce89daf967db1e1893ed3ebd67575ed82d3902563e3191ca92aaec9164fbdef9`,
-validates its signature, and stages the framework and release tools. A valid
-cached copy is reused.
+Repository/CI verification does not require an installed app, external runtime,
+credentials, or signing identity. For an intentional local signed package,
+create or repair TFTMAC's stable local-only signing identity first:
 
 ```sh
-./scripts/prepare-sparkle.command
+/bin/zsh scripts/ensure-local-signing-identity.command
 ```
 
-## Fast validation
+The identity remains in the current user's login Keychain so macOS can retain
+the removable-volume grant across changed local builds. It is not a Developer
+ID and is not suitable for public distribution.
+
+Current-host status (2026-08-31): the identity is absent, the installed Build 8
+hashes still match their historical release receipt, and deep/strict trust
+verification reports `CSSMERR_TP_NOT_TRUSTED`. Do not rebuild or re-sign the
+playable app merely to make source verification pass.
 
 ```sh
-./scripts/verify-repository.command
-./scripts/test-mactician.command
+/bin/zsh scripts/build-native-app.command
 ```
 
-Together these commands check repository policy, shell syntax, plist/strings
-and JSON syntax, Markdown links, executable bits, version consistency, C
-syntax, unit tests, and full Swift typechecking. The test script also verifies
-runtime shutdown classification, update safeguards, the scoped login repaint
-repair, English/Russian UI resources, resource selectors, overlay preparation, and
-state serialization.
+The Release application is produced under the ignored native build directory,
+copied to `dist/TFTMAC.app`, and signed as `TFTMAC Local Code Signing`.
 
-Equivalent focused checks include:
+## Test
 
 ```sh
-find . -type f \( -name '*.command' -o -name '*.sh' \) -print0 \
-  | xargs -0 -n 1 zsh -o NO_BG_NICE -n
-find launcher -type f \( -name '*.plist' -o -name '*.strings' \) -print0 \
-  | xargs -0 -n 1 plutil -lint
-find . -type f -name '*.json' -print0 | xargs -0 -n 1 jq empty
-xcrun clang -target arm64-apple-macosx12.0 -fsyntax-only launcher/EmulatorHost/main.c
+/bin/zsh scripts/test-native-app.command
 ```
 
-## Local ad-hoc build
+The current native tests cover the Gate 1 viewport/input mapping contract and run on Apple Silicon macOS.
+
+## Full validation
 
 ```sh
-PROJECT_DIR="$PWD"
-TFT_GAME_APK_DIR="$PROJECT_DIR/private/tft-apks" \
-  ./scripts/build-mactician.command
+/bin/zsh scripts/verify-tftmac.command
 ```
 
-The builder verifies all APK hashes, compiles the SwiftUI app and emulator host,
-copies the pinned Sparkle framework and runtime template, rejects embedded
-developer paths, signs nested code from the inside out with an ad-hoc identity,
-verifies the app, and creates the DMG in `dist/`.
-
-The resulting DMG embeds the four verified game APK splits.
-
-## Provisioning integration test
-
-Build the app first, close every Android Emulator process, then run:
+Local installed/runtime/signing validation is separate and currently expected
+to report the signing blocker:
 
 ```sh
-./scripts/integration-test-mactician.command
+/bin/zsh scripts/verify-installed-runtime.command
 ```
 
-The script downloads and verifies the three large Android fixtures, compiles
-`InstallerIntegration.swift`, provisions a temporary SDK/AVD, and validates the
-ready state. It is deliberately excluded from normal pull-request CI.
+Validation checks:
 
-## Optional Developer ID and notarized build
+- TFTMAC bundle identity;
+- frozen EmulatorController protocol provenance/hash;
+- pinned Swift package graph;
+- retained script and JavaScript syntax;
+- performance-lab and engineering-map self-tests;
+- native Release build;
+- native tests;
+- Git whitespace integrity;
+- no tracked private runtime artifacts.
 
-After the `mactician-notary` Keychain profile and a single Developer ID
-Application identity are installed, build a public release with one command:
+A transient `TFTMAC_FORBIDDEN_TOKEN` may be supplied for the final ownership-completeness scan. The token itself must not be committed merely to test for its absence.
 
-```sh
-./scripts/build-mactician-release.command
-```
+## Runtime data
 
-The wrapper uses `private/tft-apks` by default, validates the notarization
-profile before compiling, and automatically selects the installed Developer ID
-Application identity. Override `TFT_GAME_APK_DIR`,
-`MACTICIAN_NOTARY_PROFILE`, or `MACTICIAN_CODESIGN_IDENTITY` only when the
-machine has a non-default setup.
+Do not commit SDK packages, AVD userdata, Google/Riot credentials, tokens, APKs, runtime disks, logs containing sensitive data, or generated native build products.
 
-The lower-level equivalent is:
-
-```sh
-PROJECT_DIR="$PWD"
-: "${MACTICIAN_CODESIGN_IDENTITY:?Set MACTICIAN_CODESIGN_IDENTITY in the environment}"
-: "${MACTICIAN_NOTARY_PROFILE:?Set MACTICIAN_NOTARY_PROFILE in the environment}"
-TFT_GAME_APK_DIR="$PROJECT_DIR/private/tft-apks" \
-  ./scripts/build-mactician.command
-```
-
-The script requires a Developer ID Application identity when either public
-release setting is present. It enables hardened runtime, uses secure timestamps,
-submits the DMG, waits for acceptance, staples and validates the ticket, and
-assesses the distribution.
-
-## Environment variables
-
-| Variable | Purpose |
-| --- | --- |
-| `TFT_GAME_APK_DIR` | Required build input directory containing four pinned APK splits |
-| `MACTICIAN_CODESIGN_IDENTITY` | Developer ID Application identity; default `-` is ad hoc |
-| `MACTICIAN_NOTARY_PROFILE` | notarytool Keychain profile for a public release |
-| `TFT_ANDROID_SDK_ROOT` / `TFT_ROOT_SDK` | Explicit Android SDK for source launch scripts |
-| `ANDROID_SDK_ROOT`, `ANDROID_HOME` | Standard Android SDK discovery fallbacks |
-| `TFT_ADB`, `TFT_EMULATOR` | Explicit tool binaries |
-| `TFT_AVD_HOME`, `TFT_ROOT_AVD_HOME`, `TFT_AVD_NAME` | External AVD selection |
-| `TFT_JQ` | Non-standard `jq` path |
-| `MACTICIAN_KEYCHAIN_SERVICE` | Optional login-helper Keychain service |
-| `MACTICIAN_SPARKLE_ACCOUNT` | Sparkle Ed25519 Keychain account for appcast generation |
-| `MACTICIAN_UPDATE_*` | Release URLs, SSH destination, remote root, work directory, and inputs |
-
-## Common failures
-
-- **Sparkle download/hash failure:** remove only the partial cache file and
-  retry on a trusted network; do not change the pinned hash to match a download.
-- **Missing APK input:** set `TFT_GAME_APK_DIR`; the repository intentionally
-  does not contain game packages.
-- **APK mismatch:** use the exact pinned release or update the manifest only as
-  part of a separately verified game-version change.
-- **No signing identity:** use the default ad-hoc mode for local testing or
-  install the intended Developer ID identity and set its exact reported name.
-- **Module-cache or stale output issue:** remove ignored `launcher/.build/` or
-  `dist/` output, then rerun; source files are unaffected.
-- **Integration test refuses to start:** close other Emulator processes to avoid
-  shared host/ADB state.
+The normal runtime root is `/Volumes/MAC MINI M4/TFTMAC/Runtime`. The application must not silently create bulk runtime/build state on the internal disk when the required external runtime authority is unavailable.

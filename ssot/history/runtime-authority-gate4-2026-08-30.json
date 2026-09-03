@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "observedAt": "2026-08-30T03:59:46Z",
+  "gate": "Gate 4 stock-runtime independence",
+  "result": "PASS",
+  "runtimeRoot": "/Volumes/MAC MINI M4/TFTMAC/Runtime",
+  "sdkRoot": "/Volumes/MAC MINI M4/TFTMAC/Runtime/sdk",
+  "emulator": {
+    "version": "Android emulator version 37.1.11.0",
+    "buildId": "15917651",
+    "avd": "TFT_Ultra_Tablet",
+    "adbSerial": "emulator-5592",
+    "adbServerPort": 5040,
+    "consolePort": 5592
+  },
+  "package": {
+    "name": "com.riotgames.league.teamfighttactics",
+    "versionName": "18.1-5402721",
+    "versionCode": "8402721",
+    "installer": "com.android.vending"
+  },
+  "emulatorController": {
+    "installedPath": "/Volumes/MAC MINI M4/TFTMAC/Runtime/sdk/emulator/lib/emulator_controller.proto",
+    "vendoredPath": "Vendor/AndroidEmulator/emulator_controller.proto",
+    "sha256": "1d62c6bcad5f06621f90ec2bf26c661ba769ccd0f1416b5314d25a68e04eee5f",
+    "byteEquality": true
+  },
+  "buildTreeRequiredByLiveRuntime": false,
+  "retiredApplicationRequired": false,
+  "processAudit": {
+    "operation": "tftmac-gate4-process-audit-20260829",
+    "duplicateRisk": {
+      "tftmacApps": 1,
+      "emulators": 1,
+      "samplers": 1,
+      "adbServers": 1
+    },
+    "buildTreeProcessReferences": 0
+  },
+  "evidenceOperations": [
+    "tftmac-gate4-runtime-inventory-20260829",
+    "tftmac-gate4-start-baseline-20260829",
+    "tftmac-gate4-package-state-20260829",
+    "tftmac-gate4-proto-equality-20260829",
+    "tftmac-gate4-process-audit-20260829",
+    "tftmac-gate4-clean-stop-20260829"
+  ],
+  "historicalNotice": "Exact archived receipt. Its 5040/5592 service-context identity is superseded and must not be used as current launch authority."
+}

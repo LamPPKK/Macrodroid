@@ -1,27 +1,18 @@
 ## Summary
 
-Describe the problem, the change, and its scope.
-
-## Motivation
-
-Explain why this change is needed and why this scope is appropriate.
+Describe the problem, the change, and its exact scope.
 
 ## Validation
 
-- [ ] `./scripts/verify-repository.command`
-- [ ] `./scripts/test-mactician.command`
-- [ ] Relevant manual or integration checks are described below, or are not applicable.
-
-## Screenshots
-
-Attach before/after screenshots for UI changes, or write “Not applicable.”
+- [ ] `/bin/zsh scripts/verify-tftmac.command`
+- [ ] Relevant runtime/manual acceptance is described below or is not applicable.
 
 ## Contributor checklist
 
-- [ ] I did not add game APKs, Android images, private runtime state, credentials, logs, or generated build products.
-- [ ] Developer-facing output and documentation are in English.
-- [ ] New machine paths are resolved from environment variables, standard locations, or `PATH`.
-- [ ] Behavior changes include tests or a concrete reason why a test is impractical.
-- [ ] Performance claims include reproducible evidence and avoid overstating noisy results.
-- [ ] Documentation, changelog, and release notes are updated when applicable.
-- [ ] Existing rollback, Repair, Reset, and fail-closed behavior is preserved or the deliberate change is explained.
+- [ ] I did not add Riot APKs, Android images, credentials, private runtime state, tokens, logs, or generated build products.
+- [ ] The stock Google Android Emulator remains the normal runtime authority.
+- [ ] The change does not add a private game feed, APK repackaging, re-signing, or Riot binary patching.
+- [ ] Behavior changes include tests or a concrete reason a test is impractical.
+- [ ] Performance claims include reproducible evidence.
+- [ ] Documentation is updated when behavior or commands change.
+- [ ] Rollback and fail-closed behavior is preserved or the deliberate change is explained.

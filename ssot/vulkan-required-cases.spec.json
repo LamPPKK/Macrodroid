@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "status": "SELECTION_SPEC_FROZEN_CASE_LIST_PENDING_PINNED_CTS_TREE",
+  "ctsTag": "vulkan-cts-1.4.6.1",
+  "ctsCommit": "5c8aae22885448d70a2873e94a93b24b49505c32",
+  "output": "ssot/vulkan-required-cases.txt",
+  "selectionPolicy": {
+    "mustBeSelectedBeforePhase1GraphicsMutation": true,
+    "mustExistAtPinnedCommit": true,
+    "mustExecute": true,
+    "mayNotBeRemovedBecauseItFails": true,
+    "optionalUnsupportedCasesMayNotBeAddedAfterResultsAreKnown": true,
+    "enumerationAloneIsNotProof": true
+  },
+  "requiredBoundaries": [
+    {
+      "id": "core-draw",
+      "reason": "Basic Vulkan graphics execution required by host/guest probes and ANGLE rendering",
+      "capabilities": ["graphics pipeline", "vertex/index draw", "render target", "image layout transition", "presentation-compatible output"]
+    },
+    {
+      "id": "geometry",
+      "reason": "OpenGL ES 3.2 geometry shader dependency and known MoltenVK/gfxstream risk boundary",
+      "capabilities": ["geometryShader", "geometry stage execution", "geometry output render validation"]
+    },
+    {
+      "id": "tessellation",
+      "reason": "OpenGL ES 3.2 tessellation dependency",
+      "capabilities": ["tessellationShader", "tessellation control", "tessellation evaluation", "patch draw"]
+    },
+    {
+      "id": "shader-cull-distance",
+      "reason": "Known Metal/MoltenVK translation risk and GLES 3.2 shader semantics",
+      "capabilities": ["shaderCullDistance", "cull-distance shader execution"]
+    },
+    {
+      "id": "compute",
+      "reason": "OpenGL ES 3.1/3.2 compute requirement and TFT workload dependency",
+      "capabilities": ["compute pipeline", "dispatch", "storage buffer read/write", "compute-to-graphics visibility"]
+    },
+    {
+      "id": "images",
+      "reason": "ANGLE image, texture-buffer, cube-map-array, multisample and render-copy dependencies",
+      "capabilities": ["sampled image", "storage image", "image copy", "multisample image", "cube-compatible image", "buffer/image transfer"]
+    },
+    {
+      "id": "descriptors",
+      "reason": "Modern ANGLE descriptor usage and host Vulkan probe contract",
+      "capabilities": ["descriptor sets", "descriptor indexing when exposed", "storage buffer descriptors", "sampled image descriptors"]
+    },
+    {
+      "id": "indirect-draw",
+      "reason": "Frozen host probe feature and explicit MoltenVK geometry regression interaction",
+      "capabilities": ["drawIndirect", "indexed indirect draw", "geometry interaction"]
+    },
+    {
+      "id": "timeline-semaphore",
+      "reason": "Frozen host probe synchronization capability",
+      "capabilities": ["timelineSemaphore", "signal/wait", "cross-queue or host/device progression"]
+    },
+    {
+      "id": "synchronization2",
+      "reason": "Frozen host probe and gfxstream synchronization boundary",
+      "capabilities": ["synchronization2", "pipelineBarrier2", "submit2", "memory visibility"]
+    },
+    {
+      "id": "dynamic-rendering",
+      "reason": "Frozen host probe and Vulkan Samples workload",
+      "capabilities": ["dynamicRendering", "begin/end rendering", "color/depth attachment execution"]
+    },
+    {
+      "id": "buffer-device-address",
+      "reason": "Frozen host probe feature and modern Vulkan execution path",
+      "capabilities": ["bufferDeviceAddress", "address query", "shader or command consumption"]
+    },
+    {
+      "id": "subgroups",
+      "reason": "Frozen host probe and shader execution dependency",
+      "capabilities": ["subgroup properties", "representative subgroup shader operation"]
+    },
+    {
+      "id": "sampler-filter",
+      "reason": "Frozen host probe and visual-quality correctness",
+      "capabilities": ["sampler creation", "linear filtering", "mipmap sampling", "anisotropy when selected runtime exposes it"]
+    },
+    {
+      "id": "wsi-presentation",
+      "reason": "Runtime must render and present continuously, not only execute offscreen workloads",
+      "capabilities": ["surface/swapchain path used by runtime", "acquire", "present", "resize/recreate behavior relevant to TFTMAC"]
+    }
+  ],
+  "generationRule": "After the exact pinned CTS tree exists locally, enumerate concrete dEQP-VK test names that exercise every capability above, verify every selected name exists at the pinned commit, sort uniquely, write the exact names to ssot/vulkan-required-cases.txt, then hash that final file into STACK.lock.yaml. The generator must fail if any required boundary has zero executable selected cases."
+}

@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "observedAt": "2026-08-30T03:58:38.083Z",
+  "authority": "INSTALLED_ANDROID_EMULATOR",
+  "emulatorVersion": "Android emulator version 37.1.11.0 (build_id 15917651) (CL:N/A)",
+  "emulatorBinary": "/Volumes/MAC MINI M4/TFTMAC/Runtime/sdk/emulator/emulator",
+  "installedProtoPath": "/Volumes/MAC MINI M4/TFTMAC/Runtime/sdk/emulator/lib/emulator_controller.proto",
+  "installedProtoSHA256": "1d62c6bcad5f06621f90ec2bf26c661ba769ccd0f1416b5314d25a68e04eee5f",
+  "vendoredProtoPath": "Vendor/AndroidEmulator/emulator_controller.proto",
+  "vendoredProtoSHA256": "1d62c6bcad5f06621f90ec2bf26c661ba769ccd0f1416b5314d25a68e04eee5f",
+  "generator": {
+    "protocVersion": "36.0",
+    "swiftProtobufVersion": "1.38.1",
+    "grpcSwiftProtobufVersion": "2.4.1",
+    "script": "scripts/generate-emulator-proto.command"
+  },
+  "generatedSources": {
+    "Generated/EmulatorController/emulator_controller.pb.swift": "55641fbefbf3baae5ab309dc722dcad5c7e9ea90644a8c027c78fbbadf3d8204",
+    "Generated/EmulatorController/emulator_controller.grpc.swift": "653febae34de04ce4ebdc2a38f46b9a0e015b2f5bb55b66a24c785f24b46e02f"
+  },
+  "aemuAuthority": {
+    "branch": "emu-master-dev",
+    "qemuCommit": "ae9d18d2b6261179fbd57fffec720a04f7bfb053",
+    "aemuCommit": "3c1ced8a369417db591eb7cd083af5bb2c317975",
+    "manifestSHA256": "28865cd8a162178ba462b296f5714b6b7b6916e0cafcddfc0c5e44aa03f8e8d3"
+  },
+  "contract": "The vendored protocol bytes come directly from the installed stock Android Emulator runtime used by TFTMAC. Generated Swift sources are reproducible from that frozen protocol with the recorded pinned generator toolchain. Build/generation must fail on byte drift until the authority is intentionally refreshed."
+}

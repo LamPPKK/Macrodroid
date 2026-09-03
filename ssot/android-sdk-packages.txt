@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "observedAt": "2026-08-28T08:46:32.848Z",
+  "requiredVersions": {
+    "platform-tools": "37.0.1",
+    "emulator": "37.1.11",
+    "platforms;android-37.1": "1",
+    "build-tools;37.0.0": "37.0.0",
+    "system-images;android-37.1;google_apis_playstore_ps16k;arm64-v8a": "9"
+  }
+}

@@ -302,7 +302,7 @@ private final class InputDiagnostics {
 
 private final class TapDispatcher {
     private let configuration: Configuration
-    private let queue = DispatchQueue(label: "dev.sergeinaumov.mactician.input-bridge.adb")
+    private let queue = DispatchQueue(label: "com.flashls1.tftmac.input-bridge.adb")
     private var process: Process?
     private var input: FileHandle?
     private var showTraitsNext = true
@@ -395,7 +395,7 @@ private final class AndroidActivityMonitor {
     private static let stateMaxAge: TimeInterval = 3
 
     private let configuration: Configuration
-    private let queue = DispatchQueue(label: "dev.sergeinaumov.mactician.input-bridge.activity")
+    private let queue = DispatchQueue(label: "com.flashls1.tftmac.input-bridge.activity")
     private let stateLock = NSLock()
     private var state = ForegroundActivityState.unknown
     private var stateUpdatedAt: TimeInterval = 0

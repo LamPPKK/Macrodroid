@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "ctsTag": "vulkan-cts-1.4.6.1",
+  "ctsCommit": "5c8aae22885448d70a2873e94a93b24b49505c32",
+  "mustpassRoot": "external/vulkancts/mustpass/main",
+  "totalMustpassCasesObserved": 3247558,
+  "selection": {
+    "core-draw": [
+      "dEQP-VK.conditional_rendering.draw.condition_host_memory_expect_execution.draw",
+      "dEQP-VK.conditional_rendering.draw.condition_host_memory_expect_execution.draw_indexed"
+    ],
+    "geometry": [
+      "dEQP-VK.binding_model.descriptor_heap.graphics.vertex_geometry",
+      "dEQP-VK.binding_model.descriptor_heap.graphics.vertex_geometry_fragment"
+    ],
+    "tessellation": [
+      "dEQP-VK.binding_model.descriptor_heap.graphics.vertex_tessellation",
+      "dEQP-VK.binding_model.descriptor_heap.graphics.vertex_tessellation_fragment"
+    ],
+    "shader-cull-distance": [
+      "dEQP-VK.clipping.misc.negative_and_non_negative_cull_distance",
+      "dEQP-VK.clipping.user_defined.clip_cull_distance.vert.1_7"
+    ],
+    "compute": [
+      "dEQP-VK.api.buffer_marker.compute.default_mem.bottom_of_pipe.memory_dep.buffer_copy",
+      "dEQP-VK.api.buffer_marker.compute.default_mem.bottom_of_pipe.memory_dep.buffer_copy_offset_24"
+    ],
+    "images": [
+      "dEQP-VK.api.buffer_view.access.dedicated_alloc.buffer_view_memory_test_complete_with_buffer_dedicated_alloc_image_dedicated_alloc_compute",
+      "dEQP-VK.api.buffer_view.access.dedicated_alloc.buffer_view_memory_test_complete_with_buffer_dedicated_alloc_image_dedicated_alloc_graphics"
+    ],
+    "descriptors": [
+      "dEQP-VK.api.command_buffers.secondary_push_descriptor_set_2",
+      "dEQP-VK.api.command_buffers.secondary_push_descriptor_set_with_template"
+    ],
+    "indirect-draw": [
+      "dEQP-VK.api.buffer.dedicated_alloc.index.indirect.create.zero",
+      "dEQP-VK.api.buffer.dedicated_alloc.index.vertex.indirect.create.zero"
+    ],
+    "timeline-semaphore": [
+      "dEQP-VK.api.device_init.create_device_unsupported_features.timeline_semaphore_features",
+      "dEQP-VK.api.external.semaphore.opaque_fd.info_timeline"
+    ],
+    "synchronization2": [
+      "dEQP-VK.api.device_init.create_device_unsupported_features.synchronization2_features",
+      "dEQP-VK.api.frame_boundary.sync2.multi_frame"
+    ],
+    "dynamic-rendering": [
+      "dEQP-VK.api.device_init.create_device_unsupported_features.dynamic_rendering_features",
+      "dEQP-VK.api.device_init.create_device_unsupported_features.dynamic_rendering_local_read_features"
+    ],
+    "buffer-device-address": [
+      "dEQP-VK.api.device_init.create_device_unsupported_features.buffer_device_address_features",
+      "dEQP-VK.api.device_init.create_device_unsupported_features.buffer_device_address_features_ext"
+    ],
+    "subgroups": [
+      "dEQP-VK.api.device_init.create_device_unsupported_features.shader_subgroup_extended_types_features",
+      "dEQP-VK.api.device_init.create_device_unsupported_features.shader_subgroup_partitioned_features_ext"
+    ],
+    "sampler-filter": [
+      "dEQP-VK.api.device_init.create_device_unsupported_features.sampler_ycbcr_conversion_features",
+      "dEQP-VK.api.info.get_physical_device_properties2.features.sampler_ycbcr_conversion_features"
+    ],
+    "wsi-presentation": [
+      "dEQP-VK.api.device_init.create_device_unsupported_features.present_id2_features_khr",
+      "dEQP-VK.api.device_init.create_device_unsupported_features.present_id_features_khr"
+    ]
+  },
+  "selectedCaseCount": 30,
+  "output": "ssot/vulkan-required-cases.txt",
+  "outputSHA256": "5c021e8c6ddf39a73d93fdbbf8f3ad451ae31cfd389a6e948c474ec7bcbc5f7d"
+}

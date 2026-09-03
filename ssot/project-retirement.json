@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "authoritativeProject": "tftmac",
+  "completedAt": "2026-08-30T04:22:00Z",
+  "projects": {
+    "tftmac2": {
+      "state": "RETIRED",
+      "catalogName": "RETIRED - TFTMAC2",
+      "uniqueContentCheck": "PASS",
+      "classification": "ALREADY_SUPERSEDED",
+      "evidence": "Only Clara foundation files existed; no active changes, operations, release, or unique implementation."
+    },
+    "tftmac-runtime": {
+      "state": "ISOLATED_DIAGNOSTIC_ELIGIBILITY",
+      "catalogName": "TFTMAC Runtime - isolated diagnostic source authority",
+      "publishedHeadReviewed": "c8aa26ebaa5b977965eb165ad8aac5c98408469f",
+      "publishedChangeClosed": true,
+      "classification": "NON_COMPARABLE_DIAGNOSTIC_ONLY",
+      "evidence": "Stock Build 8 remains the only normal-play authority. The separate runtime repository is eligible only for the planned source-instrumented causal logger; any diagnostic result is non-comparable to stock performance until an explicit parity gate passes."
+    }
+  },
+  "claraCatalogResult": "TFTMAC is the only non-retired TFT project identity."
+}

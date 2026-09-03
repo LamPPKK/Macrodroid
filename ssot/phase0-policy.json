@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "observedAt": "2026-08-28T04:30:42.643Z",
+  "authority": [
+    {
+      "path": "TFTMAC_FULL_IMPLEMENTATION_PLAN.md",
+      "expectedSHA256": "81bd386c1d9d47f26659c93af914ec9a92568ee689e7bed47eb0f2afd6dd5f1a",
+      "actualSHA256": "81bd386c1d9d47f26659c93af914ec9a92568ee689e7bed47eb0f2afd6dd5f1a",
+      "exists": true,
+      "hashMatches": true
+    },
+    {
+      "path": "TFTMAC_GPU_RUNTIME_SSOT.md",
+      "expectedSHA256": "4c905ad35a676aa8f4ad0a22416e73d640120851ce9f41e742349ac61ceab1ea",
+      "actualSHA256": "4c905ad35a676aa8f4ad0a22416e73d640120851ce9f41e742349ac61ceab1ea",
+      "exists": true,
+      "hashMatches": true
+    }
+  ],
+  "legacyChecks": [
+    {
+      "id": "opengles-version-boot-property",
+      "path": "tftmac/Sources/TFTMACApp.swift",
+      "present": true,
+      "classification": "LEGACY_DONOR_NOT_V2_ACCEPTANCE"
+    },
+    {
+      "id": "legacy-avd-name",
+      "path": "tftmac/Sources/TFTMACApp.swift",
+      "present": true,
+      "classification": "LEGACY_DONOR_NOT_V2_ACCEPTANCE"
+    },
+    {
+      "id": "legacy-api36-image",
+      "path": "tools/clara-task.mjs",
+      "present": true,
+      "classification": "LEGACY_DONOR_NOT_V2_ACCEPTANCE"
+    },
+    {
+      "id": "legacy-acquisition-avd",
+      "path": "tools/clara-task.mjs",
+      "present": true,
+      "classification": "LEGACY_DONOR_NOT_V2_ACCEPTANCE"
+    },
+    {
+      "id": "legacy-performance-avd",
+      "path": "tools/clara-task.mjs",
+      "present": true,
+      "classification": "LEGACY_DONOR_NOT_V2_ACCEPTANCE"
+    },
+    {
+      "id": "legacy-api36-doc",
+      "path": "TFTMAC.md",
+      "present": true,
+      "classification": "LEGACY_DONOR_NOT_V2_ACCEPTANCE"
+    },
+    {
+      "id": "legacy-196610-proof-doc",
+      "path": "TFTMAC.md",
+      "present": true,
+      "classification": "LEGACY_DONOR_NOT_V2_ACCEPTANCE"
+    }
+  ],
+  "authorityPass": true,
+  "legacyRuntimeClaimsQuarantined": true,
+  "forbiddenRuntimeProof": [
+    "opengles-version-boot-property",
+    "legacy-avd-name",
+    "legacy-api36-image",
+    "legacy-acquisition-avd",
+    "legacy-performance-avd",
+    "legacy-api36-doc",
+    "legacy-196610-proof-doc"
+  ],
+  "pass": true
+}

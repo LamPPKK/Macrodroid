@@ -1,97 +1,33 @@
-# Troubleshooting
+# TFTMAC Troubleshooting
 
-Use the launcher's recovery actions before manually changing AVD files. Keep
-diagnostics narrow and sanitized.
+Use TFTMAC's verified runtime controls and diagnostics before changing protected AVD/runtime state manually.
 
-## Installation does not complete
+## Native build fails
 
-Check available disk space and Internet access, then retry. Partial component
-downloads are resumable. **Repair Installation** rechecks the host, manifest,
-component layout, hashes, runtime template, AVD, and game installation without
-clearing an otherwise valid AVD.
+Run:
 
-The launcher log is under
-`$HOME/Library/Application Support/Mactician/logs/launcher.log`.
-Share only the small section around the error after removing home paths,
-identifiers, and unrelated output.
+```sh
+/bin/zsh scripts/verify-tftmac.command
+```
 
-## Component hash verification fails
+Repair only the reported source, dependency, protocol, or test failure. Do not recreate the retired source-built emulator laboratory as a generic repair step.
 
-Do not edit the expected hash. Remove only the named incomplete archive from
-the launcher's `downloads/` directory and retry on a trusted network. A repeat
-failure can mean an upstream archive changed; that requires a reviewed manifest
-update, not a local bypass.
+## Stock emulator does not start
 
-For build-time APK mismatches, confirm `TFT_GAME_APK_DIR` contains the exact
-four pinned, unmodified splits listed in `release-manifest.json`.
+Verify that `/Volumes/MAC MINI M4/TFTMAC/Runtime` is mounted and that its SDK and AVD are intact. Do not silently create a replacement runtime on the internal disk.
 
-## Emulator does not start
+## Google Play or TFT requires authentication
 
-- Confirm the Mac is Apple Silicon, macOS is 12.0 or later, and Hypervisor
-  Framework is available.
-- Run `./scripts/verify-environment.sh` for the source-tree runtime.
-- Set `TFT_ANDROID_SDK_ROOT`, `ANDROID_SDK_ROOT`, or `ANDROID_HOME` when the SDK
-  is outside the standard macOS directory.
-- Set `TFT_AVD_HOME` and `TFT_AVD_NAME` when using an external source-tree AVD.
-- Use **Repair Installation** for missing launcher-managed components.
-- Use **Reset** only when the launcher reports corrupted AVD state and preserving
-  Riot/game state is less important than recreating the AVD.
+Complete sign-in, MFA, consent, or CAPTCHA through the official Android/Google/Riot UI. Do not automate around those gates.
 
-## Another emulator process is running
+## TFT package is missing or stale
 
-Close other Android Emulator or PlayDroid/OSFT virtual machines before launch or
-provisioning. The project isolates its ADB server on port 5038, but simultaneous
-VMs still compete for host CPU/GPU and can mutate shared expectations. Do not
-kill an unrelated process unless you have identified it.
+Use the official Google Play path. Confirm the package is `com.riotgames.league.teamfighttactics` and the installer is `com.android.vending`. Do not use third-party APK mirrors, repackaging, re-signing, or binary patching.
 
-## TFT restarts inside the AVD
+## Performance is poor
 
-The launcher keeps the verified APK and device-profile overlays mounted for the
-whole AVD session so a Riot disconnect or TFT process restart retains the
-selected graphics path. UI scale and game locale are applied during launcher
-startup; if an independent restart does not retain the intended presentation,
-close the emulator and press Play again.
-
-## Hotkeys do not work
-
-Grant Accessibility permission to **Mactician**, not the emulator, in
-System Settings. The bridge retries after permission is granted. Hotkeys are
-deliberately inactive outside TFT's exact `GameActivity`; the official Riot
-login WebView and unknown activities pass input through unchanged.
-
-## Repair versus Reset
-
-**Repair Installation** preserves the AVD, Riot sign-in, game assets, and
-preferences while re-verifying and refreshing launcher-owned pieces.
-
-**Reset** removes the entire Application Support directory, including the AVD,
-Riot sign-in, game data, downloads, state, and logs. It cannot be undone by the
-launcher.
-
-## Streaming-install cache is damaged
-
-An interrupted public asset download can leave a zero-byte
-`StreamingInstalls/Metadata.manifest`. The runtime detects exactly this case and
-removes only `StreamingInstalls` so TFT can download public assets again. It
-does not clear Riot sign-in or other app data. Use Repair to refresh this logic
-on an existing installation.
-
-## Pinned game version does not match
-
-The launcher intentionally refuses to mount an OpenGL overlay over an unknown
-`base.apk`. Install a launcher release built for the new TFT version. Do not
-replace hashes or patch the installed APK to force compatibility.
-
-## Update check fails
-
-Confirm Internet access and system time, then retry **Check for Updates…**. Do
-not disable Ed25519 verification or replace the appcast URL. If the feed is
-temporarily unavailable, the installed launcher remains usable; updates are not
-automatic without confirmation.
+Use the existing raw-first capture tooling. Compare one variable at a time against the accepted baseline and cold-confirm any improvement before keeping it. High / 60 / Performance OFF is the user-confirmed current playable configuration. Riot Performance Mode Beta and Ultra High are rejected for current usability on the target M4 host.
 
 ## Safe diagnostics
 
-Prefer launcher status, `wm size`, `wm density`, filtered process lists,
-`dumpsys input`, `dumpsys display`, `dumpsys gfxinfo`, and short, purpose-built
-captures. Never post complete game logs, AVD images, `/data/anr` archives,
-Keychain output, cookies, tokens, credentials, or unfiltered crash memory.
+Prefer bounded process/runtime state, SurfaceFlinger metrics, filtered logs, package metadata, and purpose-built captures. Never share complete game logs, AVD images, credentials, tokens, Keychain output, cookies, or unfiltered crash memory.

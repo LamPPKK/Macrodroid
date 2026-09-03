@@ -26,7 +26,6 @@ typeset DURATION="$DEFAULT_DURATION"
 typeset RESUME=0
 typeset DRY_RUN=0
 typeset SELF_TEST=0
-typeset CUSTOM_QUEUE_CSV=""
 
 while (( $# > 0 )); do
     case "$1" in
@@ -47,13 +46,8 @@ while (( $# > 0 )); do
             SELF_TEST=1
             shift
             ;;
-        --queue)
-            (( $# >= 2 )) || { print "--queue requires comma-separated candidate IDs"; exit 2; }
-            CUSTOM_QUEUE_CSV="$2"
-            shift 2
-            ;;
         -h|--help)
-            print "Usage: ${0:t} [--duration 10h] [--queue id,id,...] [--resume] [--dry-run] [--self-test]"
+            print "Usage: ${0:t} [--duration 10h] [--resume] [--dry-run] [--self-test]"
             exit 0
             ;;
         *)
@@ -62,13 +56,6 @@ while (( $# > 0 )); do
             ;;
     esac
 done
-
-if [[ -n "$CUSTOM_QUEUE_CSV" ]] \
-        && ! print -r -- "$CUSTOM_QUEUE_CSV" \
-            | grep -Eq '^[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$'; then
-    print "--queue must be a comma-separated list of lowercase candidate IDs."
-    exit 2
-fi
 
 duration_seconds() {
     local value="$1"
@@ -95,7 +82,6 @@ if (( SELF_TEST == 0 && DRY_RUN == 0 )) \
     typeset -a caffeinated_args
     caffeinated_args=(--duration "$DURATION")
     (( RESUME == 1 )) && caffeinated_args+=(--resume)
-    [[ -n "$CUSTOM_QUEUE_CSV" ]] && caffeinated_args+=(--queue "$CUSTOM_QUEUE_CSV")
     exec /usr/bin/caffeinate -dimsu \
         /usr/bin/env TFT_CAMPAIGN_CAFFEINATED=1 \
         "$CAMPAIGN_SCRIPT" "${caffeinated_args[@]}"
@@ -114,8 +100,7 @@ if ! "$JQ" -e '.schemaVersion == 1' "$CANDIDATE_MANIFEST" >/dev/null; then
 fi
 
 mkdir -p "$CAMPAIGN_ROOT"
-typeset CAMPAIGN_DIR="" RESUMED_QUEUE_CSV=""
-typeset RESUMED_FOCUSED_QUEUE=0
+typeset CAMPAIGN_DIR=""
 typeset START_EPOCH DEADLINE_EPOCH QUEUE_INDEX=0
 if (( RESUME == 1 )) && [[ -f "$ACTIVE_FILE" ]]; then
     IFS= read -r CAMPAIGN_DIR < "$ACTIVE_FILE" || true
@@ -126,10 +111,6 @@ if (( RESUME == 1 )) && [[ -f "$ACTIVE_FILE" ]]; then
             START_EPOCH="$("$JQ" -r '.started_epoch' "$CAMPAIGN_DIR/checkpoint.json")"
             DEADLINE_EPOCH="$("$JQ" -r '.deadline_epoch' "$CAMPAIGN_DIR/checkpoint.json")"
             QUEUE_INDEX="$("$JQ" -r '.queue_index // 0' "$CAMPAIGN_DIR/checkpoint.json")"
-            RESUMED_QUEUE_CSV="$("$JQ" -r '(.queue // []) | join(",")' "$CAMPAIGN_DIR/checkpoint.json")"
-            if [[ "$("$JQ" -r '.focused_queue // false' "$CAMPAIGN_DIR/checkpoint.json")" == true ]]; then
-                RESUMED_FOCUSED_QUEUE=1
-            fi
         fi
     else
         CAMPAIGN_DIR=""
@@ -186,22 +167,6 @@ QUEUE=(
 )
 typeset -a COMBINATION_QUEUE
 COMBINATION_QUEUE=(submit-no-fbo submit-upstream-asg submit-mvk128)
-typeset FOCUSED_QUEUE=0
-if [[ -n "$RESUMED_QUEUE_CSV" ]]; then
-    if [[ -n "$CUSTOM_QUEUE_CSV" \
-            && ( "$CUSTOM_QUEUE_CSV" != "$RESUMED_QUEUE_CSV" \
-                || "$RESUMED_FOCUSED_QUEUE" != 1 ) ]]; then
-        print "--queue does not match the focused queue stored in the resumed campaign checkpoint."
-        exit 2
-    fi
-    QUEUE=("${(@s:,:)RESUMED_QUEUE_CSV}")
-    FOCUSED_QUEUE="$RESUMED_FOCUSED_QUEUE"
-    (( FOCUSED_QUEUE == 1 )) && COMBINATION_QUEUE=()
-elif [[ -n "$CUSTOM_QUEUE_CSV" ]]; then
-    QUEUE=("${(@s:,:)CUSTOM_QUEUE_CSV}")
-    COMBINATION_QUEUE=()
-    FOCUSED_QUEUE=1
-fi
 
 typeset CURRENT_CHILD_PID=""
 typeset CURRENT_CANDIDATE=""
@@ -229,7 +194,6 @@ write_checkpoint() {
         --argjson deadline_epoch "$DEADLINE_EPOCH" \
         --argjson last_heartbeat_epoch "$now" \
         --argjson queue_index "$QUEUE_INDEX" \
-        --argjson focused_queue "$FOCUSED_QUEUE" \
         --argjson current_child_pid "${CURRENT_CHILD_PID:-null}" \
         '{
             schema_version: 1,
@@ -242,7 +206,6 @@ write_checkpoint() {
             last_heartbeat_epoch: $last_heartbeat_epoch,
             queue_index: $queue_index,
             queue: (if $queue == "" then [] else ($queue | split(",")) end),
-            focused_queue: ($focused_queue == 1),
             current_candidate: (if $current_candidate == "" then null else $current_candidate end),
             current_child_pid: $current_child_pid
         }' > "$CHECKPOINT.next"
@@ -467,13 +430,7 @@ run_candidate() {
         "$LEADERBOARD_BUILDER" "$CAMPAIGN_DIR" >/dev/null 2>&1 || true
         result_state=failed
         if [[ -n "$run_dir" && -f "$run_dir/run-result.json" ]] \
-                && "$JQ" -e '
-                    (.benchmark_succeeded == true
-                      or .transport_screen_succeeded == true
-                      or .gles_stress_succeeded == true
-                      or .gles_draw_succeeded == true)
-                    and .rollback.verified == true
-                ' \
+                && "$JQ" -e '.benchmark_succeeded == true and .rollback.verified == true' \
                     "$run_dir/run-result.json" >/dev/null 2>&1; then
             result_state=success
         elif [[ -n "$run_dir" && -f "$run_dir/run-result.json" ]] \
@@ -662,11 +619,6 @@ if (( SELF_TEST == 1 )); then
     write_checkpoint interrupted self_test simulated_interrupt
     QUEUE_INDEX="$("$JQ" -r '.queue_index' "$CHECKPOINT")"
     [[ "$QUEUE_INDEX" == 2 ]] || { print "Checkpoint resume self-test failed."; exit 1; }
-    [[ "$("$JQ" -r '.queue | join(",")' "$CHECKPOINT")" == "${(j:,:)QUEUE}" ]] \
-        || { print "Checkpoint queue self-test failed."; exit 1; }
-    [[ "$("$JQ" -r '.focused_queue' "$CHECKPOINT")" == \
-            "$([[ "$FOCUSED_QUEUE" == 1 ]] && print true || print false)" ]] \
-        || { print "Checkpoint queue-mode self-test failed."; exit 1; }
     record_event self_test_complete
     print "Performance campaign self-test: OK ($CAMPAIGN_DIR)"
     exit 0
@@ -698,13 +650,6 @@ while (( QUEUE_INDEX < ${#QUEUE} )); do
 done
 
 "$LEADERBOARD_BUILDER" "$CAMPAIGN_DIR" >/dev/null 2>&1 || true
-
-if (( FOCUSED_QUEUE == 1 )); then
-    record_event focused_queue_complete "queue=${(j:,:)QUEUE}"
-    write_checkpoint complete focused_queue "requested candidates completed"
-    print "Focused performance campaign completed: $CAMPAIGN_DIR"
-    exit 0
-fi
 
 # A single lucky scene is not reproducibility. Repeat the two strongest
 # completed one-factor candidates before selecting a champion or combining
@@ -861,9 +806,9 @@ if "$ADB" -P "$ADB_SERVER_PORT" -s "$SERIAL" get-state >/dev/null 2>&1; then
     exit 4
 fi
 typeset AVD_DIR="${TFT_ROOT_AVD_HOME:-$(tft_resolve_avd_home)}/${TFT_AVD_NAME:-TftRootAffinity}.avd"
-if [[ -e "$AVD_DIR/.mactician-avd.lock" \
-        || -e "$AVD_DIR/config.ini.mactician-asg-backup" \
-        || -e "$AVD_DIR/hardware-qemu.ini.mactician-asg-backup" ]]; then
+if [[ -e "$AVD_DIR/.tftmac-avd.lock" \
+        || -e "$AVD_DIR/config.ini.tftmac-asg-backup" \
+        || -e "$AVD_DIR/hardware-qemu.ini.tftmac-asg-backup" ]]; then
     print "Final check failed: AVD rollback markers were not removed."
     exit 4
 fi

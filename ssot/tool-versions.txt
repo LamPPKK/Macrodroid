@@ -1,0 +1,6 @@
+uname=arm64
+macos=26.6.2 (25G83)
+xcode=26.6 (17F113)
+macos_sdk=/Applications/Xcode-26.6.0.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk
+node=v24.18.0
+git=git version 2.50.1 (Apple Git-155)

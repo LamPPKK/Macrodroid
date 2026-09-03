@@ -11,8 +11,8 @@ readonly ADB_SERVER_PORT="${TFT_ADB_SERVER_PORT:-5038}"
 ADB="$(tft_resolve_adb)"
 readonly ADB
 readonly SERIAL="${TFT_SERIAL:-emulator-5582}"
-readonly PACKAGE="com.riotgames.league.teamfighttactics"
-readonly KEYCHAIN_SERVICE="${MACTICIAN_KEYCHAIN_SERVICE:-dev.sergeinaumov.mactician}"
+readonly PACKAGE="com.riotgames.league.teamfighttactics.pbe"
+readonly KEYCHAIN_SERVICE="${TFTMAC_KEYCHAIN_SERVICE:-com.flashls1.tftmac}"
 readonly CDP_HELPER="$SCRIPT_DIR/login-tft-webview.mjs"
 
 if [[ "$ADB_SERVER_PORT" != <-> ]] \

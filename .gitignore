@@ -31,8 +31,11 @@ snapshots/
 multiinstance.lock
 hardware-qemu.ini.lock
 
-# Measurements, logs, traces, and crash data
+# Measurements, logs, traces, crash data, and local control requests
 /measurements/
+/.tftmac-direct-control-request.json
+/.tftmac-latest-run-analysis.json
+/.tftmac-latest-closed-session.json
 *.log
 logcat*.txt
 *.trace

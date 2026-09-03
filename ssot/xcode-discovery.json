@@ -1,0 +1,14 @@
+{
+  "observedAt": "2026-08-27T01:51:09.220Z",
+  "discovered": [
+    {
+      "app": "/Applications/Xcode.app",
+      "developerDir": "/Applications/Xcode.app/Contents/Developer",
+      "status": 0,
+      "version": {
+        "version": "26.4",
+        "build": "17E192"
+      }
+    }
+  ]
+}

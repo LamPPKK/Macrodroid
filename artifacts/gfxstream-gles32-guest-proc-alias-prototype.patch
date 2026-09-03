@@ -2,7 +2,7 @@ Subject: [PROTOTYPE] expose promoted GLES 3.2 command aliases in guest EGL
 
 Applies to gfxstream emu-main-dev revision a9184fd (2026-08-04).
 
-This patch implements the 11 static alias candidates found by the Mactician
+This patch implements the 11 static alias candidates found by the retired-donor
 Unreal symbol audit. It reuses existing guest encoder extension opcodes and has
 passed a standalone Clang syntax check. A later runtime probe showed that the
 shipped Android EGL loader already resolves all 11 names, so this patch is not

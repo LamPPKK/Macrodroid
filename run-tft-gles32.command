@@ -19,9 +19,9 @@ readonly ADB
 
 # Existing AVD data is external to the repository.
 readonly AVD_HOME="$(tft_resolve_avd_home)"
-readonly AVD_NAME="${TFT_AVD_NAME:-Tft}"
+readonly AVD_NAME="${TFT_AVD_NAME:-TftPBE}"
 readonly SERIAL="emulator-5572"
-readonly PACKAGE="com.riotgames.league.teamfighttactics"
+readonly PACKAGE="com.riotgames.league.teamfighttactics.pbe"
 readonly ACTIVITY="com.epicgames.unreal.SplashActivity"
 readonly ANGLE_FEATURES="exposeNonConformantExtensionsAndVersions:exposeES32ForTesting"
 # 1600x900 is the balanced fallback: it gives TFT 56% more source pixels than
@@ -58,7 +58,7 @@ if "$ADB" -s "$SERIAL" get-state >/dev/null 2>&1; then
 fi
 
 "$EMULATOR" "@$AVD_NAME" \
-    -id TFT-Tft \
+    -id TFT-PBE \
     -port 5572 \
     -gpu host \
     -feature VulkanNativeSwapchain \

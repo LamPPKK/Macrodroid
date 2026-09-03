@@ -5,7 +5,7 @@ readonly PROJECT_DIR="${0:A:h:h}"
 readonly SOURCE_DIR="$PROJECT_DIR/artifacts/android-egl-capability-probe"
 readonly OUTPUT="${1:-$PROJECT_DIR/runtime/android-egl-capability-probe}"
 readonly GO_COMMAND="${TFT_GO_COMMAND:-go1.24.3}"
-readonly BUILD_CACHE="$(mktemp -d -t mactician-android-egl-go-cache)"
+readonly BUILD_CACHE="$(mktemp -d -t tftmac-android-egl-go-cache)"
 
 cleanup() {
     rm -rf "$BUILD_CACHE"

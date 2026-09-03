@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
 
 permissions:
@@ -10,25 +10,27 @@ permissions:
 
 jobs:
   validate:
-    name: Validate and test
+    name: Validate TFTMAC
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Install validation tools
         run: |
           command -v jq >/dev/null || brew install jq
           command -v rg >/dev/null || brew install ripgrep
 
-      - name: Validate repository policy and metadata
-        run: ./scripts/verify-repository.command
+      - name: Validate TFTMAC source, unsigned Release build, and native tests
+        run: /bin/zsh scripts/verify-tftmac.command
 
-      - name: Run launcher unit tests and production typecheck
-        run: ./scripts/test-mactician.command
-
-      - name: Reject whitespace and generated changes
+      - name: Reject whitespace and generated drift
         run: |
           git diff --check
           test -z "$(git status --short)"

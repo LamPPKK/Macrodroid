@@ -1,68 +1,46 @@
 name: Bug report
-description: Report a reproducible launcher, installer, or runtime problem.
+description: Report a reproducible TFTMAC native-app or runtime problem.
 title: "[Bug]: "
 labels: [bug]
 body:
   - type: markdown
     attributes:
-      value: Thanks for helping improve Mactician. Remove account names and other personal data from logs before attaching them.
+      value: Thanks for helping improve TFTMAC. Remove account names, credentials, tokens, and other private data before attaching logs.
   - type: input
-    id: launcher-version
+    id: build
     attributes:
-      label: Mactician version and build
-      placeholder: 1.0.0 (33)
+      label: TFTMAC commit or build
+      placeholder: commit SHA or build identifier
     validations:
       required: true
   - type: input
     id: macos-version
     attributes:
       label: macOS version
-      placeholder: 15.6.1
     validations:
       required: true
   - type: input
     id: mac-model
     attributes:
       label: Mac model and Apple chip
-      placeholder: MacBook Pro, Apple M3 Pro
-    validations:
-      required: true
-  - type: dropdown
-    id: installation-state
-    attributes:
-      label: Installation state
-      options:
-        - Fresh installation
-        - Updated installation
-        - Existing installation
+      placeholder: Mac mini, Apple M4
     validations:
       required: true
   - type: input
-    id: resolution
+    id: runtime
     attributes:
-      label: Selected resolution
-      placeholder: 1920×1080
-    validations:
-      required: true
-  - type: input
-    id: resources
-    attributes:
-      label: Selected RAM and vCPU
-      placeholder: 6144 MB RAM, 6 vCPU
-    validations:
-      required: true
+      label: Android Emulator version
+      placeholder: 37.1.11
   - type: textarea
     id: expected
     attributes:
       label: Expected behavior
-      description: What did you expect to happen?
     validations:
       required: true
   - type: textarea
     id: actual
     attributes:
       label: Actual behavior
-      description: What happened instead?
     validations:
       required: true
   - type: textarea
@@ -70,21 +48,21 @@ body:
     attributes:
       label: Reproduction steps
       placeholder: |
-        1. Open ...
-        2. Select ...
-        3. Observe ...
+        1. Open TFTMAC
+        2. Perform the action
+        3. Observe the result
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Sanitized logs
-      description: Paste relevant log excerpts. Remove Riot account names, filesystem usernames, tokens, and other private data.
+      label: Sanitized diagnostics
+      description: Include only the bounded excerpt needed to show the failure.
       render: shell
   - type: checkboxes
     id: privacy
     attributes:
       label: Privacy confirmation
       options:
-        - label: I removed credentials, account identifiers, and raw sensitive logs from this report.
+        - label: I removed credentials, account identifiers, tokens, and raw sensitive data.
           required: true

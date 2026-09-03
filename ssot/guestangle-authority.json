@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "observedAt": "2026-08-28T04:03:25.796Z",
+  "branchAuthority": "emu-master-dev",
+  "qemuCommit": "ae9d18d2b6261179fbd57fffec720a04f7bfb053",
+  "sourcePath": "external/qemu/android/android-emu/android/userspace-boot-properties.cpp",
+  "sourceSHA256": "e377e79c0114c17f4412a3071706f3e5ce8656880e180bf5ef5408dee702a939",
+  "checks": {
+    "guestAngleFeatureGate": true,
+    "hardwareEGLAngle": true,
+    "guestAngleRequiresVulkan": true,
+    "hardwareVulkanRanchu": true,
+    "nonconformantExposureExplicitlyDisabled": true
+  },
+  "evidence": [
+    {
+      "line": 307,
+      "text": "\"removed, use '-feature GuestAngle' instead.\");"
+    },
+    {
+      "line": 308,
+      "text": "fc::setEnabledOverride(fc::GuestAngle, true);"
+    },
+    {
+      "line": 310,
+      "text": "if (fc::isEnabled(fc::GuestAngle)) {"
+    },
+    {
+      "line": 311,
+      "text": "params.push_back({\"androidboot.hardwareegl\", \"angle\"});"
+    },
+    {
+      "line": 314,
+      "text": "// Cannot use GuestAngle without Vulkan enabled"
+    },
+    {
+      "line": 316,
+      "text": "dfatal(\"Vulkan is not supported: GuestAngle feature won't work!\");"
+    },
+    {
+      "line": 330,
+      "text": "// GuestAngle boot parameters are only valid for some system images with"
+    },
+    {
+      "line": 349,
+      "text": "// Without turning off exposeNonConformantExtensionsAndVersions,"
+    },
+    {
+      "line": 355,
+      "text": "const char* extensionLimitStr = \"exposeN*\";"
+    },
+    {
+      "line": 359,
+      "text": "strlen(extensionLimitStr)) < MAX_PARAM_LENGTH;"
+    },
+    {
+      "line": 364,
+      "text": "angle_overrides_disabled += extensionLimitStr;"
+    },
+    {
+      "line": 368,
+      "text": "extensionLimitStr,"
+    },
+    {
+      "line": 370,
+      "text": "strlen(extensionLimitStr),"
+    },
+    {
+      "line": 408,
+      "text": "// Set the boot parameters for GuestAngle mode"
+    },
+    {
+      "line": 427,
+      "text": "params.push_back({\"androidboot.hardware.vulkan\", \"ranchu\"});"
+    },
+    {
+      "line": 533,
+      "text": "// GuestAngle. This behavior requires system image to support overriding"
+    },
+    {
+      "line": 538,
+      "text": "((apiLevel >= 34 && fc::isEnabled(fc::GuestAngle)) ||"
+    },
+    {
+      "line": 543,
+      "text": "// Always enable skiavk when GuestAngle is used."
+    },
+    {
+      "line": 545,
+      "text": "fc::isEnabled(fc::Minigbm) || fc::isEnabled(fc::GuestAngle);"
+    }
+  ],
+  "pass": true
+}

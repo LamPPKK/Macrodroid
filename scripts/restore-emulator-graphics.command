@@ -10,7 +10,7 @@ readonly ANGLE_DIR="$LIB_DIR/gles_angle"
 
 restore_library() {
     local active="$1"
-    local backup="$active.mactician-original"
+    local backup="$active.tftmac-original"
 
     if [[ -L "$active" && -f "$backup" ]]; then
         unlink "$active"
