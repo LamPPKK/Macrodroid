@@ -178,7 +178,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
 
     init(frame: NSRect, mailbox: LatestFrameMailbox) {
         guard let device = MTLCreateSystemDefaultDevice() else {
-            fatalError("TFTMAC requires Metal on Apple Silicon")
+            fatalError("Macrodroid requires a Metal-capable GPU")
         }
         guard let commandQueue = device.makeCommandQueue() else {
             fatalError("TFTMAC could not create its persistent Metal command queue")

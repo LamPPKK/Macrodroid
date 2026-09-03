@@ -14,6 +14,7 @@ struct TFTMACRuntimePaths: Sendable {
     let emulator: URL
     let adb: URL
     let avdHome: URL
+    let avdName: String
     let avdDirectory: URL
     let avdConfig: URL
     let hostApplication: URL
@@ -21,32 +22,101 @@ struct TFTMACRuntimePaths: Sendable {
 
     static func discover() throws -> Self {
         let manager = FileManager.default
-        let runtimeRoot = URL(fileURLWithPath: "/Volumes/MAC MINI M4/TFTMAC/Runtime", isDirectory: true)
-        let sdkCandidates = ["SDK", "sdk"].map { runtimeRoot.appendingPathComponent($0, isDirectory: true) }
+        let env = ProcessInfo.processInfo.environment
+
+        // 1. Android SDK Discovery
+        var sdkCandidates: [URL] = []
+        if let custom = env["MACRODROID_SDK_ROOT"] ?? env["TFT_ANDROID_SDK_ROOT"] ?? env["ANDROID_HOME"] ?? env["ANDROID_SDK_ROOT"] {
+            sdkCandidates.append(URL(fileURLWithPath: custom, isDirectory: true))
+        }
+        let userSDK = manager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Android/sdk", isDirectory: true)
+        sdkCandidates.append(userSDK)
+        let appSupport = manager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
+        sdkCandidates.append(appSupport.appendingPathComponent("Macrodroid/sdk", isDirectory: true))
+        sdkCandidates.append(appSupport.appendingPathComponent("Mactician/sdk", isDirectory: true))
+        sdkCandidates.append(appSupport.appendingPathComponent("TFTMAC/sdk", isDirectory: true))
+        sdkCandidates.append(URL(fileURLWithPath: "/Volumes/MAC MINI M4/TFTMAC/Runtime/SDK", isDirectory: true))
+        sdkCandidates.append(URL(fileURLWithPath: "/Volumes/MAC MINI M4/TFTMAC/Runtime/sdk", isDirectory: true))
+
         guard let sdkRoot = sdkCandidates.first(where: {
             manager.isExecutableFile(atPath: $0.appendingPathComponent("emulator/emulator").path)
                 && manager.isExecutableFile(atPath: $0.appendingPathComponent("platform-tools/adb").path)
         }) else {
-            throw TFTMACRuntimeError("The proven Android runtime is not mounted at /Volumes/MAC MINI M4/TFTMAC/Runtime.")
+            throw TFTMACRuntimeError("Android SDK not found. Please install Android SDK under ~/Library/Android/sdk or set ANDROID_HOME.")
         }
 
-        let avdCandidates = ["AVD", "avd"].map { runtimeRoot.appendingPathComponent($0, isDirectory: true) }
-        guard let avdHome = avdCandidates.first(where: {
-            manager.fileExists(atPath: $0.appendingPathComponent("TFT_Ultra_Tablet.ini").path)
-        }) else {
-            throw TFTMACRuntimeError("The TFT_Ultra_Tablet AVD is missing from the proven runtime.")
+        // 2. AVD Home Discovery
+        var avdHomeCandidates: [URL] = []
+        if let customAVD = env["MACRODROID_AVD_HOME"] ?? env["TFT_AVD_HOME"] ?? env["ANDROID_AVD_HOME"] {
+            avdHomeCandidates.append(URL(fileURLWithPath: customAVD, isDirectory: true))
         }
-        let avdINI = avdHome.appendingPathComponent("TFT_Ultra_Tablet.ini")
+        let userAVD = manager.homeDirectoryForCurrentUser.appendingPathComponent(".android/avd", isDirectory: true)
+        avdHomeCandidates.append(userAVD)
+        avdHomeCandidates.append(appSupport.appendingPathComponent("Macrodroid/avd", isDirectory: true))
+        avdHomeCandidates.append(appSupport.appendingPathComponent("Mactician/avd", isDirectory: true))
+        avdHomeCandidates.append(appSupport.appendingPathComponent("TFTMAC/avd", isDirectory: true))
+        avdHomeCandidates.append(URL(fileURLWithPath: "/Volumes/MAC MINI M4/TFTMAC/Runtime/AVD", isDirectory: true))
+        avdHomeCandidates.append(URL(fileURLWithPath: "/Volumes/MAC MINI M4/TFTMAC/Runtime/avd", isDirectory: true))
+
+        guard let avdHome = avdHomeCandidates.first(where: { manager.fileExists(atPath: $0.path) }) else {
+            throw TFTMACRuntimeError("Android AVD directory not found (checked ~/.android/avd).")
+        }
+
+        // 3. AVD Resolution (.ini)
+        var resolvedName: String?
+        if let preferred = env["MACRODROID_AVD_NAME"] ?? env["TFT_AVD_NAME"] {
+            if manager.fileExists(atPath: avdHome.appendingPathComponent("\(preferred).ini").path) {
+                resolvedName = preferred
+            }
+        }
+        if resolvedName == nil {
+            let priorityNames = [
+                "TFT_Ultra_Tablet",
+                "Macrodroid",
+                "Tft",
+                "Pixel_3a_API_34_extension_level_7_x86_64",
+                "Pixel_3a_API_34_x86_64"
+            ]
+            for name in priorityNames {
+                if manager.fileExists(atPath: avdHome.appendingPathComponent("\(name).ini").path) {
+                    resolvedName = name
+                    break
+                }
+            }
+        }
+        if resolvedName == nil {
+            if let entries = try? manager.contentsOfDirectory(atPath: avdHome.path) {
+                let inis = entries.filter { $0.hasSuffix(".ini") }
+                for ini in inis {
+                    let candidateName = String(ini.dropLast(".ini".count))
+                    let iniURL = avdHome.appendingPathComponent(ini)
+                    if let text = try? String(contentsOf: iniURL, encoding: .utf8),
+                       let pathLine = text.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix("path=") }) {
+                        let path = String(pathLine.dropFirst("path=".count))
+                        if manager.fileExists(atPath: URL(fileURLWithPath: path).appendingPathComponent("config.ini").path) {
+                            resolvedName = candidateName
+                            break
+                        }
+                    }
+                }
+            }
+        }
+
+        guard let avdName = resolvedName else {
+            throw TFTMACRuntimeError("No valid Android Virtual Device (.ini) found in \(avdHome.path).")
+        }
+
+        let avdINI = avdHome.appendingPathComponent("\(avdName).ini")
         let iniText = try String(contentsOf: avdINI, encoding: .utf8)
         guard let avdPath = iniText.split(whereSeparator: \.isNewline)
             .first(where: { $0.hasPrefix("path=") })?
             .dropFirst("path=".count), !avdPath.isEmpty else {
-            throw TFTMACRuntimeError("TFT_Ultra_Tablet.ini does not identify its AVD directory.")
+            throw TFTMACRuntimeError("\(avdName).ini does not identify its AVD directory.")
         }
         let avdDirectory = URL(fileURLWithPath: String(avdPath), isDirectory: true)
         let avdConfig = avdDirectory.appendingPathComponent("config.ini")
         guard manager.fileExists(atPath: avdConfig.path) else {
-            throw TFTMACRuntimeError("The TFT_Ultra_Tablet config.ini is missing.")
+            throw TFTMACRuntimeError("The \(avdName) config.ini is missing.")
         }
 
         guard let resourceURL = Bundle.main.resourceURL else {
@@ -70,6 +140,7 @@ struct TFTMACRuntimePaths: Sendable {
             emulator: sdkRoot.appendingPathComponent("emulator/emulator"),
             adb: sdkRoot.appendingPathComponent("platform-tools/adb"),
             avdHome: avdHome,
+            avdName: avdName,
             avdDirectory: avdDirectory,
             avdConfig: avdConfig,
             hostApplication: hostApplication,
@@ -2101,7 +2172,7 @@ actor TFTMACRuntimeService {
                 "pid": ProcessInfo.processInfo.processIdentifier,
                 "exclusive": true
             ])
-            try assertRuntimeUnoccupied(telemetry: telemetry)
+            try assertRuntimeUnoccupied(paths: paths, telemetry: telemetry)
             try recoverInterruptedAVDTransaction(paths: paths)
             recordFrozenReceipts(telemetry: telemetry, paths: paths)
             avdTransaction = try prepareAVD(paths: paths, telemetry: telemetry)
@@ -2566,15 +2637,15 @@ actor TFTMACRuntimeService {
         return false
     }
 
-    private func assertRuntimeUnoccupied(telemetry: TFTMACNativeTelemetry) throws {
+    private func assertRuntimeUnoccupied(paths: TFTMACRuntimePaths, telemetry: TFTMACNativeTelemetry) throws {
         let processOutput = (try? Self.runCommand(
             URL(fileURLWithPath: "/bin/ps"),
             ["-axo", "pid=,command="],
             timeout: 10
         ).output) ?? ""
         let emulatorConflicts = processOutput.split(whereSeparator: \.isNewline).filter { line in
-            line.contains("qemu-system-aarch64")
-                && (line.contains("@TFT_Ultra_Tablet") || line.contains("-port 5582") || line.contains("-grpc 8554"))
+            (line.contains("qemu-system") || line.contains("emulator"))
+                && (line.contains("@\(paths.avdName)") || line.contains("-port 5582") || line.contains("-grpc 8554"))
         }
         let listenerOutput = (try? Self.runCommand(
             URL(fileURLWithPath: "/usr/sbin/lsof"),
@@ -2583,10 +2654,10 @@ actor TFTMACRuntimeService {
         ).output) ?? ""
         let listeners = listenerOutput.split(whereSeparator: \.isNewline).dropFirst()
         guard emulatorConflicts.isEmpty && listeners.isEmpty else {
-            throw TFTMACRuntimeError("The shared TFT_Ultra_Tablet runtime or ports 5582/8554 are already in use. Close the existing emulator before launching TFTMAC.")
+            throw TFTMACRuntimeError("The shared \(paths.avdName) runtime or ports 5582/8554 are already in use. Close the existing emulator before launching Macrodroid.")
         }
         telemetry.recordEvent("RUNTIME_OWNERSHIP_PREFLIGHT_PASSED", payload: [
-            "avd": "TFT_Ultra_Tablet",
+            "avd": paths.avdName,
             "console_port": 5582,
             "controller_port": 8554,
             "existing_emulator_count": 0,
@@ -2610,7 +2681,7 @@ actor TFTMACRuntimeService {
             ("adb_serial", "emulator-5582", "known-good donor", "DIRECT"),
             ("controller_port", "\(profile.controllerPort)", "native authenticated controller", "REQUESTED"),
             ("adb_vendor_keys", "ABSENT", "launch environment contract", "DIRECT"),
-            ("avd", "TFT_Ultra_Tablet", "installed runtime", "DIRECT"),
+            ("avd", paths.avdName, "installed runtime", "DIRECT"),
             ("resolution", "\(profile.width)x\(profile.height)", "5 GiB gameplay evidence", "DIRECT"),
             ("density_dpi", "\(profile.densityDPI)", "5 GiB gameplay evidence", "DIRECT"),
             ("refresh_hz", "\(profile.refreshHz)", "5 GiB gameplay evidence", "DIRECT"),
@@ -2683,7 +2754,7 @@ actor TFTMACRuntimeService {
             "--env", "TFT_HOST_STDERR=\(stderr.path)",
             paths.hostApplication.path,
             "--args",
-            "@TFT_Ultra_Tablet", "-id", "TFTMAC", "-port", "5582",
+            "@\(paths.avdName)", "-id", "Macrodroid", "-port", "5582",
             "-gpu", profile.gpuMode, "-audio", profile.audioBackend,
             "-feature", profile.effectiveEmulatorFeatures.joined(separator: ","),
             "-append-userspace-opt", "androidboot.opengles.version=196610",
@@ -4664,8 +4735,8 @@ actor TFTMACRuntimeService {
                 ["-p", "\(processIdentifier)", "-ww", "-o", "command="],
                 timeout: 5
               ), result.status == 0 else { return false }
-        let baseIdentityMatches = result.output.contains("qemu-system-aarch64")
-            && result.output.contains("@TFT_Ultra_Tablet")
+        let isQemu = result.output.contains("qemu-system") || result.output.contains("emulator")
+        let baseIdentityMatches = isQemu
             && result.output.contains("-port 5582")
         return baseIdentityMatches && (sessionMarker.map(result.output.contains) ?? true)
     }
@@ -4677,8 +4748,8 @@ actor TFTMACRuntimeService {
             timeout: 10
         ), result.status == 0 else { return nil }
         for line in result.output.split(whereSeparator: \.isNewline) {
-            guard line.contains("qemu-system-aarch64"),
-                  line.contains("@TFT_Ultra_Tablet"),
+            let isQemu = line.contains("qemu-system") || line.contains("emulator")
+            guard isQemu,
                   line.contains(sessionMarker),
                   let pid = line.split(whereSeparator: \.isWhitespace).first.flatMap({ Int32($0) }) else { continue }
             return pid
@@ -4693,7 +4764,7 @@ actor TFTMACRuntimeService {
             timeout: 10
         ), result.status == 0 else { return true }
         return result.output.split(whereSeparator: \.isNewline).contains { line in
-            line.contains("qemu-system-aarch64") && line.contains("@TFT_Ultra_Tablet")
+            (line.contains("qemu-system") || line.contains("emulator")) && (line.contains("-port 5582") || line.contains("-grpc 8554"))
         }
     }
 

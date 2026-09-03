@@ -5,7 +5,9 @@ ROOT="${0:A:h:h}"
 ICON_SOURCE="${ROOT}/tftmac/Assets/TFTMAC-Official-Icon.png"
 ICON_SOURCE_SHA256="d6ba9ceb76c4b1e44e87f059f775a0ed629f9bea29b0dd73245853d7dca3a016"
 if [[ -z "${DEVELOPER_DIR:-}" ]]; then
-  if [[ -d /Applications/Xcode-26.6.0.app/Contents/Developer ]]; then
+  if [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
+    export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+  elif [[ -d /Applications/Xcode-26.6.0.app/Contents/Developer ]]; then
     export DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
   else
     export DEVELOPER_DIR="$(xcode-select -p)"
@@ -15,14 +17,19 @@ DERIVED="${ROOT}/.build/native-release"
 APP="${DERIVED}/Build/Products/Release/Macrodroid.app"
 DIST="${ROOT}/dist/Macrodroid.app"
 ICON_WORK="$(mktemp -d /private/tmp/tftmac-native-icon.XXXXXX)"
-SIGNING_IDENTITY_NAME="${TFTMAC_CODE_SIGN_IDENTITY_NAME:-TFTMAC Local Code Signing}"
+SIGNING_IDENTITY_NAME="${MACRODROID_CODE_SIGN_IDENTITY_NAME:-${TFTMAC_CODE_SIGN_IDENTITY_NAME:-Macrodroid Local Code Signing}}"
 SIGNING_IDENTITY_HASH="$(/usr/bin/security find-identity -v -p codesigning \
   | /usr/bin/awk -v name="${SIGNING_IDENTITY_NAME}" 'index($0, "\"" name "\"") { print $2; exit }')"
 
-[[ -n "${SIGNING_IDENTITY_HASH}" ]] || {
-  print -u2 "TFTMAC requires the stable '${SIGNING_IDENTITY_NAME}' identity. Run scripts/ensure-local-signing-identity.command once."
-  exit 1
-}
+if [[ -z "${SIGNING_IDENTITY_HASH}" ]]; then
+  SIGNING_IDENTITY_HASH="$(/usr/bin/security find-identity -v -p codesigning \
+    | /usr/bin/awk -v name="TFTMAC Local Code Signing" 'index($0, "\"" name "\"") { print $2; exit }')"
+fi
+
+if [[ -z "${SIGNING_IDENTITY_HASH}" ]]; then
+  print -u2 "Notice: No dedicated signing certificate found. Using ad-hoc (-) codesigning."
+  SIGNING_IDENTITY_HASH="-"
+fi
 [[ -s "${ICON_SOURCE}" ]] || {
   print -u2 "The official TFTMAC icon source is missing: ${ICON_SOURCE}"
   exit 1
@@ -92,7 +99,7 @@ HOST_APP="${DIST}/Contents/Resources/Macrodroid Emulator Host.app"
 HOST_MACOS="${HOST_APP}/Contents/MacOS"
 /bin/mkdir -p "${HOST_MACOS}"
 /usr/bin/xcrun --sdk macosx clang \
-  -Os -arch arm64 -mmacosx-version-min=15.0 \
+  -Os -arch arm64 -arch x86_64 -mmacosx-version-min=15.0 \
   "${ROOT}/RuntimeHost/main.c" \
   -o "${HOST_MACOS}/MacrodroidEmulatorHost"
 /bin/cp "${ROOT}/RuntimeHost/Info.plist" "${HOST_APP}/Contents/Info.plist"
@@ -101,7 +108,9 @@ HOST_MACOS="${HOST_APP}/Contents/MacOS"
 
 /usr/bin/codesign --force --deep --sign "${SIGNING_IDENTITY_HASH}" --timestamp=none "${DIST}"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "${DIST}"
-/usr/bin/codesign -dvv "${DIST}" 2>&1 \
-  | /usr/bin/grep -F "Authority=${SIGNING_IDENTITY_NAME}" >/dev/null
+if [[ "${SIGNING_IDENTITY_HASH}" != "-" ]]; then
+  /usr/bin/codesign -dvv "${DIST}" 2>&1 \
+    | /usr/bin/grep -F "Authority=${SIGNING_IDENTITY_NAME}" >/dev/null
+fi
 
 echo "Native Macrodroid built: ${DIST}"

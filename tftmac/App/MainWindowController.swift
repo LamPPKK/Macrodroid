@@ -15,7 +15,7 @@ final class MainWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "TFTMAC"
+        window.title = "Macrodroid"
         window.titleVisibility = .visible
         window.collectionBehavior.insert(.fullScreenPrimary)
         window.minSize = NSSize(width: 960, height: 540)
