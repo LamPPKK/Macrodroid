@@ -6,19 +6,20 @@ final class MainWindowController: NSWindowController {
 
     init(mailbox: LatestFrameMailbox) {
         emulatorView = EmbeddedEmulatorView(
-            frame: NSRect(x: 0, y: 0, width: 1920, height: 1080),
+            frame: NSRect(x: 0, y: 0, width: 1280, height: 720),
             mailbox: mailbox
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1920, height: 1080),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 720),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Macrodroid"
         window.titleVisibility = .visible
+        window.contentAspectRatio = NSSize(width: 16, height: 9)
         window.collectionBehavior.insert(.fullScreenPrimary)
-        window.minSize = NSSize(width: 960, height: 540)
+        window.minSize = NSSize(width: 800, height: 450)
         window.center()
         window.contentView = emulatorView
         super.init(window: window)

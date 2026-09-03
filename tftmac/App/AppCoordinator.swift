@@ -44,9 +44,6 @@ final class AppCoordinator: NSObject, NSApplicationDelegate {
         controller.window?.makeFirstResponder(controller.emulatorView)
         NSApp.activate(ignoringOtherApps: true)
         runtime.start()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak controller] in
-            controller?.enterNativeFullscreen()
-        }
     }
 
     @objc func showSettings(_ sender: Any?) {
