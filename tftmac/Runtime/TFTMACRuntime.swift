@@ -50,14 +50,21 @@ struct TFTMACRuntimePaths: Sendable {
         }
 
         guard let resourceURL = Bundle.main.resourceURL else {
-            throw TFTMACRuntimeError("TFTMAC.app has no Resources directory.")
+            throw TFTMACRuntimeError("Application bundle has no Resources directory.")
         }
-        let hostApplication = resourceURL.appendingPathComponent("TFTMAC Emulator Host.app", isDirectory: true)
+        let macrodroidHost = resourceURL.appendingPathComponent("Macrodroid Emulator Host.app", isDirectory: true)
+        let legacyHost = resourceURL.appendingPathComponent("TFTMAC Emulator Host.app", isDirectory: true)
+        let hostApplication = manager.fileExists(atPath: macrodroidHost.path) ? macrodroidHost : legacyHost
         guard manager.fileExists(atPath: hostApplication.path) else {
-            throw TFTMACRuntimeError("TFTMAC Emulator Host.app is missing from the application bundle.")
+            throw TFTMACRuntimeError("Emulator Host application is missing from the application bundle.")
         }
-        let applicationSupport = manager.homeDirectoryForCurrentUser
+        let modernSupport = manager.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Macrodroid", isDirectory: true)
+        let legacySupport = manager.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/TFTMAC", isDirectory: true)
+        let applicationSupport = manager.fileExists(atPath: modernSupport.path) || !manager.fileExists(atPath: legacySupport.path)
+            ? modernSupport
+            : legacySupport
         return Self(
             sdkRoot: sdkRoot,
             emulator: sdkRoot.appendingPathComponent("emulator/emulator"),

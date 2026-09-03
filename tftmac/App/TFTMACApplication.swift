@@ -17,16 +17,16 @@ enum TFTMACApplication {
 
     @MainActor
     private static func installMainMenu(on application: NSApplication, coordinator: AppCoordinator) {
-        let mainMenu = NSMenu(title: "TFTMAC")
+        let mainMenu = NSMenu(title: "Macrodroid")
 
         let appItem = NSMenuItem()
-        let appMenu = NSMenu(title: "TFTMAC")
+        let appMenu = NSMenu(title: "Macrodroid")
         appItem.submenu = appMenu
-        appMenu.addItem(withTitle: "About TFTMAC", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "About Macrodroid", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         let settings = appMenu.addItem(withTitle: "Performance Lab…", action: #selector(AppCoordinator.showSettings(_:)), keyEquivalent: ",")
         settings.target = coordinator
         appMenu.addItem(.separator())
-        let quit = appMenu.addItem(withTitle: "Quit TFTMAC", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = appMenu.addItem(withTitle: "Quit Macrodroid", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = application
         mainMenu.addItem(appItem)
 

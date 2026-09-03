@@ -63,7 +63,7 @@
 		200000000000000000000008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		200000000000000000000009 /* emulator_controller.pb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = emulator_controller.pb.swift; sourceTree = "<group>"; };
 		200000000000000000000010 /* emulator_controller.grpc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = emulator_controller.grpc.swift; sourceTree = "<group>"; };
-		200000000000000000000011 /* TFTMAC.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TFTMAC.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		200000000000000000000011 /* Macrodroid.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Macrodroid.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		200000000000000000000012 /* EmbeddedControlProbe */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = EmbeddedControlProbe; sourceTree = BUILT_PRODUCTS_DIR; };
 		200000000000000000000013 /* TFTMACTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TFTMACTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		200000000000000000000014 /* FrameContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameContract.swift; sourceTree = "<group>"; };
@@ -150,7 +150,7 @@
 		400000000000000000000006 /* EmbeddedControlProbe */ = {isa = PBXGroup; children = (200000000000000000000006 /* EmbeddedControlProbe.swift */,); path = EmbeddedControlProbe; sourceTree = "<group>"; };
 		400000000000000000000007 /* Tests */ = {isa = PBXGroup; children = (400000000000000000000008 /* TFTMACTests */,); path = Tests; sourceTree = "<group>"; };
 		400000000000000000000008 /* TFTMACTests */ = {isa = PBXGroup; children = (200000000000000000000007 /* TFTMACGate1Tests.swift */, 20000000000000000000001C /* GameFrameTelemetryTests.swift */, 200000000000000000000020 /* CombatBenchmarkAnalysisTests.swift */, 200000000000000000000022 /* GraphicsStackReceiptTests.swift */,); path = TFTMACTests; sourceTree = "<group>"; };
-		400000000000000000000009 /* Products */ = {isa = PBXGroup; children = (200000000000000000000011 /* TFTMAC.app */, 200000000000000000000012 /* EmbeddedControlProbe */, 200000000000000000000013 /* TFTMACTests.xctest */,); name = Products; sourceTree = "<group>"; };
+		400000000000000000000009 /* Products */ = {isa = PBXGroup; children = (200000000000000000000011 /* Macrodroid.app */, 200000000000000000000012 /* EmbeddedControlProbe */, 200000000000000000000013 /* TFTMACTests.xctest */,); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -162,8 +162,8 @@
 			dependencies = ();
 			name = TFTMAC;
 			packageProductDependencies = (D00000000000000000000001 /* GRPCCore */, D00000000000000000000002 /* GRPCNIOTransportHTTP2 */, D00000000000000000000003 /* GRPCProtobuf */, D00000000000000000000004 /* SwiftProtobuf */);
-			productName = TFTMAC;
-			productReference = 200000000000000000000011 /* TFTMAC.app */;
+			productName = Macrodroid;
+			productReference = 200000000000000000000011 /* Macrodroid.app */;
 			productType = "com.apple.product-type.application";
 		};
 		500000000000000000000002 /* EmbeddedControlProbe */ = {
@@ -222,8 +222,8 @@
 /* Begin XCBuildConfiguration section */
 		B00000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; SWIFT_VERSION = 6.0;}; name = Debug; };
 		B00000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 6.0;}; name = Release; };
-		B00000000000000000000011 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 8; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = TFTMAC/Info.plist; MACOSX_DEPLOYMENT_TARGET = 15.0; MARKETING_VERSION = 2.3.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.flashls1.tftmac; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0;}; name = Debug; };
-		B00000000000000000000012 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 8; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = TFTMAC/Info.plist; MACOSX_DEPLOYMENT_TARGET = 15.0; MARKETING_VERSION = 2.3.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.flashls1.tftmac; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0;}; name = Release; };
+		B00000000000000000000011 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 8; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = tftmac/Info.plist; MACOSX_DEPLOYMENT_TARGET = 15.0; MARKETING_VERSION = 2.3.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.lamppkk.macrodroid; PRODUCT_NAME = Macrodroid; SDKROOT = macosx; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0;}; name = Debug; };
+		B00000000000000000000012 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 8; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = tftmac/Info.plist; MACOSX_DEPLOYMENT_TARGET = 15.0; MARKETING_VERSION = 2.3.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.lamppkk.macrodroid; PRODUCT_NAME = Macrodroid; SDKROOT = macosx; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0;}; name = Release; };
 		B00000000000000000000021 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_VERSION = 6.0;}; name = Debug; };
 		B00000000000000000000022 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_VERSION = 6.0;}; name = Release; };
 		B00000000000000000000031 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; PRODUCT_BUNDLE_IDENTIFIER = com.flashls1.tftmac.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_VERSION = 6.0;}; name = Debug; };

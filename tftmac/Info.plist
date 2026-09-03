@@ -5,17 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>TFTMAC</string>
+    <string>Macrodroid</string>
     <key>CFBundleExecutable</key>
-    <string>TFTMAC</string>
+    <string>Macrodroid</string>
     <key>CFBundleIconFile</key>
-    <string>TFTMAC.icns</string>
+    <string>Macrodroid.icns</string>
     <key>CFBundleIdentifier</key>
-    <string>com.flashls1.tftmac</string>
+    <string>com.lamppkk.macrodroid</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>TFTMAC</string>
+    <string>Macrodroid</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -31,8 +31,8 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSRemovableVolumesUsageDescription</key>
-    <string>TFTMAC uses the Android emulator runtime stored on MAC MINI M4.</string>
+    <string>Macrodroid uses the Android emulator runtime stored on external volumes.</string>
     <key>NSHumanReadableCopyright</key>
-    <string>TFTMAC. Teamfight Tactics and Riot Games are property of their respective owners.</string>
+    <string>Macrodroid. Teamfight Tactics and Riot Games are property of their respective owners.</string>
 </dict>
 </plist>

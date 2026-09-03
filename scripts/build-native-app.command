@@ -12,8 +12,8 @@ if [[ -z "${DEVELOPER_DIR:-}" ]]; then
   fi
 fi
 DERIVED="${ROOT}/.build/native-release"
-APP="${DERIVED}/Build/Products/Release/TFTMAC.app"
-DIST="${ROOT}/dist/TFTMAC.app"
+APP="${DERIVED}/Build/Products/Release/Macrodroid.app"
+DIST="${ROOT}/dist/Macrodroid.app"
 ICON_WORK="$(mktemp -d /private/tmp/tftmac-native-icon.XXXXXX)"
 SIGNING_IDENTITY_NAME="${TFTMAC_CODE_SIGN_IDENTITY_NAME:-TFTMAC Local Code Signing}"
 SIGNING_IDENTITY_HASH="$(/usr/bin/security find-identity -v -p codesigning \
@@ -85,16 +85,16 @@ TRACE_PROCESSOR="$(/bin/zsh "${ROOT}/scripts/install-trace-processor.command")"
   exit 1
 }
 
-# Package a TFTMAC-owned Mac application host for Android Emulator. Launching
+# Package a Macrodroid-owned Mac application host for Android Emulator. Launching
 # this nested app with /usr/bin/open keeps the emulator and ADB identity inside
 # the logged-in user's macOS session, matching the proven donor architecture.
-HOST_APP="${DIST}/Contents/Resources/TFTMAC Emulator Host.app"
+HOST_APP="${DIST}/Contents/Resources/Macrodroid Emulator Host.app"
 HOST_MACOS="${HOST_APP}/Contents/MacOS"
 /bin/mkdir -p "${HOST_MACOS}"
 /usr/bin/xcrun --sdk macosx clang \
   -Os -arch arm64 -mmacosx-version-min=15.0 \
   "${ROOT}/RuntimeHost/main.c" \
-  -o "${HOST_MACOS}/TFTMACEmulatorHost"
+  -o "${HOST_MACOS}/MacrodroidEmulatorHost"
 /bin/cp "${ROOT}/RuntimeHost/Info.plist" "${HOST_APP}/Contents/Info.plist"
 /usr/bin/plutil -lint "${HOST_APP}/Contents/Info.plist" >/dev/null
 /usr/bin/codesign --force --sign "${SIGNING_IDENTITY_HASH}" --timestamp=none "${HOST_APP}"
@@ -104,4 +104,4 @@ HOST_MACOS="${HOST_APP}/Contents/MacOS"
 /usr/bin/codesign -dvv "${DIST}" 2>&1 \
   | /usr/bin/grep -F "Authority=${SIGNING_IDENTITY_NAME}" >/dev/null
 
-echo "Native TFTMAC built: ${DIST}"
+echo "Native Macrodroid built: ${DIST}"

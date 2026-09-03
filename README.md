@@ -1,117 +1,130 @@
-# TFTMAC
+# Macrodroid
 
-TFTMAC is a native macOS application for running the official Android Teamfight Tactics client on Apple Silicon through Google's stock Android Emulator.
+> **Native Apple Silicon Android Client & High-Performance Gaming Runtime**
 
-## Current architecture
+Macrodroid is a high-performance native macOS application built in Swift and MetalKit, designed to run official Android applications and mobile games—deeply optimized for Teamfight Tactics (TFT)—on Apple Silicon (M1/M2/M3/M4) Macs through a headless, fully embedded Google Android Emulator.
 
-```text
-TFTMAC.app
-  -> AppKit window
-  -> Metal presentation layer
-  -> authenticated local EmulatorController
-  -> stock Google Android Emulator
-  -> official Google Play ARM64 guest
-  -> official Google Play TFT package
-  -> Riot authentication and content lifecycle
-```
+---
 
-The product does not bundle, mirror, patch, re-sign, or privately update Riot binaries. Google Play is the installation/update authority for the Android application, and Riot's application owns its own content initialization.
+## 🌟 Highlights
 
-## Runtime authority
+- **100% Native Mac Experience**: No third-party emulator windows or Qt toolbars. Macrodroid embeds the Android display directly inside a native AppKit window backed by MetalKit with full macOS Spaces and Fullscreen support.
+- **Ultra-Low Latency Input**: Native macOS mouse clicks, drags, and keyboard strokes map directly to authenticated gRPC `EmulatorController.sendTouch` calls—bypassing `adb shell` execution overhead.
+- **Metal Presentation Pipeline**: 1080p RGBA presentation rendered with a triple-buffered Metal texture pipeline, hardware-accelerated on Apple Silicon GPUs.
+- **Engineering Performance Lab**: Built-in SQLite telemetry engine tracking continuous frame times, GPU render latencies (p95/p99), frame drops, and combat degradation incidents in real time.
+- **Clean Ownership & Security**: Zero binary tampering with game APKs. Preserves official Google Play and Riot Games authentication and update lifecycles.
 
-The working runtime is stored outside the repository under:
+---
+
+## 🏗 Architecture
 
 ```text
-/Volumes/MAC MINI M4/TFTMAC/Runtime
+Macrodroid.app
+  ├── AppKit Window & Menu Bar (Native macOS controls, fullscreen Space)
+  ├── MetalKit Presentation Layer (MTKView, custom Metal pipeline, triple-buffering)
+  ├── Authenticated gRPC Protocol (EmulatorController loopback over port 5582)
+  │     ├── Native Touch & Mouse Mapping (ViewportMapper -> sendTouch)
+  │     └── Native Frame Streaming (RGBA8888 1920×1080 -> LatestFrameMailbox)
+  └── Headless Android Emulator (-no-window via Macrodroid Emulator Host.app)
+        ├── Official ARM64 Guest Image (API 36 / Android 16)
+        ├── Guest ANGLE (OpenGL ES → Vulkan translator)
+        ├── VirtIO-GPU ASG Transport (Address Space Graphics)
+        └── MoltenVK (Vulkan → Metal on macOS)
 ```
 
-The current stock emulator authority is Android Emulator 37.1.11. The exact installed EmulatorController protocol is vendored at `Vendor/AndroidEmulator/emulator_controller.proto` with provenance in `Vendor/AndroidEmulator/SOURCE.json`.
+---
 
-The source-built emulator laboratory is not part of the normal product path.
-`flashls1/tftmac-runtime@c8aa26e` is eligible only as an isolated,
-non-comparable diagnostic source runtime for the planned causal logger.
+## 📋 Requirements
 
-## Current handoff authority
+- **Hardware**: Apple Silicon Mac (M1, M2, M3, M4 or later).
+- **Operating System**: macOS 15.0 (Sequoia) or later.
+- **Development Tools**: Xcode 16+ or Apple Command Line Tools.
+- **Runtime Dependencies**:
+  - Android Emulator 37.1.11+ (ARM64).
+  - Android SDK (Platform Tools 36+, System Image API 36 Google APIs / Play Store).
+  - Node.js 24 (for repository validation tooling).
+  - `jq`, `ripgrep` (`rg`), and `zsh`.
 
-- [`facts.md`](facts.md) — locked facts, current observations, verified results, and explicit unknowns.
-- [`project.md`](project.md) — complete project history, architecture pivots, current Build 8 logger state, and continuity for a new chat.
-- [`dev.md`](dev.md) — code ownership, experiment ledger, SQL contracts, hypotheses, and the next development gates.
+---
 
-Historical plans and benchmark records remain useful evidence, but they do not override these current boundaries or the machine-readable files under `ssot/`. The dated archive under `docs/history/2026-08-31-pre-build8/` is not current execution authority.
+## 🚀 Quick Start
 
-## Native build
+### 1. Build the Native App
 
-Requirements:
-
-- Apple Silicon Mac
-- macOS 15 or later
-- Xcode 26.6
-- Node.js 24 for repository tooling
-- `jq`, `ripgrep`, and zsh
-
-Build:
+Build the release application bundle:
 
 ```sh
-/bin/zsh scripts/build-native-app.command
+/bin/zsh scripts/build-macrodroid-app.command
 ```
 
-Test:
+The compiled application will be generated at:
+```text
+dist/Macrodroid.app
+```
+
+### 2. Run Tests
+
+Execute the native test suite (covering FrameContract, ViewportMapper, AVD guards, and telemetry stores):
 
 ```sh
 /bin/zsh scripts/test-native-app.command
 ```
 
-Repository/CI validation (no installed app, private runtime, credentials, or
-signing identity required):
+### 3. Verify Repository Integrity
+
+Run the automated consistency and SSOT checks:
 
 ```sh
 /bin/zsh scripts/verify-tftmac.command
 ```
 
-Local installed-app/runtime/signing validation:
+---
 
-```sh
-/bin/zsh scripts/verify-installed-runtime.command
-```
+## 🎮 Playing Games & Running Apps
 
-The latter currently reports the known missing local signing identity and
-`CSSMERR_TP_NOT_TRUSTED`; it is intentionally not a CI dependency.
+Macrodroid connects to an AVD configured for high-performance graphics:
 
-The native application bundle identifier is `com.flashls1.tftmac`.
+1. **First Launch**: Open `Macrodroid.app`. The headless emulator process will start in the background via the isolated host helper.
+2. **Account Sign-in**: If Google Play or Riot Games requires authentication, PIN, or MFA, the official interface appears directly inside the Metal window for you to complete.
+3. **Gameplay**:
+   - Left-click / Drag: Native touchscreen interaction mapped seamlessly to Android touch events.
+   - Hotkeys: In-game actions map directly via the gRPC input bridge.
+   - Fullscreen: Press `Command + Control + F` or use the native green macOS window button to enter fullscreen.
 
-## Runtime and package rules
+---
 
-TFTMAC preserves the known-good stock SDK and AVD. Runtime state, Google credentials, Riot credentials, Android userdata, APK bytes, tokens, and private session data are never committed to Git.
+## 🔬 Performance Lab & Telemetry
 
-The supported package is:
+Macrodroid includes a continuous graphics and combat performance logger:
+
+- **Local Storage**: Captures and session records are stored locally under `~/Library/Application Support/Macrodroid`.
+- **SQL Analytics**: High-frequency metrics (monotonic frame timestamps, Metal command buffer latencies, and SurfaceFlinger presentation markers) are recorded into a local SQLite database schema.
+- **Automatic Incident Detection**: Any sequence drops or frame pacing anomalies exceeding threshold intervals are tagged and analyzed automatically.
+
+---
+
+## 📁 Project Structure
 
 ```text
-com.riotgames.league.teamfighttactics
+├── tftmac/               # Core native macOS Swift application
+│   ├── App/             # App lifecycle, coordinators, settings window
+│   ├── Presentation/    # EmbeddedEmulatorView (MetalKit), FrameContract, ViewportMapper
+│   ├── Runtime/         # gRPC client, AVD transaction guard, telemetry store, input
+│   └── Assets/          # Application icons and branding assets
+├── RuntimeHost/         # Minimal C helper application (Macrodroid Emulator Host.app)
+├── Vendor/              # Google Android Emulator gRPC Protobuf definitions
+├── ssot/                # Single Source of Truth: hardware facts, SQL schemas, locks
+├── scripts/             # Build, testing, benchmarking, and verification automation
+├── docs/                # Architecture specifications, benchmarks, and research logs
+├── facts.md             # Locked facts and observed runtime boundaries
+├── project.md           # Project chronology, architectural pivots, and development state
+└── benchmark.md         # Detailed benchmarking methodology and continuous FPS metrics
 ```
 
-Expected installer authority:
+---
 
-```text
-com.android.vending
-```
+## 📄 License & Attribution
 
-If Google Play or Riot requires authentication, MFA, consent, or CAPTCHA, TFTMAC surfaces the official UI for the user to complete that step.
-
-## Performance and diagnostics
-
-Performance work is evidence-driven. Build 8 automatically logs the TFT process/layer lifetime and has been live-verified. It proves exact gameplay cadence and degradation, but it does not yet name an internal graphics root. Source-level causal instrumentation is planned in an isolated diagnostic runtime, never by silently replacing the stock playable runtime.
-
-The current target is 1920x1080 at 60 Hz. High graphics at a 60 FPS cap with Riot Performance Mode OFF is the accepted playable baseline. Ultra High and Riot Performance Mode Beta were rejected on the target M4 host because of severe lag and unacceptable combat tails.
-
-## Project boundaries
-
-- One active product: TFTMAC.
-- One authoritative repository: `flashls1/TFTMAC`.
-- No legacy launcher, hosted game feed, private update service, or donor branding belongs in the shipping tree.
-- No source-built emulator checkout is required for normal build, launch, test, repair, or release.
-
-## License and attribution
-
-Repository source is provided under [LICENSE](LICENSE). Third-party software and platform components retain their own licenses and terms; see [NOTICE.md](NOTICE.md).
-
-Teamfight Tactics, TFT, Riot Games, Google, Android, Apple, macOS, Metal, and related names belong to their respective owners. TFTMAC is an independent project and is not endorsed by Riot Games, Google, or Apple.
+- **License**: MIT License (see [LICENSE](LICENSE)).
+- **Heritage**: Macrodroid builds upon the foundational research and donor contracts pioneered by Mactician and the TFTMAC native client project.
+- **Disclaimer**: Teamfight Tactics, League of Legends, and Riot Games are trademarks or registered trademarks of Riot Games, Inc. Android is a trademark of Google LLC. Macrodroid is an independent open-source project and is not affiliated with or endorsed by Riot Games or Google.
