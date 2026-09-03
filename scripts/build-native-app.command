@@ -24,6 +24,9 @@ SIGNING_IDENTITY_HASH="$(/usr/bin/security find-identity -v -p codesigning \
 if [[ -z "${SIGNING_IDENTITY_HASH}" ]]; then
   SIGNING_IDENTITY_HASH="$(/usr/bin/security find-identity -v -p codesigning \
     | /usr/bin/awk -v name="TFTMAC Local Code Signing" 'index($0, "\"" name "\"") { print $2; exit }')"
+  if [[ -n "${SIGNING_IDENTITY_HASH}" ]]; then
+    SIGNING_IDENTITY_NAME="TFTMAC Local Code Signing"
+  fi
 fi
 
 if [[ -z "${SIGNING_IDENTITY_HASH}" ]]; then
@@ -50,6 +53,8 @@ trap cleanup EXIT
   -scheme TFTMAC \
   -configuration Release \
   -derivedDataPath "${DERIVED}" \
+  ARCHS="arm64 x86_64" \
+  ONLY_ACTIVE_ARCH=NO \
   CODE_SIGNING_ALLOWED=NO \
   build
 

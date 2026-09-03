@@ -26,9 +26,17 @@ if /usr/bin/security find-certificate -c "${IDENTITY_NAME}" "${LOGIN_KEYCHAIN}" 
   exit 1
 fi
 
-readonly OPENSSL="${TFTMAC_OPENSSL:-/opt/homebrew/bin/openssl}"
+if [[ -n "${TFTMAC_OPENSSL:-}" && -x "${TFTMAC_OPENSSL}" ]]; then
+  readonly OPENSSL="${TFTMAC_OPENSSL}"
+elif [[ -x "/opt/homebrew/bin/openssl" ]]; then
+  readonly OPENSSL="/opt/homebrew/bin/openssl"
+elif [[ -x "/usr/local/bin/openssl" ]]; then
+  readonly OPENSSL="/usr/local/bin/openssl"
+else
+  readonly OPENSSL="$(command -v openssl || echo /usr/bin/openssl)"
+fi
 [[ -x "${OPENSSL}" ]] || {
-  print -u2 "TFTMAC requires OpenSSL at ${OPENSSL} to create its one-time local signing identity."
+  print -u2 "OpenSSL was not found at ${OPENSSL}. Please install openssl via Homebrew or ensure it is in PATH."
   exit 1
 }
 

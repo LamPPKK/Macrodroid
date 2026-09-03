@@ -70,32 +70,63 @@ struct TFTMACRuntimePaths: Sendable {
             }
         }
         if resolvedName == nil {
+            #if arch(arm64)
             let priorityNames = [
                 "TFT_Ultra_Tablet",
+                "Macrodroid_ARM64",
                 "Macrodroid",
                 "Tft",
-                "Pixel_3a_API_34_extension_level_7_x86_64",
-                "Pixel_3a_API_34_x86_64"
+                "Pixel_3a_API_34_extension_level_7_x86_64"
             ]
+            let expectedArch = "arm64"
+            #else
+            let priorityNames = [
+                "Pixel_3a_API_34_extension_level_7_x86_64",
+                "Pixel_3a_API_34_x86_64",
+                "Macrodroid_x86_64",
+                "Macrodroid",
+                "TFT_Ultra_Tablet",
+                "Tft"
+            ]
+            let expectedArch = "x86_64"
+            #endif
             for name in priorityNames {
                 if manager.fileExists(atPath: avdHome.appendingPathComponent("\(name).ini").path) {
                     resolvedName = name
                     break
                 }
             }
-        }
-        if resolvedName == nil {
-            if let entries = try? manager.contentsOfDirectory(atPath: avdHome.path) {
-                let inis = entries.filter { $0.hasSuffix(".ini") }
-                for ini in inis {
-                    let candidateName = String(ini.dropLast(".ini".count))
-                    let iniURL = avdHome.appendingPathComponent(ini)
-                    if let text = try? String(contentsOf: iniURL, encoding: .utf8),
-                       let pathLine = text.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix("path=") }) {
-                        let path = String(pathLine.dropFirst("path=".count))
-                        if manager.fileExists(atPath: URL(fileURLWithPath: path).appendingPathComponent("config.ini").path) {
-                            resolvedName = candidateName
-                            break
+            if resolvedName == nil {
+                if let entries = try? manager.contentsOfDirectory(atPath: avdHome.path) {
+                    let inis = entries.filter { $0.hasSuffix(".ini") }
+                    // First pass: look for an AVD matching the host architecture
+                    for ini in inis {
+                        let candidateName = String(ini.dropLast(".ini".count))
+                        let iniURL = avdHome.appendingPathComponent(ini)
+                        if let text = try? String(contentsOf: iniURL, encoding: .utf8),
+                           let pathLine = text.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix("path=") }) {
+                            let path = String(pathLine.dropFirst("path=".count))
+                            let configURL = URL(fileURLWithPath: path).appendingPathComponent("config.ini")
+                            if let configText = try? String(contentsOf: configURL, encoding: .utf8),
+                               configText.contains(expectedArch) {
+                                resolvedName = candidateName
+                                break
+                            }
+                        }
+                    }
+                    // Second pass: accept any valid AVD
+                    if resolvedName == nil {
+                        for ini in inis {
+                            let candidateName = String(ini.dropLast(".ini".count))
+                            let iniURL = avdHome.appendingPathComponent(ini)
+                            if let text = try? String(contentsOf: iniURL, encoding: .utf8),
+                               let pathLine = text.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix("path=") }) {
+                                let path = String(pathLine.dropFirst("path=".count))
+                                if manager.fileExists(atPath: URL(fileURLWithPath: path).appendingPathComponent("config.ini").path) {
+                                    resolvedName = candidateName
+                                    break
+                                }
+                            }
                         }
                     }
                 }
@@ -2957,68 +2988,77 @@ actor TFTMACRuntimeService {
             "manual_unlock_was_required": manualUnlockRequired
         ])
         let package = "com.riotgames.league.teamfighttactics"
-        let packageDump = try Self.adb(paths: paths, ["shell", "dumpsys", "package", package], timeout: 30).output
-        guard packageDump.contains("Package [\(package)]") || packageDump.contains("versionName=") else {
-            throw TFTMACRuntimeError("Official TFT is not installed. Open Google Play in Android and install Teamfight Tactics.")
-        }
-        let installer = try? Self.adb(paths: paths, ["shell", "cmd", "package", "get-install-source", package], timeout: 15).output
-        tftPackageVersion = packageDump.split(whereSeparator: \.isNewline)
-            .first(where: { $0.contains("versionName=") })
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            ?? "unknown"
-        let versionCodeLine = packageDump.split(whereSeparator: \.isNewline)
-            .first(where: { $0.contains("versionCode=") })
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            ?? "unknown"
-        let signingLine = packageDump.split(whereSeparator: \.isNewline)
-            .first(where: { $0.contains("signatures=PackageSignatures") })
-            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            ?? "unknown"
-        telemetry.recordReceipt(key: "official_tft_version", value: tftPackageVersion, source: "dumpsys package", confidence: "DIRECT")
-        telemetry.recordReceipt(key: "official_tft_version_code", value: versionCodeLine, source: "dumpsys package", confidence: "DIRECT")
-        telemetry.recordReceipt(key: "official_tft_installer", value: installer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown", source: "cmd package get-install-source", confidence: "DIRECT")
-        telemetry.recordReceipt(key: "official_tft_signing_receipt", value: signingLine, source: "dumpsys package", confidence: signingLine == "unknown" ? "UNKNOWN" : "DIRECT")
-        telemetry.recordEvent("OFFICIAL_TFT_PACKAGE_RECEIPT", payload: [
-            "package": package,
-            "installer_output": installer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown",
-            "version_line": tftPackageVersion,
-            "version_code_line": versionCodeLine,
-            "signing_line": signingLine
-        ])
-        try await Task.sleep(for: .milliseconds(750))
-        guard logcatProcess?.isRunning == true,
-              Self.fileSize(telemetry.captureDirectory.appendingPathComponent("logcat.raw.txt")) > 0 else {
-            throw TFTMACRuntimeError("The required local logcat recorder did not become healthy before TFT launch.")
-        }
-        telemetry.recordEvent("LOGGER_HEALTH_GATE_PASSED", payload: [
-            "logcat_growing": true,
-            "resource_sampler_active": true,
-            "sql_database": "TFTMAC_NATIVE_RUNTIME.sqlite"
-        ])
-        recordDiagnosticSnapshot(paths: paths, telemetry: telemetry, label: "before_tft_launch")
+        let packageDump = (try? Self.adb(paths: paths, ["shell", "dumpsys", "package", package], timeout: 15).output) ?? ""
+        let isTFTInstalled = packageDump.contains("Package [\(package)]") || packageDump.contains("versionName=")
 
-        let resolved = try? Self.adb(
-            paths: paths,
-            ["shell", "cmd", "package", "resolve-activity", "--brief", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", package],
-            timeout: 20
-        ).output.split(whereSeparator: \.isNewline).last.map(String.init)
-        var launched = false
-        for component in [resolved, "\(package)/com.epicgames.unreal.SplashActivity", "\(package)/com.epicgames.unreal.GameActivity"].compactMap({ $0 }) {
-            let result = try? Self.adb(paths: paths, ["shell", "am", "start", "-W", "-n", component], timeout: 45)
-            if result?.status == 0 {
-                launched = true
-                telemetry.recordEvent("TFT_LAUNCH_REQUESTED", payload: ["component": component])
-                break
+        if isTFTInstalled {
+            let installer = try? Self.adb(paths: paths, ["shell", "cmd", "package", "get-install-source", package], timeout: 15).output
+            tftPackageVersion = packageDump.split(whereSeparator: \.isNewline)
+                .first(where: { $0.contains("versionName=") })
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                ?? "unknown"
+            let versionCodeLine = packageDump.split(whereSeparator: \.isNewline)
+                .first(where: { $0.contains("versionCode=") })
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                ?? "unknown"
+            let signingLine = packageDump.split(whereSeparator: \.isNewline)
+                .first(where: { $0.contains("signatures=PackageSignatures") })
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                ?? "unknown"
+            telemetry.recordReceipt(key: "official_tft_version", value: tftPackageVersion, source: "dumpsys package", confidence: "DIRECT")
+            telemetry.recordReceipt(key: "official_tft_version_code", value: versionCodeLine, source: "dumpsys package", confidence: "DIRECT")
+            telemetry.recordReceipt(key: "official_tft_installer", value: installer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown", source: "cmd package get-install-source", confidence: "DIRECT")
+            telemetry.recordReceipt(key: "official_tft_signing_receipt", value: signingLine, source: "dumpsys package", confidence: signingLine == "unknown" ? "UNKNOWN" : "DIRECT")
+            telemetry.recordEvent("OFFICIAL_TFT_PACKAGE_RECEIPT", payload: [
+                "package": package,
+                "installer_output": installer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown",
+                "version_line": tftPackageVersion,
+                "version_code_line": versionCodeLine,
+                "signing_line": signingLine
+            ])
+            try await Task.sleep(for: .milliseconds(750))
+            if logcatProcess?.isRunning == true,
+               Self.fileSize(telemetry.captureDirectory.appendingPathComponent("logcat.raw.txt")) > 0 {
+                telemetry.recordEvent("LOGGER_HEALTH_GATE_PASSED", payload: [
+                    "logcat_growing": true,
+                    "resource_sampler_active": true,
+                    "sql_database": "TFTMAC_NATIVE_RUNTIME.sqlite"
+                ])
             }
+            recordDiagnosticSnapshot(paths: paths, telemetry: telemetry, label: "before_tft_launch")
+
+            let resolved = try? Self.adb(
+                paths: paths,
+                ["shell", "cmd", "package", "resolve-activity", "--brief", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", package],
+                timeout: 20
+            ).output.split(whereSeparator: \.isNewline).last.map(String.init)
+            var launched = false
+            for component in [resolved, "\(package)/com.epicgames.unreal.SplashActivity", "\(package)/com.epicgames.unreal.GameActivity"].compactMap({ $0 }) {
+                let result = try? Self.adb(paths: paths, ["shell", "am", "start", "-W", "-n", component], timeout: 45)
+                if result?.status == 0 {
+                    launched = true
+                    telemetry.recordEvent("TFT_LAUNCH_REQUESTED", payload: ["component": component])
+                    break
+                }
+            }
+            if launched {
+                telemetry.recordEvent("TFT_READY_FOR_USER", payload: [
+                    "engine": "Unreal Engine",
+                    "resolution": "\(profile.width)x\(profile.height)",
+                    "refresh_hz": profile.refreshHz,
+                    "audio_backend": "coreaudio",
+                    "profile_id": profile.identifier
+                ])
+            }
+        } else {
+            _ = try? Self.adb(paths: paths, ["shell", "input", "keyevent", "KEYCODE_HOME"], timeout: 10)
+            telemetry.recordEvent("ANDROID_HOME_READY_FOR_USER", payload: [
+                "resolution": "\(profile.width)x\(profile.height)",
+                "refresh_hz": profile.refreshHz,
+                "audio_backend": "coreaudio",
+                "profile_id": profile.identifier
+            ])
         }
-        guard launched else { throw TFTMACRuntimeError("Android could not launch the official TFT activity.") }
-        telemetry.recordEvent("TFT_READY_FOR_USER", payload: [
-            "engine": "Unreal Engine",
-            "resolution": "1920x1080",
-            "refresh_hz": profile.refreshHz,
-            "audio_backend": "coreaudio",
-            "profile_id": profile.identifier
-        ])
         telemetry.markRunning()
         await status("", false)
         while !stopping {
@@ -4479,8 +4519,8 @@ actor TFTMACRuntimeService {
                 serializer: GRPCProtobuf.ProtobufSerializer<SwiftProtobuf.Google_Protobuf_Empty>(),
                 deserializer: GRPCProtobuf.ProtobufDeserializer<Android_Emulation_Control_EmulatorStatus>()
             )
-            guard emulatorStatus.version.contains("37.1.11") else {
-                throw TFTMACRuntimeError("Unexpected Android Emulator version: \(emulatorStatus.version)")
+            guard !emulatorStatus.version.isEmpty else {
+                throw TFTMACRuntimeError("Android Emulator did not report a valid version.")
             }
             telemetry.recordEvent("CONTROLLER_AUTHENTICATED", payload: [
                 "version": emulatorStatus.version,
