@@ -33,7 +33,6 @@ struct TFTMACRuntimePaths: Sendable {
         sdkCandidates.append(userSDK)
         let appSupport = manager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
         sdkCandidates.append(appSupport.appendingPathComponent("Macrodroid/sdk", isDirectory: true))
-        sdkCandidates.append(appSupport.appendingPathComponent("Mactician/sdk", isDirectory: true))
         sdkCandidates.append(appSupport.appendingPathComponent("TFTMAC/sdk", isDirectory: true))
         sdkCandidates.append(URL(fileURLWithPath: "/Volumes/MAC MINI M4/TFTMAC/Runtime/SDK", isDirectory: true))
         sdkCandidates.append(URL(fileURLWithPath: "/Volumes/MAC MINI M4/TFTMAC/Runtime/sdk", isDirectory: true))
@@ -53,7 +52,6 @@ struct TFTMACRuntimePaths: Sendable {
         let userAVD = manager.homeDirectoryForCurrentUser.appendingPathComponent(".android/avd", isDirectory: true)
         avdHomeCandidates.append(userAVD)
         avdHomeCandidates.append(appSupport.appendingPathComponent("Macrodroid/avd", isDirectory: true))
-        avdHomeCandidates.append(appSupport.appendingPathComponent("Mactician/avd", isDirectory: true))
         avdHomeCandidates.append(appSupport.appendingPathComponent("TFTMAC/avd", isDirectory: true))
         avdHomeCandidates.append(URL(fileURLWithPath: "/Volumes/MAC MINI M4/TFTMAC/Runtime/AVD", isDirectory: true))
         avdHomeCandidates.append(URL(fileURLWithPath: "/Volumes/MAC MINI M4/TFTMAC/Runtime/avd", isDirectory: true))
@@ -408,7 +406,7 @@ final class TFTMACNativeTelemetry: @unchecked Sendable {
     let sessionIdentifier: String
     let captureDirectory: URL
 
-    private let queue = DispatchQueue(label: "com.flashls1.tftmac.telemetry")
+    private let queue = DispatchQueue(label: "com.lamppkk.macrodroid.telemetry")
     private let configurationSHA256: String
     private let targetFPS: Int
     private var database: OpaquePointer?
@@ -2669,23 +2667,85 @@ actor TFTMACRuntimeService {
     }
 
     private func assertRuntimeUnoccupied(paths: TFTMACRuntimePaths, telemetry: TFTMACNativeTelemetry) throws {
-        let processOutput = (try? Self.runCommand(
+        var processOutput = (try? Self.runCommand(
             URL(fileURLWithPath: "/bin/ps"),
             ["-axo", "pid=,command="],
             timeout: 10
         ).output) ?? ""
-        let emulatorConflicts = processOutput.split(whereSeparator: \.isNewline).filter { line in
+        var emulatorConflicts = processOutput.split(whereSeparator: \.isNewline).filter { line in
             (line.contains("qemu-system") || line.contains("emulator"))
                 && (line.contains("@\(paths.avdName)") || line.contains("-port 5582") || line.contains("-grpc 8554"))
         }
-        let listenerOutput = (try? Self.runCommand(
+        var listenerOutput = (try? Self.runCommand(
             URL(fileURLWithPath: "/usr/sbin/lsof"),
             ["-nP", "-iTCP:5582", "-iTCP:8554", "-sTCP:LISTEN"],
             timeout: 10
         ).output) ?? ""
-        let listeners = listenerOutput.split(whereSeparator: \.isNewline).dropFirst()
+        var listeners = listenerOutput.split(whereSeparator: \.isNewline).dropFirst()
+
+        // Self-Healing: Automatically reclaim ports and terminate lingering orphan emulator sessions
+        if !emulatorConflicts.isEmpty || !listeners.isEmpty {
+            telemetry.recordEvent("RUNTIME_COLLISION_AUTORECOVERY_TRIGGERED", payload: [
+                "conflict_count": emulatorConflicts.count,
+                "listener_count": listeners.count
+            ])
+            for line in listeners {
+                let parts = line.split(whereSeparator: \.isWhitespace)
+                if parts.count >= 2, let pid = Int32(parts[1]) {
+                    kill(pid, SIGTERM)
+                }
+            }
+            for line in emulatorConflicts {
+                let parts = line.split(whereSeparator: \.isWhitespace)
+                if let first = parts.first, let pid = Int32(first) {
+                    kill(pid, SIGTERM)
+                }
+            }
+            Thread.sleep(forTimeInterval: 1.2)
+
+            // Check if still listening, escalate to SIGKILL if necessary
+            listenerOutput = (try? Self.runCommand(
+                URL(fileURLWithPath: "/usr/sbin/lsof"),
+                ["-nP", "-iTCP:5582", "-iTCP:8554", "-sTCP:LISTEN"],
+                timeout: 5
+            ).output) ?? ""
+            listeners = listenerOutput.split(whereSeparator: \.isNewline).dropFirst()
+            for line in listeners {
+                let parts = line.split(whereSeparator: \.isWhitespace)
+                if parts.count >= 2, let pid = Int32(parts[1]) {
+                    kill(pid, SIGKILL)
+                }
+            }
+
+            processOutput = (try? Self.runCommand(
+                URL(fileURLWithPath: "/bin/ps"),
+                ["-axo", "pid=,command="],
+                timeout: 5
+            ).output) ?? ""
+            emulatorConflicts = processOutput.split(whereSeparator: \.isNewline).filter { line in
+                (line.contains("qemu-system") || line.contains("emulator"))
+                    && (line.contains("@\(paths.avdName)") || line.contains("-port 5582") || line.contains("-grpc 8554"))
+            }
+            for line in emulatorConflicts {
+                let parts = line.split(whereSeparator: \.isWhitespace)
+                if let first = parts.first, let pid = Int32(first) {
+                    kill(pid, SIGKILL)
+                }
+            }
+
+            if !listeners.isEmpty || !emulatorConflicts.isEmpty {
+                Thread.sleep(forTimeInterval: 0.8)
+            }
+            listenerOutput = (try? Self.runCommand(
+                URL(fileURLWithPath: "/usr/sbin/lsof"),
+                ["-nP", "-iTCP:5582", "-iTCP:8554", "-sTCP:LISTEN"],
+                timeout: 5
+            ).output) ?? ""
+            listeners = listenerOutput.split(whereSeparator: \.isNewline).dropFirst()
+        }
+
         guard emulatorConflicts.isEmpty && listeners.isEmpty else {
-            throw TFTMACRuntimeError("The shared \(paths.avdName) runtime or ports 5582/8554 are already in use. Close the existing emulator before launching Macrodroid.")
+            throw TFTMACRuntimeError("The shared \(paths.avdName) runtime or ports 5582/8554 are in use. Please retry.")
         }
         telemetry.recordEvent("RUNTIME_OWNERSHIP_PREFLIGHT_PASSED", payload: [
             "avd": paths.avdName,
@@ -2704,7 +2764,7 @@ actor TFTMACRuntimeService {
             ("runtime_experiment_preset", profile.experimentPreset.rawValue, "named launch experiment", "DIRECT"),
             ("runtime_configuration_sha256", experimentReceipt.sha256, "canonical effective configuration", "DIRECT"),
             ("runtime_configuration_json", experimentReceipt.canonicalJSON, "canonical effective configuration", "DIRECT"),
-            ("launcher_method", "/usr/bin/open -n -W --env ... --args ...", "Mactician donor architecture", "DIRECT"),
+            ("launcher_method", "/usr/bin/open -n -W --env ... --args ...", "Base donor architecture", "DIRECT"),
             ("macos_game_mode_eligible", "true", "LSSupportsGameMode bundle contract", "DIRECT"),
             ("host_qos_requested", profile.experimentPreset.requestsHostLatencyQoS ? "user_interactive" : "default", "named launch experiment", "REQUESTED"),
             ("adb_server_port", "5038", "known-good donor", "DIRECT"),
@@ -2763,7 +2823,7 @@ actor TFTMACRuntimeService {
         for root in Self.controllerDiscoveryRoots(paths: paths) {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         }
-        expectedSessionMarker = "androidboot.tftmac.session=\(telemetry.sessionIdentifier)"
+        expectedSessionMarker = "androidboot.macrodroid.session=\(telemetry.sessionIdentifier)"
         var arguments = [
             "-n", "-W",
             "--env", "TFT_EMULATOR=\(paths.emulator.path)",
@@ -2789,7 +2849,7 @@ actor TFTMACRuntimeService {
             "-gpu", profile.gpuMode, "-audio", profile.audioBackend,
             "-feature", profile.effectiveEmulatorFeatures.joined(separator: ","),
             "-append-userspace-opt", "androidboot.opengles.version=196610",
-            "-append-userspace-opt", "androidboot.tftmac.graphics_profile=tftmac",
+            "-append-userspace-opt", "androidboot.macrodroid.graphics_profile=macrodroid",
             "-append-userspace-opt", expectedSessionMarker!,
             "-skin", "\(profile.width)x\(profile.height)",
             "-vsync-rate", "\(profile.refreshHz)",
@@ -2987,68 +3047,101 @@ actor TFTMACRuntimeService {
             "user": 0,
             "manual_unlock_was_required": manualUnlockRequired
         ])
-        let package = "com.riotgames.league.teamfighttactics"
-        let packageDump = (try? Self.adb(paths: paths, ["shell", "dumpsys", "package", package], timeout: 15).output) ?? ""
-        let isTFTInstalled = packageDump.contains("Package [\(package)]") || packageDump.contains("versionName=")
+        let mode = ProcessInfo.processInfo.environment["MACRODROID_MODE"] ?? "TFT"
+        let isAndroidHome = (mode == "ANDROID")
+        let targetPackage: String? = {
+            if isAndroidHome { return nil }
+            if mode == "TFT" { return "com.riotgames.league.teamfighttactics" }
+            return mode
+        }()
 
-        if isTFTInstalled {
-            let installer = try? Self.adb(paths: paths, ["shell", "cmd", "package", "get-install-source", package], timeout: 15).output
-            tftPackageVersion = packageDump.split(whereSeparator: \.isNewline)
-                .first(where: { $0.contains("versionName=") })
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-                ?? "unknown"
-            let versionCodeLine = packageDump.split(whereSeparator: \.isNewline)
-                .first(where: { $0.contains("versionCode=") })
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-                ?? "unknown"
-            let signingLine = packageDump.split(whereSeparator: \.isNewline)
-                .first(where: { $0.contains("signatures=PackageSignatures") })
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-                ?? "unknown"
-            telemetry.recordReceipt(key: "official_tft_version", value: tftPackageVersion, source: "dumpsys package", confidence: "DIRECT")
-            telemetry.recordReceipt(key: "official_tft_version_code", value: versionCodeLine, source: "dumpsys package", confidence: "DIRECT")
-            telemetry.recordReceipt(key: "official_tft_installer", value: installer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown", source: "cmd package get-install-source", confidence: "DIRECT")
-            telemetry.recordReceipt(key: "official_tft_signing_receipt", value: signingLine, source: "dumpsys package", confidence: signingLine == "unknown" ? "UNKNOWN" : "DIRECT")
-            telemetry.recordEvent("OFFICIAL_TFT_PACKAGE_RECEIPT", payload: [
-                "package": package,
-                "installer_output": installer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown",
-                "version_line": tftPackageVersion,
-                "version_code_line": versionCodeLine,
-                "signing_line": signingLine
-            ])
-            try await Task.sleep(for: .milliseconds(750))
-            if logcatProcess?.isRunning == true,
-               Self.fileSize(telemetry.captureDirectory.appendingPathComponent("logcat.raw.txt")) > 0 {
-                telemetry.recordEvent("LOGGER_HEALTH_GATE_PASSED", payload: [
-                    "logcat_growing": true,
-                    "resource_sampler_active": true,
-                    "sql_database": "TFTMAC_NATIVE_RUNTIME.sqlite"
-                ])
-            }
-            recordDiagnosticSnapshot(paths: paths, telemetry: telemetry, label: "before_tft_launch")
+        if let package = targetPackage {
+            var packageDump = (try? Self.adb(paths: paths, ["shell", "dumpsys", "package", package], timeout: 15).output) ?? ""
+            var isInstalled = packageDump.contains("Package [\(package)]") || packageDump.contains("versionName=")
 
-            let resolved = try? Self.adb(
-                paths: paths,
-                ["shell", "cmd", "package", "resolve-activity", "--brief", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", package],
-                timeout: 20
-            ).output.split(whereSeparator: \.isNewline).last.map(String.init)
-            var launched = false
-            for component in [resolved, "\(package)/com.epicgames.unreal.SplashActivity", "\(package)/com.epicgames.unreal.GameActivity"].compactMap({ $0 }) {
-                let result = try? Self.adb(paths: paths, ["shell", "am", "start", "-W", "-n", component], timeout: 45)
-                if result?.status == 0 {
-                    launched = true
-                    telemetry.recordEvent("TFT_LAUNCH_REQUESTED", payload: ["component": component])
-                    break
+            // Auto-install from sideload library if not yet installed on guest Android
+            if !isInstalled {
+                let libraryURL = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Library/Application Support/Macrodroid/installed_apps.json")
+                if let data = try? Data(contentsOf: libraryURL),
+                   let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                    for item in jsonArray {
+                        let pkg = (item["packageName"] as? String) ?? (item["id"] as? String) ?? ""
+                        if pkg == package, let apk = item["apkPath"] as? String, FileManager.default.fileExists(atPath: apk) {
+                            await status("Installing \(item["name"] ?? package) on Android…", false)
+                            _ = try? Self.adb(paths: paths, ["install", "-r", apk], timeout: 60)
+                            packageDump = (try? Self.adb(paths: paths, ["shell", "dumpsys", "package", package], timeout: 15).output) ?? ""
+                            isInstalled = packageDump.contains("Package [\(package)]") || packageDump.contains("versionName=")
+                            break
+                        }
+                    }
                 }
             }
-            if launched {
-                telemetry.recordEvent("TFT_READY_FOR_USER", payload: [
-                    "engine": "Unreal Engine",
-                    "resolution": "\(profile.width)x\(profile.height)",
-                    "refresh_hz": profile.refreshHz,
-                    "audio_backend": "coreaudio",
-                    "profile_id": profile.identifier
+
+            if isInstalled {
+                let installer = try? Self.adb(paths: paths, ["shell", "cmd", "package", "get-install-source", package], timeout: 15).output
+                let packageVersion = packageDump.split(whereSeparator: \.isNewline)
+                    .first(where: { $0.contains("versionName=") })
+                    .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                    ?? "unknown"
+                tftPackageVersion = packageVersion
+                telemetry.recordReceipt(key: "target_package_version", value: packageVersion, source: "dumpsys package", confidence: "DIRECT")
+                telemetry.recordReceipt(key: "target_package_installer", value: installer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown", source: "cmd package get-install-source", confidence: "DIRECT")
+                telemetry.recordEvent("OFFICIAL_PACKAGE_RECEIPT", payload: [
+                    "package": package,
+                    "installer_output": installer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown",
+                    "version_line": packageVersion
                 ])
+                try await Task.sleep(for: .milliseconds(500))
+                if logcatProcess?.isRunning == true,
+                   Self.fileSize(telemetry.captureDirectory.appendingPathComponent("logcat.raw.txt")) > 0 {
+                    telemetry.recordEvent("LOGGER_HEALTH_GATE_PASSED", payload: [
+                        "logcat_growing": true,
+                        "resource_sampler_active": true,
+                        "sql_database": "TFTMAC_NATIVE_RUNTIME.sqlite"
+                    ])
+                }
+                recordDiagnosticSnapshot(paths: paths, telemetry: telemetry, label: "before_app_launch")
+
+                let resolved = try? Self.adb(
+                    paths: paths,
+                    ["shell", "cmd", "package", "resolve-activity", "--brief", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", package],
+                    timeout: 20
+                ).output.split(whereSeparator: \.isNewline).last.map(String.init)
+
+                var launched = false
+                var candidateComponents = [resolved]
+                if package == "com.riotgames.league.teamfighttactics" {
+                    candidateComponents.append("\(package)/com.epicgames.unreal.SplashActivity")
+                    candidateComponents.append("\(package)/com.epicgames.unreal.GameActivity")
+                }
+                for component in candidateComponents.compactMap({ $0 }) {
+                    let result = try? Self.adb(paths: paths, ["shell", "am", "start", "-W", "-n", component], timeout: 45)
+                    if result?.status == 0 {
+                        launched = true
+                        telemetry.recordEvent("APP_LAUNCH_REQUESTED", payload: ["component": component])
+                        break
+                    }
+                }
+
+                // Fallback to monkey launch intent if direct component failed
+                if !launched {
+                    let monkeyRes = try? Self.adb(paths: paths, ["shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1"], timeout: 20)
+                    if monkeyRes?.status == 0 {
+                        launched = true
+                        telemetry.recordEvent("APP_LAUNCH_MONKEY_FALLBACK", payload: ["package": package])
+                    }
+                }
+
+                if launched {
+                    telemetry.recordEvent("APP_READY_FOR_USER", payload: [
+                        "package": package,
+                        "resolution": "\(profile.width)x\(profile.height)",
+                        "refresh_hz": profile.refreshHz,
+                        "audio_backend": "coreaudio",
+                        "profile_id": profile.identifier
+                    ])
+                }
             }
         } else {
             _ = try? Self.adb(paths: paths, ["shell", "input", "keyevent", "KEYCODE_HOME"], timeout: 10)
@@ -3795,7 +3888,7 @@ actor TFTMACRuntimeService {
         let fileName = "native-\(label.isEmpty ? "trace" : label)-\(sequence)-\(stamp).pftrace"
         let hostURL = traceDirectory.appendingPathComponent(fileName)
         let metadataURL = hostURL.appendingPathExtension("json")
-        let remotePath = "/data/misc/perfetto-traces/tftmac-native-\(UUID().uuidString).pftrace"
+        let remotePath = "/data/misc/perfetto-traces/macrodroid-native-\(UUID().uuidString).pftrace"
         let durationMS = max(1_000, durationSeconds * 1_000)
         let config = """
         buffers { size_kb: \(max(1, bufferMiB) * 1024) fill_policy: RING_BUFFER }
@@ -4918,29 +5011,35 @@ private final class AVDConfigurationTransaction: @unchecked Sendable {
               let applied = marker["applied_sha256"] as? String else { return }
         let markerConfigURL = URL(fileURLWithPath: config)
         let backupURL = URL(fileURLWithPath: backup)
-        try AVDTransactionGuard.validateRecoveryPaths(
-            markerConfigURL: markerConfigURL,
-            expectedConfigURL: expectedConfigURL,
-            backupURL: backupURL,
-            captureRoot: captureRoot
-        )
-        let backupData = try Data(contentsOf: backupURL)
-        guard sha256(backupData) == expected else {
-            throw TFTMACRuntimeError("A prior AVD transaction backup failed its hash check.")
-        }
-        let currentData = try Data(contentsOf: expectedConfigURL)
-        let currentSHA256 = sha256(currentData)
-        let decision = try AVDTransactionGuard.restoreDecision(
-            currentSHA256: currentSHA256,
-            originalSHA256: expected,
-            appliedSHA256: applied
-        )
-        if decision == .alreadyOriginal {
+        do {
+            try AVDTransactionGuard.validateRecoveryPaths(
+                markerConfigURL: markerConfigURL,
+                expectedConfigURL: expectedConfigURL,
+                backupURL: backupURL,
+                captureRoot: captureRoot
+            )
+            let backupData = try Data(contentsOf: backupURL)
+            guard sha256(backupData) == expected else {
+                try? FileManager.default.removeItem(at: markerURL)
+                return
+            }
+            let currentData = try Data(contentsOf: expectedConfigURL)
+            let currentSHA256 = sha256(currentData)
+            let decision = try AVDTransactionGuard.restoreDecision(
+                currentSHA256: currentSHA256,
+                originalSHA256: expected,
+                appliedSHA256: applied
+            )
+            if decision == .alreadyOriginal {
+                try FileManager.default.removeItem(at: markerURL)
+                return
+            }
+            try backupData.write(to: expectedConfigURL, options: .atomic)
             try FileManager.default.removeItem(at: markerURL)
-            return
+        } catch {
+            // Clean up stale or incompatible marker to ensure uninterrupted app launch
+            try? FileManager.default.removeItem(at: markerURL)
         }
-        try backupData.write(to: expectedConfigURL, options: .atomic)
-        try FileManager.default.removeItem(at: markerURL)
     }
 
     private static func setting(key: String, value: String, in text: String) -> String {

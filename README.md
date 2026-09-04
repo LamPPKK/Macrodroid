@@ -75,7 +75,7 @@ Execute the native test suite (covering FrameContract, ViewportMapper, AVD guard
 Run the automated consistency and SSOT checks:
 
 ```sh
-/bin/zsh scripts/verify-tftmac.command
+/bin/zsh scripts/build-native-app.command
 ```
 
 ---
@@ -106,7 +106,7 @@ Macrodroid includes a continuous graphics and combat performance logger:
 ## 📁 Project Structure
 
 ```text
-├── tftmac/               # Core native macOS Swift application
+├── tftmac/               # Core Macrodroid Swift application codebase
 │   ├── App/             # App lifecycle, coordinators, settings window
 │   ├── Presentation/    # EmbeddedEmulatorView (MetalKit), FrameContract, ViewportMapper
 │   ├── Runtime/         # gRPC client, AVD transaction guard, telemetry store, input
@@ -126,5 +126,5 @@ Macrodroid includes a continuous graphics and combat performance logger:
 ## 📄 License & Attribution
 
 - **License**: MIT License (see [LICENSE](LICENSE)).
-- **Heritage**: Macrodroid builds upon the foundational research and donor contracts pioneered by Mactician and the TFTMAC native client project.
+- **Heritage**: Macrodroid builds upon the foundational research and donor contracts pioneered by Mactician.
 - **Disclaimer**: Teamfight Tactics, League of Legends, and Riot Games are trademarks or registered trademarks of Riot Games, Inc. Android is a trademark of Google LLC. Macrodroid is an independent open-source project and is not affiliated with or endorsed by Riot Games or Google.

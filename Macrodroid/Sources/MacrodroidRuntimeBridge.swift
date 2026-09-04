@@ -22,7 +22,7 @@ final class TFTMACRuntimeBridge: ObservableObject {
     var onEmulatorReady: ((pid_t) -> Void)?
     var onRuntimeStopped: (() -> Void)?
 
-    private let worker = DispatchQueue(label: "com.tftmac.runtime", qos: .userInitiated)
+    private let worker = DispatchQueue(label: "com.lamppkk.macrodroid.runtime", qos: .userInitiated)
     private var stopping = false
 
     private var resources: URL {
@@ -31,7 +31,7 @@ final class TFTMACRuntimeBridge: ObservableObject {
     }
 
     private var tool: URL {
-        resources.appendingPathComponent("Tools/tftmac-direct-control.mjs")
+        resources.appendingPathComponent("Tools/macrodroid-direct-control.mjs")
     }
 
     private var node: URL? {
@@ -61,7 +61,7 @@ final class TFTMACRuntimeBridge: ObservableObject {
         worker.async { [weak self] in
             guard let self else { return }
             do {
-                _ = try self.runTool("cleanup-tftmac-adb-residue")
+                _ = try self.runTool("cleanup-macrodroid-adb-residue")
                 let start = try self.runTool("start-donor-control-5gb")
                 let pid = self.extractPID(from: start)
                 DispatchQueue.main.async {
@@ -162,7 +162,7 @@ final class TFTMACRuntimeBridge: ObservableObject {
             guard let self else { return }
             do {
                 let adb = try self.requireADB()
-                let guest = "/sdcard/Pictures/tftmac-screenshot.png"
+                let guest = "/sdcard/Pictures/macrodroid-screenshot.png"
                 _ = try self.run(adb, ["-P", "5040", "-s", "emulator-5592", "shell", "screencap", "-p", guest])
                 let pictures = FileManager.default.homeDirectoryForCurrentUser
                     .appendingPathComponent("Pictures/TFTMAC", isDirectory: true)

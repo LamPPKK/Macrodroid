@@ -19,7 +19,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "TFTMAC Performance Lab"
+        window.title = "Macrodroid Performance Lab"
         window.isReleasedWhenClosed = false
         window.center()
         super.init(window: window)
@@ -151,7 +151,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
         next.save()
         onSave?(originalProfile, next)
         originalProfile = next
-        resultLabel.stringValue = "Saved as \(next.identifier). Quit and relaunch TFTMAC to apply it."
+        resultLabel.stringValue = "Saved as \(next.identifier). Quit and relaunch Macrodroid to apply it."
     }
 
     private func selectedInteger(_ button: NSPopUpButton) -> Int? {

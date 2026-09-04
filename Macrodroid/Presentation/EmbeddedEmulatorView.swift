@@ -156,6 +156,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     var onKeyboardInput: ((String?, String?) -> Void)?
     var onPresentationSample: ((PresentationSample) -> Void)?
     var onHostPresentationWindow: ((HostPresentationWindow) -> Void)?
+    var onFPSChanged: ((Double) -> Void)?
 
     private let mailbox: LatestFrameMailbox
     private let commandQueue: MTLCommandQueue
@@ -181,14 +182,14 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             fatalError("Macrodroid requires a Metal-capable GPU")
         }
         guard let commandQueue = device.makeCommandQueue() else {
-            fatalError("TFTMAC could not create its persistent Metal command queue")
+            fatalError("Macrodroid could not create its persistent Metal command queue")
         }
         self.mailbox = mailbox
         self.commandQueue = commandQueue
         do {
             pipeline = try Self.makePipeline(device: device)
         } catch {
-            fatalError("TFTMAC could not create its native frame pipeline: \(error.localizedDescription)")
+            fatalError("Macrodroid could not create its native frame pipeline: \(error.localizedDescription)")
         }
         super.init(frame: frame, device: device)
         framebufferOnly = true
@@ -333,7 +334,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             descriptor.usage = [.shaderRead]
             descriptor.storageMode = .shared
             textures[slot] = device?.makeTexture(descriptor: descriptor)
-            textures[slot]?.label = "TFTMAC Android frame \(slot)"
+            textures[slot]?.label = "Macrodroid Android frame \(slot)"
         }
         guard let texture = textures[slot] else { return false }
         frame.pixels.withUnsafeBytes { bytes in
@@ -409,13 +410,27 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     }
 
     private func updatePerformanceOverlay() {
+        let guestFPS = gameFrameWindow?.effectiveFPS ?? 0
+        let deliveredFPS = lastSourceFPS
+        let displayFPS: Double
+        if guestFPS > 0 {
+            displayFPS = guestFPS
+        } else if deliveredFPS > 0 {
+            displayFPS = min(deliveredFPS, lastPresentationFPS > 0 ? lastPresentationFPS : deliveredFPS)
+        } else if lastPresentationFPS > 0 && lastSampleReceivedCount > 0 {
+            displayFPS = lastPresentationFPS
+        } else {
+            displayFPS = 0
+        }
+        onFPSChanged?(displayFPS)
+
         let guestLine: String
         if let gameFrameWindow, case .available = gameFrameWindow.status {
             let low = gameFrameWindow.onePercentLowFPS.map { String(format: "%.0f", $0) } ?? "—"
             let p99 = gameFrameWindow.p99MS.map { String(format: "%.1f", $0) } ?? "—"
-            guestLine = String(format: "TFT %.0f · 1%% %@ · P99 %@ms", gameFrameWindow.effectiveFPS, low, p99)
+            guestLine = String(format: "APP %.0f · 1%% %@ · P99 %@ms", gameFrameWindow.effectiveFPS, low, p99)
         } else {
-            guestLine = "TFT —"
+            guestLine = "APP —"
         }
         let gpu = lastHostGPUTimeP95MS.map { String(format: "%.1f", $0) } ?? "—"
         fpsLabel.stringValue = String(
@@ -446,6 +461,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         fpsLabel.wantsLayer = true
         fpsLabel.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.62).cgColor
         fpsLabel.layer?.cornerRadius = 6
+        fpsLabel.isHidden = true
         addSubview(fpsLabel)
 
         NSLayoutConstraint.activate([
@@ -470,7 +486,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             float2 textureCoordinate;
         };
 
-        vertex RasterData tftmac_vertex(uint vertexID [[vertex_id]]) {
+        vertex RasterData macrodroid_vertex(uint vertexID [[vertex_id]]) {
             const float2 positions[3] = { float2(-1.0, -1.0), float2(3.0, -1.0), float2(-1.0, 3.0) };
             // Metal's bottom screen edge must sample the bottom RGBA row.
             // The oversized triangle therefore maps bottom vertices to v=1.
@@ -481,16 +497,16 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             return output;
         }
 
-        fragment float4 tftmac_fragment(RasterData input [[stage_in]], texture2d<float> frame [[texture(0)]]) {
+        fragment float4 macrodroid_fragment(RasterData input [[stage_in]], texture2d<float> frame [[texture(0)]]) {
             constexpr sampler sampleState(coord::normalized, address::clamp_to_edge, filter::linear);
             return frame.sample(sampleState, input.textureCoordinate);
         }
         """
         let library = try device.makeLibrary(source: source, options: nil)
         let descriptor = MTLRenderPipelineDescriptor()
-        descriptor.label = "TFTMAC RGBA presenter"
-        descriptor.vertexFunction = library.makeFunction(name: "tftmac_vertex")
-        descriptor.fragmentFunction = library.makeFunction(name: "tftmac_fragment")
+        descriptor.label = "Macrodroid RGBA presenter"
+        descriptor.vertexFunction = library.makeFunction(name: "macrodroid_vertex")
+        descriptor.fragmentFunction = library.makeFunction(name: "macrodroid_fragment")
         descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm_srgb
         return try device.makeRenderPipelineState(descriptor: descriptor)
     }

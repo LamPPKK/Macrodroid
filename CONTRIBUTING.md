@@ -1,20 +1,14 @@
 # Contributing
 
-Keep TFTMAC changes narrow, testable, and aligned with the current stock-runtime architecture.
+Keep Macrodroid changes narrow, testable, and aligned with the current stock-runtime architecture.
 
 ## Development setup
 
 Use an Apple Silicon Mac with macOS 15 or later, Xcode 26.6, zsh, Node.js 24, `jq`, and `ripgrep`. Runtime and game data must remain outside Git.
 
-Run before opening a pull request:
-
-```sh
-/bin/zsh scripts/verify-tftmac.command
-```
-
 ## Rules
 
-- Preserve `com.flashls1.tftmac` as the application identity.
+- Preserve `com.lamppkk.macrodroid` as the application identity.
 - Preserve the stock Google Android Emulator as runtime authority unless a separately approved measured blocker requires a different architecture.
 - Do not add Riot APKs, credentials, Android userdata, tokens, runtime disks, or private session data to the repository.
 - Do not add hosted game feeds, APK repacking, re-signing, or binary patching.

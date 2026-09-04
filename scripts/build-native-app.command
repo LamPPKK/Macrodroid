@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
-ICON_SOURCE="${ROOT}/tftmac/Assets/TFTMAC-Official-Icon.png"
-ICON_SOURCE_SHA256="d6ba9ceb76c4b1e44e87f059f775a0ed629f9bea29b0dd73245853d7dca3a016"
+ICON_SOURCE="${ROOT}/Macrodroid/Assets/Macrodroid-Official-Icon.png"
+ICON_SOURCE_SHA256="67f40d296dc8f7699b5b0a944edbaa0b9b178d4caa95a41d3318756b2e5f9633"
 if [[ -z "${DEVELOPER_DIR:-}" ]]; then
   if [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
     export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
@@ -16,17 +16,14 @@ fi
 DERIVED="${ROOT}/.build/native-release"
 APP="${DERIVED}/Build/Products/Release/Macrodroid.app"
 DIST="${ROOT}/dist/Macrodroid.app"
-ICON_WORK="$(mktemp -d /private/tmp/tftmac-native-icon.XXXXXX)"
+ICON_WORK="$(mktemp -d /private/tmp/macrodroid-native-icon.XXXXXX)"
 SIGNING_IDENTITY_NAME="${MACRODROID_CODE_SIGN_IDENTITY_NAME:-${TFTMAC_CODE_SIGN_IDENTITY_NAME:-Macrodroid Local Code Signing}}"
 SIGNING_IDENTITY_HASH="$(/usr/bin/security find-identity -v -p codesigning \
   | /usr/bin/awk -v name="${SIGNING_IDENTITY_NAME}" 'index($0, "\"" name "\"") { print $2; exit }')"
 
 if [[ -z "${SIGNING_IDENTITY_HASH}" ]]; then
   SIGNING_IDENTITY_HASH="$(/usr/bin/security find-identity -v -p codesigning \
-    | /usr/bin/awk -v name="TFTMAC Local Code Signing" 'index($0, "\"" name "\"") { print $2; exit }')"
-  if [[ -n "${SIGNING_IDENTITY_HASH}" ]]; then
-    SIGNING_IDENTITY_NAME="TFTMAC Local Code Signing"
-  fi
+    | /usr/bin/awk -v name="Macrodroid Local Code Signing" 'index($0, "\"" name "\"") { print $2; exit }')"
 fi
 
 if [[ -z "${SIGNING_IDENTITY_HASH}" ]]; then
@@ -34,11 +31,11 @@ if [[ -z "${SIGNING_IDENTITY_HASH}" ]]; then
   SIGNING_IDENTITY_HASH="-"
 fi
 [[ -s "${ICON_SOURCE}" ]] || {
-  print -u2 "The official TFTMAC icon source is missing: ${ICON_SOURCE}"
+  print -u2 "The official Macrodroid icon source is missing: ${ICON_SOURCE}"
   exit 1
 }
 [[ "$(/usr/bin/shasum -a 256 "${ICON_SOURCE}" | /usr/bin/awk '{print $1}')" == "${ICON_SOURCE_SHA256}" ]] || {
-  print -u2 "The official TFTMAC icon source failed its SHA-256 receipt."
+  print -u2 "The official Macrodroid icon source failed its SHA-256 receipt."
   exit 1
 }
 
@@ -49,10 +46,12 @@ trap cleanup EXIT
 
 /usr/bin/xcodebuild \
   -quiet \
-  -project "${ROOT}/TFTMAC.xcodeproj" \
-  -scheme TFTMAC \
+  -project "${ROOT}/Macrodroid.xcodeproj" \
+  -scheme Macrodroid \
   -configuration Release \
   -derivedDataPath "${DERIVED}" \
+  -clonedSourcePackagesDirPath "${DERIVED}/SourcePackages" \
+  -disableAutomaticPackageResolution \
   ARCHS="arm64 x86_64" \
   ONLY_ACTIVE_ARCH=NO \
   CODE_SIGNING_ALLOWED=NO \
@@ -66,7 +65,7 @@ trap cleanup EXIT
 # The Info.plist declares TFTMAC.icns. Downsample the official generated
 # 1:1 master and embed every required Mac representation before signing.
 /usr/bin/sips -z 1024 1024 "${ICON_SOURCE}" --out "${ICON_WORK}/icon_1024x1024.png" >/dev/null
-/bin/mkdir -p "${ICON_WORK}/TFTMAC.iconset" "${DIST}/Contents/Resources"
+/bin/mkdir -p "${ICON_WORK}/Macrodroid.iconset" "${DIST}/Contents/Resources"
 for specification in \
   '16 icon_16x16.png' \
   '32 icon_16x16@2x.png' \
@@ -81,10 +80,13 @@ for specification in \
   pixels="${specification%% *}"
   filename="${specification#* }"
   /usr/bin/sips -z "${pixels}" "${pixels}" "${ICON_WORK}/icon_1024x1024.png" \
-    --out "${ICON_WORK}/TFTMAC.iconset/${filename}" >/dev/null
+    --out "${ICON_WORK}/Macrodroid.iconset/${filename}" >/dev/null
 done
-/usr/bin/iconutil -c icns "${ICON_WORK}/TFTMAC.iconset" -o "${DIST}/Contents/Resources/TFTMAC.icns"
+/usr/bin/iconutil -c icns "${ICON_WORK}/Macrodroid.iconset" -o "${DIST}/Contents/Resources/Macrodroid.icns"
+/bin/cp "${DIST}/Contents/Resources/Macrodroid.icns" "${DIST}/Contents/Resources/TFTMAC.icns"
+/bin/cp "${ICON_WORK}/icon_1024x1024.png" "${DIST}/Contents/Resources/Macrodroid-1024.png"
 /bin/cp "${ICON_WORK}/icon_1024x1024.png" "${DIST}/Contents/Resources/TFTMAC-1024.png"
+/bin/cp "${ROOT}/Macrodroid/Assets/Macrodroid-Logo.png" "${DIST}/Contents/Resources/Macrodroid-Logo.png"
 
 # Perfetto v58.2 mac-arm64 is pinned by the official manifest SHA-256. Raw
 # combat traces are normalized locally with this exact executable before the

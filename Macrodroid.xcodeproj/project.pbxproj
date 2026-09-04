@@ -6,13 +6,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		100000000000000000000001 /* TFTMACApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* TFTMACApplication.swift */; };
+		100000000000000000000001 /* MacrodroidApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* MacrodroidApplication.swift */; };
 		100000000000000000000002 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000002 /* AppCoordinator.swift */; };
 		100000000000000000000003 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* MainWindowController.swift */; };
 		100000000000000000000004 /* EmbeddedEmulatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* EmbeddedEmulatorView.swift */; };
 		100000000000000000000005 /* ViewportMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* ViewportMapper.swift */; };
 		100000000000000000000006 /* EmbeddedControlProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* EmbeddedControlProbe.swift */; };
-		100000000000000000000007 /* TFTMACGate1Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* TFTMACGate1Tests.swift */; };
+		100000000000000000000007 /* MacrodroidGate1Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* MacrodroidGate1Tests.swift */; };
 		100000000000000000000008 /* ViewportMapper.swift in Tests */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* ViewportMapper.swift */; };
 		100000000000000000000011 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000001 /* GRPCCore */; };
 		100000000000000000000012 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000002 /* GRPCNIOTransportHTTP2 */; };
@@ -27,7 +27,7 @@
 		10000000000000000000001B /* GRPCProtobuf in Probe Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000003 /* GRPCProtobuf */; };
 		10000000000000000000001C /* SwiftProtobuf in Probe Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000004 /* SwiftProtobuf */; };
 		100000000000000000000020 /* FrameContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000014 /* FrameContract.swift */; };
-		100000000000000000000021 /* TFTMACRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000015 /* TFTMACRuntime.swift */; };
+		100000000000000000000021 /* MacrodroidRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000015 /* MacrodroidRuntime.swift */; };
 		100000000000000000000022 /* FrameContract.swift in Tests */ = {isa = PBXBuildFile; fileRef = 200000000000000000000014 /* FrameContract.swift */; };
 		100000000000000000000023 /* AVDTransactionGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000016 /* AVDTransactionGuard.swift */; };
 		100000000000000000000024 /* AVDTransactionGuard.swift in Tests */ = {isa = PBXBuildFile; fileRef = 200000000000000000000016 /* AVDTransactionGuard.swift */; };
@@ -50,24 +50,26 @@
 		100000000000000000000035 /* GraphicsStackReceipt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000021 /* GraphicsStackReceipt.swift */; };
 		100000000000000000000036 /* GraphicsStackReceipt.swift in Tests */ = {isa = PBXBuildFile; fileRef = 200000000000000000000021 /* GraphicsStackReceipt.swift */; };
 		100000000000000000000037 /* GraphicsStackReceiptTests.swift in Tests */ = {isa = PBXBuildFile; fileRef = 200000000000000000000022 /* GraphicsStackReceiptTests.swift */; };
+		100000000000000000000038 /* MacrodroidLauncherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000038 /* MacrodroidLauncherView.swift */; };
+		100000000000000000000039 /* LauncherWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000039 /* LauncherWindowController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		200000000000000000000001 /* TFTMACApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TFTMACApplication.swift; sourceTree = "<group>"; };
+		200000000000000000000001 /* MacrodroidApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacrodroidApplication.swift; sourceTree = "<group>"; };
 		200000000000000000000002 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
 		200000000000000000000003 /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
 		200000000000000000000004 /* EmbeddedEmulatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedEmulatorView.swift; sourceTree = "<group>"; };
 		200000000000000000000005 /* ViewportMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewportMapper.swift; sourceTree = "<group>"; };
 		200000000000000000000006 /* EmbeddedControlProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmbeddedControlProbe.swift; sourceTree = "<group>"; };
-		200000000000000000000007 /* TFTMACGate1Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TFTMACGate1Tests.swift; sourceTree = "<group>"; };
+		200000000000000000000007 /* MacrodroidGate1Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacrodroidGate1Tests.swift; sourceTree = "<group>"; };
 		200000000000000000000008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		200000000000000000000009 /* emulator_controller.pb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = emulator_controller.pb.swift; sourceTree = "<group>"; };
 		200000000000000000000010 /* emulator_controller.grpc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = emulator_controller.grpc.swift; sourceTree = "<group>"; };
 		200000000000000000000011 /* Macrodroid.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Macrodroid.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		200000000000000000000012 /* EmbeddedControlProbe */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = EmbeddedControlProbe; sourceTree = BUILT_PRODUCTS_DIR; };
-		200000000000000000000013 /* TFTMACTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TFTMACTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		200000000000000000000013 /* MacrodroidTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MacrodroidTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		200000000000000000000014 /* FrameContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameContract.swift; sourceTree = "<group>"; };
-		200000000000000000000015 /* TFTMACRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TFTMACRuntime.swift; sourceTree = "<group>"; };
+		200000000000000000000015 /* MacrodroidRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacrodroidRuntime.swift; sourceTree = "<group>"; };
 		200000000000000000000016 /* AVDTransactionGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AVDTransactionGuard.swift; sourceTree = "<group>"; };
 		200000000000000000000017 /* RuntimeProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeProfile.swift; sourceTree = "<group>"; };
 		200000000000000000000018 /* RuntimeSettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeSettingsWindowController.swift; sourceTree = "<group>"; };
@@ -81,6 +83,8 @@
 		200000000000000000000020 /* CombatBenchmarkAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CombatBenchmarkAnalysisTests.swift; sourceTree = "<group>"; };
 		200000000000000000000021 /* GraphicsStackReceipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphicsStackReceipt.swift; sourceTree = "<group>"; };
 		200000000000000000000022 /* GraphicsStackReceiptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphicsStackReceiptTests.swift; sourceTree = "<group>"; };
+		200000000000000000000038 /* MacrodroidLauncherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacrodroidLauncherView.swift; sourceTree = "<group>"; };
+		200000000000000000000039 /* LauncherWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LauncherWindowController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,7 +107,7 @@
 		400000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				400000000000000000000002 /* TFTMAC */,
+				400000000000000000000002 /* Macrodroid */,
 				40000000000000000000000A /* Generated */,
 				400000000000000000000005 /* Probes */,
 				400000000000000000000007 /* Tests */,
@@ -111,21 +115,31 @@
 			);
 			sourceTree = "<group>";
 		};
-		400000000000000000000002 /* TFTMAC */ = {
+		400000000000000000000002 /* Macrodroid */ = {
 			isa = PBXGroup;
 			children = (
 				400000000000000000000003 /* App */,
+				40000000000000000000000D /* Launcher */,
 				400000000000000000000004 /* Presentation */,
 				40000000000000000000000C /* Runtime */,
 				200000000000000000000008 /* Info.plist */,
 			);
-			path = TFTMAC;
+			path = Macrodroid;
+			sourceTree = "<group>";
+		};
+		40000000000000000000000D /* Launcher */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000038 /* MacrodroidLauncherView.swift */,
+				200000000000000000000039 /* LauncherWindowController.swift */,
+			);
+			path = Launcher;
 			sourceTree = "<group>";
 		};
 		400000000000000000000003 /* App */ = {
 			isa = PBXGroup;
 			children = (
-				200000000000000000000001 /* TFTMACApplication.swift */,
+				200000000000000000000001 /* MacrodroidApplication.swift */,
 				200000000000000000000002 /* AppCoordinator.swift */,
 				200000000000000000000003 /* MainWindowController.swift */,
 				200000000000000000000018 /* RuntimeSettingsWindowController.swift */,
@@ -143,24 +157,24 @@
 			path = Presentation;
 			sourceTree = "<group>";
 		};
-		40000000000000000000000C /* Runtime */ = {isa = PBXGroup; children = (200000000000000000000017 /* RuntimeProfile.swift */, 200000000000000000000019 /* RuntimeLease.swift */, 20000000000000000000001A /* TelemetrySignalClassifier.swift */, 20000000000000000000001B /* GameFrameTelemetry.swift */, 200000000000000000000021 /* GraphicsStackReceipt.swift */, 20000000000000000000001E /* CombatBenchmarkAnalysis.swift */, 20000000000000000000001F /* CombatBenchmarkStore.swift */, 20000000000000000000001D /* TouchInput.swift */, 200000000000000000000015 /* TFTMACRuntime.swift */, 200000000000000000000016 /* AVDTransactionGuard.swift */,); path = Runtime; sourceTree = "<group>"; };
+		40000000000000000000000C /* Runtime */ = {isa = PBXGroup; children = (200000000000000000000017 /* RuntimeProfile.swift */, 200000000000000000000019 /* RuntimeLease.swift */, 20000000000000000000001A /* TelemetrySignalClassifier.swift */, 20000000000000000000001B /* GameFrameTelemetry.swift */, 200000000000000000000021 /* GraphicsStackReceipt.swift */, 20000000000000000000001E /* CombatBenchmarkAnalysis.swift */, 20000000000000000000001F /* CombatBenchmarkStore.swift */, 20000000000000000000001D /* TouchInput.swift */, 200000000000000000000015 /* MacrodroidRuntime.swift */, 200000000000000000000016 /* AVDTransactionGuard.swift */,); path = Runtime; sourceTree = "<group>"; };
 		40000000000000000000000A /* Generated */ = {isa = PBXGroup; children = (40000000000000000000000B /* EmulatorController */,); path = Generated; sourceTree = "<group>"; };
 		40000000000000000000000B /* EmulatorController */ = {isa = PBXGroup; children = (200000000000000000000009 /* emulator_controller.pb.swift */, 200000000000000000000010 /* emulator_controller.grpc.swift */,); path = EmulatorController; sourceTree = "<group>"; };
 		400000000000000000000005 /* Probes */ = {isa = PBXGroup; children = (400000000000000000000006 /* EmbeddedControlProbe */,); path = Probes; sourceTree = "<group>"; };
 		400000000000000000000006 /* EmbeddedControlProbe */ = {isa = PBXGroup; children = (200000000000000000000006 /* EmbeddedControlProbe.swift */,); path = EmbeddedControlProbe; sourceTree = "<group>"; };
-		400000000000000000000007 /* Tests */ = {isa = PBXGroup; children = (400000000000000000000008 /* TFTMACTests */,); path = Tests; sourceTree = "<group>"; };
-		400000000000000000000008 /* TFTMACTests */ = {isa = PBXGroup; children = (200000000000000000000007 /* TFTMACGate1Tests.swift */, 20000000000000000000001C /* GameFrameTelemetryTests.swift */, 200000000000000000000020 /* CombatBenchmarkAnalysisTests.swift */, 200000000000000000000022 /* GraphicsStackReceiptTests.swift */,); path = TFTMACTests; sourceTree = "<group>"; };
-		400000000000000000000009 /* Products */ = {isa = PBXGroup; children = (200000000000000000000011 /* Macrodroid.app */, 200000000000000000000012 /* EmbeddedControlProbe */, 200000000000000000000013 /* TFTMACTests.xctest */,); name = Products; sourceTree = "<group>"; };
+		400000000000000000000007 /* Tests */ = {isa = PBXGroup; children = (400000000000000000000008 /* MacrodroidTests */,); path = Tests; sourceTree = "<group>"; };
+		400000000000000000000008 /* MacrodroidTests */ = {isa = PBXGroup; children = (200000000000000000000007 /* MacrodroidGate1Tests.swift */, 20000000000000000000001C /* GameFrameTelemetryTests.swift */, 200000000000000000000020 /* CombatBenchmarkAnalysisTests.swift */, 200000000000000000000022 /* GraphicsStackReceiptTests.swift */,); path = MacrodroidTests; sourceTree = "<group>"; };
+		400000000000000000000009 /* Products */ = {isa = PBXGroup; children = (200000000000000000000011 /* Macrodroid.app */, 200000000000000000000012 /* EmbeddedControlProbe */, 200000000000000000000013 /* MacrodroidTests.xctest */,); name = Products; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		500000000000000000000001 /* TFTMAC */ = {
+		500000000000000000000001 /* Macrodroid */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 900000000000000000000002 /* Build configuration list for PBXNativeTarget "TFTMAC" */;
+			buildConfigurationList = 900000000000000000000002 /* Build configuration list for PBXNativeTarget "Macrodroid" */;
 			buildPhases = (700000000000000000000001 /* Sources */, 300000000000000000000001 /* Frameworks */, 800000000000000000000001 /* Resources */);
 			buildRules = ();
 			dependencies = ();
-			name = TFTMAC;
+			name = Macrodroid;
 			packageProductDependencies = (D00000000000000000000001 /* GRPCCore */, D00000000000000000000002 /* GRPCNIOTransportHTTP2 */, D00000000000000000000003 /* GRPCProtobuf */, D00000000000000000000004 /* SwiftProtobuf */);
 			productName = Macrodroid;
 			productReference = 200000000000000000000011 /* Macrodroid.app */;
@@ -178,15 +192,15 @@
 			productReference = 200000000000000000000012 /* EmbeddedControlProbe */;
 			productType = "com.apple.product-type.tool";
 		};
-		500000000000000000000003 /* TFTMACTests */ = {
+		500000000000000000000003 /* MacrodroidTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 900000000000000000000004 /* Build configuration list for PBXNativeTarget "TFTMACTests" */;
+			buildConfigurationList = 900000000000000000000004 /* Build configuration list for PBXNativeTarget "MacrodroidTests" */;
 			buildPhases = (700000000000000000000003 /* Sources */, 300000000000000000000003 /* Frameworks */);
 			buildRules = ();
 			dependencies = ();
-			name = TFTMACTests;
-			productName = TFTMACTests;
-			productReference = 200000000000000000000013 /* TFTMACTests.xctest */;
+			name = MacrodroidTests;
+			productName = MacrodroidTests;
+			productReference = 200000000000000000000013 /* MacrodroidTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
@@ -195,7 +209,7 @@
 		600000000000000000000001 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2600; LastUpgradeCheck = 2600;};
-			buildConfigurationList = 900000000000000000000001 /* Build configuration list for PBXProject "TFTMAC" */;
+			buildConfigurationList = 900000000000000000000001 /* Build configuration list for PBXProject "Macrodroid" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -205,7 +219,7 @@
 			productRefGroup = 400000000000000000000009 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (500000000000000000000001 /* TFTMAC */, 500000000000000000000002 /* EmbeddedControlProbe */, 500000000000000000000003 /* TFTMACTests */);
+			targets = (500000000000000000000001 /* Macrodroid */, 500000000000000000000002 /* EmbeddedControlProbe */, 500000000000000000000003 /* MacrodroidTests */);
 		};
 /* End PBXProject section */
 
@@ -214,7 +228,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		700000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000001, 100000000000000000000002, 100000000000000000000003, 100000000000000000000027, 100000000000000000000004, 100000000000000000000005, 100000000000000000000020, 100000000000000000000021, 100000000000000000000023, 100000000000000000000025, 100000000000000000000028, 10000000000000000000002A, 10000000000000000000002C, 100000000000000000000035, 10000000000000000000002F, 100000000000000000000031, 100000000000000000000033, 100000000000000000000015, 100000000000000000000016,); runOnlyForDeploymentPostprocessing = 0; };
+		700000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000001, 100000000000000000000002, 100000000000000000000003, 100000000000000000000027, 100000000000000000000004, 100000000000000000000005, 100000000000000000000020, 100000000000000000000021, 100000000000000000000023, 100000000000000000000025, 100000000000000000000028, 10000000000000000000002A, 10000000000000000000002C, 100000000000000000000035, 10000000000000000000002F, 100000000000000000000031, 100000000000000000000033, 100000000000000000000015, 100000000000000000000016, 100000000000000000000038, 100000000000000000000039,); runOnlyForDeploymentPostprocessing = 0; };
 		700000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000006, 100000000000000000000017, 100000000000000000000018,); runOnlyForDeploymentPostprocessing = 0; };
 		700000000000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000007, 10000000000000000000001C, 100000000000000000000008, 100000000000000000000022, 100000000000000000000024, 100000000000000000000026, 100000000000000000000029, 10000000000000000000002B, 10000000000000000000002D, 10000000000000000000002E, 100000000000000000000036, 100000000000000000000030, 100000000000000000000032, 100000000000000000000034, 100000000000000000000037,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
@@ -222,19 +236,19 @@
 /* Begin XCBuildConfiguration section */
 		B00000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; SWIFT_VERSION = 6.0;}; name = Debug; };
 		B00000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 6.0;}; name = Release; };
-		B00000000000000000000011 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = "$(ARCHS_STANDARD)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 8; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = tftmac/Info.plist; MACOSX_DEPLOYMENT_TARGET = 15.0; MARKETING_VERSION = 2.3.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.lamppkk.macrodroid; PRODUCT_NAME = Macrodroid; SDKROOT = macosx; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0;}; name = Debug; };
-		B00000000000000000000012 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = "$(ARCHS_STANDARD)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 8; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = tftmac/Info.plist; MACOSX_DEPLOYMENT_TARGET = 15.0; MARKETING_VERSION = 2.3.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.lamppkk.macrodroid; PRODUCT_NAME = Macrodroid; SDKROOT = macosx; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0;}; name = Release; };
+		B00000000000000000000011 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = "$(ARCHS_STANDARD)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 8; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Macrodroid/Info.plist; MACOSX_DEPLOYMENT_TARGET = 15.0; MARKETING_VERSION = 2.3.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.lamppkk.macrodroid; PRODUCT_NAME = Macrodroid; SDKROOT = macosx; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0;}; name = Debug; };
+		B00000000000000000000012 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = "$(ARCHS_STANDARD)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 8; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Macrodroid/Info.plist; MACOSX_DEPLOYMENT_TARGET = 15.0; MARKETING_VERSION = 2.3.0; OTHER_LDFLAGS = "-lsqlite3"; PRODUCT_BUNDLE_IDENTIFIER = com.lamppkk.macrodroid; PRODUCT_NAME = Macrodroid; SDKROOT = macosx; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_VERSION = 6.0;}; name = Release; };
 		B00000000000000000000021 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = "$(ARCHS_STANDARD)"; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_VERSION = 6.0;}; name = Debug; };
 		B00000000000000000000022 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = "$(ARCHS_STANDARD)"; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_VERSION = 6.0;}; name = Release; };
-		B00000000000000000000031 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = "$(ARCHS_STANDARD)"; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; PRODUCT_BUNDLE_IDENTIFIER = com.flashls1.tftmac.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_VERSION = 6.0;}; name = Debug; };
-		B00000000000000000000032 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = "$(ARCHS_STANDARD)"; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; PRODUCT_BUNDLE_IDENTIFIER = com.flashls1.tftmac.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_VERSION = 6.0;}; name = Release; };
+		B00000000000000000000031 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = "$(ARCHS_STANDARD)"; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; PRODUCT_BUNDLE_IDENTIFIER = com.lamppkk.macrodroid.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_VERSION = 6.0;}; name = Debug; };
+		B00000000000000000000032 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ARCHS = "$(ARCHS_STANDARD)"; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 15.0; PRODUCT_BUNDLE_IDENTIFIER = com.lamppkk.macrodroid.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SWIFT_VERSION = 6.0;}; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		900000000000000000000001 /* Build configuration list for PBXProject "TFTMAC" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000001, B00000000000000000000002,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		900000000000000000000002 /* Build configuration list for PBXNativeTarget "TFTMAC" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000011, B00000000000000000000012,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		900000000000000000000001 /* Build configuration list for PBXProject "Macrodroid" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000001, B00000000000000000000002,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		900000000000000000000002 /* Build configuration list for PBXNativeTarget "Macrodroid" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000011, B00000000000000000000012,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		900000000000000000000003 /* Build configuration list for PBXNativeTarget "EmbeddedControlProbe" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000021, B00000000000000000000022,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		900000000000000000000004 /* Build configuration list for PBXNativeTarget "TFTMACTests" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000031, B00000000000000000000032,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		900000000000000000000004 /* Build configuration list for PBXNativeTarget "MacrodroidTests" */ = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000031, B00000000000000000000032,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */

@@ -1,12 +1,11 @@
-# TFTMAC Project Record
+# Macrodroid Project Record
 
-**Project:** native macOS TFT client experience using the official Android TFT package  
-**Current development line:** `codex/native-tftmac-2.0.0`  
-**Current installed release:** TFTMAC 2.3.0 build 8, installed, live-launched, and automatically logging; release hashes match, while the timestamped current-host signing audit is blocked by the missing local identity
-**Project record through:** 2026-08-31 America/Chicago
+**Status:** authoritative for the active repository state.  
+**Current development line:** `codex/native-macrodroid-2.0.0`  
+**Current installed release:** Macrodroid 2.3.0 build 8, installed, live-launched, and automatically logging.
 
-This is the continuity document for a new developer or a new chat. It records
-what TFTMAC is, why the architecture changed, what has been built, what the
+This project record is the single source of truth for new agents. It explains
+what Macrodroid is, why the architecture changed, what has been built, what the
 evidence says, and what remains unfinished. Immutable/current facts live in
 `facts.md`; exact benchmark formulas and current run findings live in
 `benchmark.md`; engineering hypotheses and next code work live in `dev.md`.
@@ -54,7 +53,7 @@ tearing, frame age, and lifetime ownership have not been proven.
 
 ### Initial working donor
 
-The Mactician donor had already proven that the Android runtime and TFT could
+The donor prototype had already proven that the Android runtime and TFT could
 work on this Mac. Its critical behavior was not only its AVD variables. It
 launched the emulator through a packaged Mac application host using
 `/usr/bin/open -n -W --env ... --args ...`, inside the logged-in user's macOS

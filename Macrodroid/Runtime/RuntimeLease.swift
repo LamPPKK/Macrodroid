@@ -8,9 +8,9 @@ enum RuntimeLeaseError: LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .alreadyOwned(let processIdentifier):
-            return "TFTMAC runtime is already owned by process \(processIdentifier). Close the other TFTMAC session first."
+            return "Macrodroid runtime is already owned by process \(processIdentifier). Close the other Macrodroid session first."
         case .cannotCreate(let reason):
-            return "TFTMAC could not acquire its runtime lease: \(reason)"
+            return "Macrodroid could not acquire its runtime lease: \(reason)"
         }
     }
 }

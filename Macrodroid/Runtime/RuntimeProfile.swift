@@ -108,7 +108,7 @@ struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
     static let supportedASGDrawFlushIntervals = [400, 800]
 
     static let playable = TFTMACRuntimeProfile(
-        identifier: "tftmac_5gb_native_v1",
+        identifier: "macrodroid_5gb_native_v1",
         width: 1920,
         height: 1080,
         densityDPI: 320,
@@ -223,7 +223,7 @@ struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
             asgDrawFlushInterval,
             in: Self.supportedASGDrawFlushIntervals
         ) ?? self.asgDrawFlushInterval
-        let identifier = "tftmac_native_\(safeRAM)m_\(safeVCPU)c_\(safeRefresh)hz_flush\(safeFlush)"
+        let identifier = "macrodroid_native_\(safeRAM)m_\(safeVCPU)c_\(safeRefresh)hz_flush\(safeFlush)"
         return Self(
             identifier: identifier,
             width: width,

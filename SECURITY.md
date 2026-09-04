@@ -1,6 +1,6 @@
 # Security policy
 
-Security fixes are handled on a best-effort basis for the current TFTMAC codebase.
+Security fixes are handled on a best-effort basis for the current Macrodroid codebase.
 
 ## Reporting
 

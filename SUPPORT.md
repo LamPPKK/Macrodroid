@@ -1,10 +1,10 @@
 # Support
 
-TFTMAC is maintained on a best-effort basis for the current Apple Silicon build and stock Android runtime.
+Macrodroid is maintained on a best-effort basis for the current Apple Silicon build and stock Android runtime.
 
 For a useful bug report include:
 
-- TFTMAC commit/version;
+- Macrodroid commit/version;
 - macOS version and Mac model/chip;
 - whether the stock emulator and AVD already existed;
 - package version and installer authority when relevant;
