@@ -17,12 +17,12 @@ final class LauncherWindowController: NSWindowController {
         let hostingController = NSHostingController(rootView: contentView)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1060, height: 660),
+            contentRect: NSRect(x: 0, y: 0, width: 1120, height: 700),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.minSize = NSSize(width: 880, height: 560)
+        window.minSize = NSSize(width: 980, height: 640)
         window.title = "Macrodroid"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true

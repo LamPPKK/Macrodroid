@@ -6,7 +6,7 @@ readonly ROOT="${0:A:h:h}"
 cd "$ROOT"
 
 fail() {
-  print -u2 "TFTMAC source validation failed: $*"
+  print -u2 "Macrodroid source validation failed: $*"
   exit 1
 }
 
@@ -18,27 +18,27 @@ require_command() {
 # /Applications/TFTMAC.app, the external emulator runtime, a signing identity,
 # user credentials, or a private capture. Those checks belong to the separate
 # local-only verify-installed-runtime.command contract.
-for tool in git jq node plutil rg shasum xcodebuild zsh; do
+for tool in git jq node plutil grep shasum xcodebuild zsh; do
   require_command "$tool"
 done
 
-readonly INFO="tftmac/Info.plist"
-readonly PACKAGE_RESOLVED="TFTMAC.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+readonly INFO="Macrodroid/Info.plist"
+readonly PACKAGE_RESOLVED="Macrodroid.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 readonly PROTO="Vendor/AndroidEmulator/emulator_controller.proto"
 readonly PROTO_SOURCE="Vendor/AndroidEmulator/SOURCE.json"
 
 for required in \
-  TFTMAC.xcodeproj/project.pbxproj \
-  TFTMAC.xcodeproj/xcshareddata/xcschemes/TFTMAC.xcscheme \
+  Macrodroid.xcodeproj/project.pbxproj \
+  Macrodroid.xcodeproj/xcshareddata/xcschemes/Macrodroid.xcscheme \
   "$INFO" \
   "$PACKAGE_RESOLVED" \
   "$PROTO" \
   "$PROTO_SOURCE" \
-  tftmac/Assets/TFTMAC-Official-Icon.png \
+  Macrodroid/Assets/Macrodroid-Official-Icon.png \
   Generated/EmulatorController/emulator_controller.pb.swift \
   Generated/EmulatorController/emulator_controller.grpc.swift \
   scripts/generate-emulator-proto.command \
-  scripts/build-tftmac-app.command \
+  scripts/build-macrodroid-app.command \
   scripts/build-native-app.command \
   scripts/install-trace-processor.command \
   scripts/ensure-local-signing-identity.command \
@@ -48,15 +48,15 @@ for required in \
   ssot/STACK.lock.yaml \
   ssot/runtime-authority.json \
   ssot/retained-evidence-index.json \
-  ssot/TFTMAC_ENGINEERING_MAP.sql \
-  ssot/TFTMAC_PERFORMANCE_LAB.sql; do
+  ssot/MACRODROID_ENGINEERING_MAP.sql \
+  ssot/MACRODROID_PERFORMANCE_LAB.sql; do
   [[ -f "$required" ]] || fail "required file is missing: $required"
 done
 
 plutil -lint "$INFO" >/dev/null || fail "Info.plist is invalid"
-[[ "$(plutil -extract CFBundleDisplayName raw "$INFO")" == "TFTMAC" ]] || fail "unexpected app display name"
-[[ "$(plutil -extract CFBundleExecutable raw "$INFO")" == "TFTMAC" ]] || fail "unexpected app executable"
-[[ "$(plutil -extract CFBundleIdentifier raw "$INFO")" == "com.flashls1.tftmac" ]] || fail "unexpected bundle identifier"
+[[ "$(plutil -extract CFBundleDisplayName raw "$INFO")" == "Macrodroid" ]] || fail "unexpected app display name"
+[[ "$(plutil -extract CFBundleExecutable raw "$INFO")" == "Macrodroid" ]] || fail "unexpected app executable"
+[[ "$(plutil -extract CFBundleIdentifier raw "$INFO")" == "com.lamppkk.macrodroid" ]] || fail "unexpected bundle identifier"
 readonly INFO_VERSION="$(plutil -extract CFBundleShortVersionString raw "$INFO")"
 readonly INFO_BUILD="$(plutil -extract CFBundleVersion raw "$INFO")"
 readonly AUTHORITY_VERSION="$(jq -r '.finalInstalledRelease.version' ssot/runtime-authority.json)"
@@ -68,12 +68,12 @@ readonly AUTHORITY_BUILD="$(jq -r '.finalInstalledRelease.build' ssot/runtime-au
 
 # There is one executable build authority. The compatibility entrypoint may
 # delegate to it, but it may never rebuild or install the retired Node shell.
-rg -q -F 'scripts/build-native-app.command' scripts/build-tftmac-app.command \
+grep -q -F 'scripts/build-native-app.command' scripts/build-macrodroid-app.command \
   || fail "compatibility build entrypoint does not delegate to the native build"
-if rg -n 'tftmac/Sources|tftmac-direct-control|5040|5592|swiftc' scripts/build-tftmac-app.command; then
+if grep -n -E 'Macrodroid/Sources|macrodroid-direct-control|5040|5592|swiftc' scripts/build-macrodroid-app.command 2>/dev/null; then
   fail "compatibility build entrypoint still contains a retired build/runtime path"
 fi
-if rg -n 'TFTMACRuntimeBridge|TFTMACViews|TFTMACWindowCoordinator' TFTMAC.xcodeproj/project.pbxproj; then
+if grep -n -E 'MacrodroidRuntimeBridge|MacrodroidViews|MacrodroidWindowCoordinator' Macrodroid.xcodeproj/project.pbxproj 2>/dev/null; then
   fail "native Xcode target references the retired Node shell"
 fi
 
@@ -183,7 +183,7 @@ for locked in \
   'installed_runtime_verifier: "BLOCKED_SIGNING_IDENTITY"' \
   'id: "2026-08-31T22-30-26.086Z-8df607d7-a34a-4e2a-b00d-739aa3143200"' \
   'advanced_source_causal_logger: "planned"'; do
-  rg -q -F -- "$locked" ssot/STACK.lock.yaml || fail "active stack lock drifted: $locked"
+  grep -q -F -- "$locked" ssot/STACK.lock.yaml || fail "active stack lock drifted: $locked"
 done
 
 readonly STACK_RUNTIME_AUTHORITY_SHA="$(awk -F'"' '/^[[:space:]]*runtime_authority_sha256:/ {print $2}' ssot/STACK.lock.yaml)"
@@ -200,12 +200,12 @@ while read -r expected_hash authority_path; do
   [[ "$actual_hash" == "$expected_hash" ]] || fail "authority input hash drifted: $authority_path"
 done < ssot/AUTHORITY_INPUTS.sha256
 
-readonly TEST_FUNCTION_COUNT="$(rg -n '^[[:space:]]*func test' Tests/TFTMACTests --glob '*.swift' | wc -l | tr -d '[:space:]')"
+readonly TEST_FUNCTION_COUNT="$(grep -r -n '^[[:space:]]*func test' Tests/MacrodroidTests --include '*.swift' | wc -l | tr -d '[:space:]')"
 [[ "$TEST_FUNCTION_COUNT" == "43" ]] || fail "native test inventory drifted: expected 43, found $TEST_FUNCTION_COUNT"
 [[ "$(plutil -extract LSSupportsGameMode raw "$INFO")" == "true" ]] \
   || fail "native app is not eligible for macOS Game Mode"
-[[ "$(shasum -a 256 tftmac/Assets/TFTMAC-Official-Icon.png | awk '{print $1}')" == "d6ba9ceb76c4b1e44e87f059f775a0ed629f9bea29b0dd73245853d7dca3a016" ]] \
-  || fail "official TFTMAC icon source hash drifted"
+[[ "$(shasum -a 256 Macrodroid/Assets/Macrodroid-Official-Icon.png | awk '{print $1}')" == "67f40d296dc8f7699b5b0a944edbaa0b9b178d4caa95a41d3318756b2e5f9633" ]] \
+  || fail "official Macrodroid icon source hash drifted"
 
 readonly PROTO_SHA="$(shasum -a 256 "$PROTO" | awk '{print $1}')"
 readonly RECORDED_PROTO_SHA="$(jq -r '.vendoredProtoSHA256' "$PROTO_SOURCE")"
@@ -232,13 +232,13 @@ while IFS= read -r script; do
   zsh -o NO_BG_NICE -n "$script" || fail "zsh syntax failed: $script"
 done < <(find scripts -type f \( -name '*.command' -o -name '*.sh' \) | LC_ALL=C sort)
 
-node --check tools/tftmac-direct-control.mjs >/dev/null
+node --check tools/macrodroid-direct-control.mjs >/dev/null
 [[ ! -f tools/tftmac-v2.mjs ]] || node --check tools/tftmac-v2.mjs >/dev/null
-node tools/tftmac-direct-control.mjs engineering-map-selftest >/dev/null
-node tools/tftmac-direct-control.mjs lab-selftest >/dev/null
+node tools/macrodroid-direct-control.mjs engineering-map-selftest >/dev/null
+node tools/macrodroid-direct-control.mjs lab-selftest >/dev/null
 
 if [[ -n "${TFTMAC_FORBIDDEN_TOKEN:-}" ]]; then
-  if git ls-files | rg -i -F -- "$TFTMAC_FORBIDDEN_TOKEN"; then
+  if git ls-files | grep -i -F -- "$TFTMAC_FORBIDDEN_TOKEN"; then
     fail "forbidden retired-product token remains in a tracked path"
   fi
   if git grep -n -i -F -- "$TFTMAC_FORBIDDEN_TOKEN"; then
@@ -246,10 +246,10 @@ if [[ -n "${TFTMAC_FORBIDDEN_TOKEN:-}" ]]; then
   fi
 fi
 
-if git ls-files | rg -i '\.(apk|apks|xapk|aab|obb|qcow2|p12|pfx|jks|keystore|mobileprovision|sqlite|sqlite3|db|perfetto-trace|trace|pcap|dmp)$'; then
+if git ls-files | grep -i -E '\.(apk|apks|xapk|aab|obb|qcow2|p12|pfx|jks|keystore|mobileprovision|sqlite|sqlite3|db|perfetto-trace|trace|pcap|dmp)$'; then
   fail "private, generated, credential, or raw runtime artifact is tracked"
 fi
-if git ls-files | rg -i '(^|/)(captures?|screenshots?|login[-_]?probes?|ocr[-_]?probes?|recovery[-_]?apps?|avd[-_]?data)(/|$)'; then
+if git ls-files | grep -i -E '(^|/)(captures?|screenshots?|login[-_]?probes?|ocr[-_]?probes?|recovery[-_]?apps?|avd[-_]?data)(/|$)'; then
   fail "private capture, screenshot, login/OCR probe, recovery app, or AVD data is tracked"
 fi
 
@@ -266,7 +266,9 @@ trap cleanup EXIT
 git status --porcelain=v1 --untracked-files=all > "$STATE_BEFORE"
 
 if [[ -z "${DEVELOPER_DIR:-}" ]]; then
-  if [[ -d /Applications/Xcode-26.6.0.app/Contents/Developer ]]; then
+  if [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
+    export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+  elif [[ -d /Applications/Xcode-26.6.0.app/Contents/Developer ]]; then
     export DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer
   else
     export DEVELOPER_DIR="$(xcode-select -p)"
@@ -275,15 +277,16 @@ fi
 readonly RELEASE_DERIVED="${ROOT}/.build/native-ci-release"
 /usr/bin/xcodebuild \
   -quiet \
-  -project "${ROOT}/TFTMAC.xcodeproj" \
-  -scheme TFTMAC \
+  -project "${ROOT}/Macrodroid.xcodeproj" \
+  -scheme Macrodroid \
   -configuration Release \
-  -destination 'platform=macOS,arch=arm64' \
+  -destination 'platform=macOS' \
   -derivedDataPath "$RELEASE_DERIVED" \
+  ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO \
   build
-[[ -x "${RELEASE_DERIVED}/Build/Products/Release/TFTMAC.app/Contents/MacOS/TFTMAC" ]] \
-  || fail "unsigned Release build did not produce the TFTMAC executable"
+[[ -x "${RELEASE_DERIVED}/Build/Products/Release/Macrodroid.app/Contents/MacOS/Macrodroid" ]] \
+  || fail "unsigned Release build did not produce the Macrodroid executable"
 
 /bin/zsh scripts/test-native-app.command
 
@@ -293,4 +296,4 @@ cmp -s "$STATE_BEFORE" "$STATE_AFTER" || {
   fail "source verification changed tracked or visible generated state"
 }
 
-print "TFTMAC source validation: OK (unsigned Release build; 43 native tests)"
+print "Macrodroid source validation: OK (unsigned Release build; 43 native tests)"

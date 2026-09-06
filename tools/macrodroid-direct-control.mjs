@@ -1496,7 +1496,7 @@ function analyzeApproximateLatestMatch() {
 function ingestApproximateLatestMatch() {
   const analysis = analyzeApproximateLatestMatch();
   const captureDir = readJSON(CONTROL_STATE)?.captureDir;
-  const databasePath = path.join(DIAGNOSTICS_ROOT, 'TFTMAC_PERFORMANCE_LAB.sqlite');
+  const databasePath = path.join(DIAGNOSTICS_ROOT, 'MACRODROID_PERFORMANCE_LAB.sqlite');
   const schemaPath = labSchemaPath();
   if (!schemaPath) throw new Error('TFTMAC performance-lab schema is unavailable.');
   ensureDir(DIAGNOSTICS_ROOT);
@@ -1981,7 +1981,7 @@ function ingestContinuousRunIntoLab() {
   const analysis = analyzeContinuousRun();
   const captureDir = analysis.captureDir;
   const labSessionId = `${analysis.sessionId}-continuous-run`;
-  const databasePath = path.join(DIAGNOSTICS_ROOT, 'TFTMAC_PERFORMANCE_LAB.sqlite');
+  const databasePath = path.join(DIAGNOSTICS_ROOT, 'MACRODROID_PERFORMANCE_LAB.sqlite');
   const schemaPath = labSchemaPath();
   if (!schemaPath) throw new Error('TFTMAC performance-lab schema is unavailable.');
   ensureDir(DIAGNOSTICS_ROOT);
@@ -2213,7 +2213,7 @@ function ingestAnalysisIntoLab() {
   const analysis = analyzeSession();
   const captureDir = analysis.captureDir;
   const labSessionId = analysis.match.matchOrdinal > 1 ? `${analysis.sessionId}-match-${analysis.match.matchOrdinal}` : analysis.sessionId;
-  const databasePath = path.join(DIAGNOSTICS_ROOT, 'TFTMAC_PERFORMANCE_LAB.sqlite');
+  const databasePath = path.join(DIAGNOSTICS_ROOT, 'MACRODROID_PERFORMANCE_LAB.sqlite');
   const schemaPath = labSchemaPath();
   if (!schemaPath) throw new Error('TFTMAC performance-lab schema is unavailable.');
   ensureDir(DIAGNOSTICS_ROOT);
@@ -4000,14 +4000,14 @@ function asNumber(value) {
 
 function labSchemaPath() {
   const candidates = [
-    path.join(scriptDir, 'TFTMAC_PERFORMANCE_LAB.sql'),
-    path.join(repoRoot, 'ssot', 'TFTMAC_PERFORMANCE_LAB.sql')
+    path.join(scriptDir, 'MACRODROID_PERFORMANCE_LAB.sql'),
+    path.join(repoRoot, 'ssot', 'MACRODROID_PERFORMANCE_LAB.sql')
   ];
   return candidates.find(exists) ?? null;
 }
 
 function engineeringMapSelfTest() {
-  const schemaPath = path.join(repoRoot, 'ssot', 'TFTMAC_ENGINEERING_MAP.sql');
+  const schemaPath = path.join(repoRoot, 'ssot', 'MACRODROID_ENGINEERING_MAP.sql');
   if (!exists(schemaPath)) throw new Error('TFTMAC engineering-map SQL is unavailable.');
   const tempPath = `/private/tmp/tftmac-map-selftest-${process.pid}-${Date.now()}.sqlite`;
   const db = new DatabaseSync(tempPath);
@@ -4059,7 +4059,7 @@ function normalizePerformanceLab(captureDir, frames, metrics, storage, manifestS
   ensureDir(DIAGNOSTICS_ROOT);
   const schemaPath = labSchemaPath();
   if (!schemaPath) throw new Error('TFTMAC performance-lab schema is unavailable.');
-  const databasePath = path.join(DIAGNOSTICS_ROOT, 'TFTMAC_PERFORMANCE_LAB.sqlite');
+  const databasePath = path.join(DIAGNOSTICS_ROOT, 'MACRODROID_PERFORMANCE_LAB.sqlite');
   const initialize = !exists(databasePath) || fs.statSync(databasePath).size === 0;
   const db = new DatabaseSync(databasePath);
   try {
@@ -4573,8 +4573,8 @@ function buildApp() {
   command(swiftc, ['-O', '-parse-as-library', '-target', 'arm64-apple-macosx14.0', '-sdk', sdkPath, ...sources, '-o', binary], { timeout: 240000, env: xcodeEnv });
   fs.copyFileSync(path.join(repoRoot, 'tftmac', 'Info.plist'), path.join(contents, 'Info.plist'));
   fs.copyFileSync(scriptPath, path.join(contents, 'Resources', 'tftmac-direct-control.mjs'));
-  const labSource = path.join(repoRoot, 'ssot', 'TFTMAC_PERFORMANCE_LAB.sql');
-  if (exists(labSource)) fs.copyFileSync(labSource, path.join(contents, 'Resources', 'TFTMAC_PERFORMANCE_LAB.sql'));
+  const labSource = path.join(repoRoot, 'ssot', 'MACRODROID_PERFORMANCE_LAB.sql');
+  if (exists(labSource)) fs.copyFileSync(labSource, path.join(contents, 'Resources', 'MACRODROID_PERFORMANCE_LAB.sql'));
   fs.writeFileSync(path.join(contents, 'Resources', 'build-commit.txt'), `${currentGitSha()}\n`);
   command('/usr/bin/codesign', ['--force', '--sign', '-', '--timestamp=none', app], { timeout: 120000 });
   command('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', app], { timeout: 120000 });

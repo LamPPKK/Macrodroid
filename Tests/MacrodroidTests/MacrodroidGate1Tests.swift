@@ -121,7 +121,83 @@ final class TFTMACGate1Tests: XCTestCase {
         XCTAssertEqual(candidate.ramMiB, 6144)
         XCTAssertEqual(candidate.refreshHz, 30)
         XCTAssertEqual(candidate.asgDrawFlushInterval, 400)
-        XCTAssertEqual(candidate.identifier, "tftmac_native_6144m_8c_30hz_flush400")
+        XCTAssertEqual(candidate.identifier, "macrodroid_native_6144m_8c_30hz_flush400")
+
+        // Validate EngineLaunchPolicy and EngineCloseBehavior persistence
+        XCTAssertEqual(EngineLaunchPolicy.allCases.count, 2)
+        XCTAssertTrue(EngineLaunchPolicy.allCases.contains(.alwaysBackground))
+        XCTAssertTrue(EngineLaunchPolicy.allCases.contains(.onDemand))
+        let policyDefaults = UserDefaults(suiteName: "test.engine.policy")!
+        policyDefaults.removeObject(forKey: EngineLaunchPolicy.preferenceKey)
+        XCTAssertEqual(EngineLaunchPolicy.load(from: policyDefaults), .alwaysBackground)
+        EngineLaunchPolicy.onDemand.save(to: policyDefaults)
+        XCTAssertEqual(EngineLaunchPolicy.load(from: policyDefaults), .onDemand)
+        EngineLaunchPolicy.alwaysBackground.save(to: policyDefaults)
+        XCTAssertEqual(EngineLaunchPolicy.load(from: policyDefaults), .alwaysBackground)
+
+        XCTAssertEqual(EngineCloseBehavior.allCases.count, 2)
+        XCTAssertTrue(EngineCloseBehavior.allCases.contains(.keepWarm))
+        XCTAssertTrue(EngineCloseBehavior.allCases.contains(.stopEngine))
+        let closeDefaults = UserDefaults(suiteName: "test.engine.close")!
+        closeDefaults.removeObject(forKey: EngineCloseBehavior.preferenceKey)
+        XCTAssertEqual(EngineCloseBehavior.load(from: closeDefaults), .keepWarm)
+        EngineCloseBehavior.stopEngine.save(to: closeDefaults)
+        XCTAssertEqual(EngineCloseBehavior.load(from: closeDefaults), .stopEngine)
+        EngineCloseBehavior.keepWarm.save(to: closeDefaults)
+        XCTAssertEqual(EngineCloseBehavior.load(from: closeDefaults), .keepWarm)
+
+        // Validate NotificationPreferences
+        let notifDefaults = UserDefaults(suiteName: "test.notif.prefs")!
+        notifDefaults.removeObject(forKey: NotificationPreferences.mirroringEnabledKey)
+        notifDefaults.removeObject(forKey: NotificationPreferences.filterSystemKey)
+        XCTAssertTrue(NotificationPreferences.isMirroringEnabled(defaults: notifDefaults))
+        XCTAssertTrue(NotificationPreferences.isSystemFilterEnabled(defaults: notifDefaults))
+        NotificationPreferences.setMirroringEnabled(false, defaults: notifDefaults)
+        XCTAssertFalse(NotificationPreferences.isMirroringEnabled(defaults: notifDefaults))
+        NotificationPreferences.setSystemFilterEnabled(false, defaults: notifDefaults)
+        XCTAssertFalse(NotificationPreferences.isSystemFilterEnabled(defaults: notifDefaults))
+
+        // Validate AndroidNotificationParser
+        let sampleList = """
+0|com.riotgames.league.teamfighttactics|1001|null|10200: NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=com.riotgames.league.teamfighttactics user=UserHandle{0} id=1001 tag=null score=0 key=0|com.riotgames.league.teamfighttactics|1001|null|10200: Notification(channel=tft_game_channel pri=0 flags=0x10 color=0x00000000 vis=PRIVATE))
+0|android|17041793|null|1000: NotificationRecord(0|android|17041793|null|1000: pkg=android user=UserHandle{0} id=17041793 tag=null score=-20 key=0|android|17041793|null|1000: Notification(channel=DEVELOPER pri=-2 flags=0x2 color=0x00000000 vis=SECRET))
+"""
+        let parsedKeys = AndroidNotificationParser.parseNotificationKeys(from: sampleList)
+        XCTAssertEqual(parsedKeys.count, 2)
+        XCTAssertEqual(parsedKeys.first, "0|com.riotgames.league.teamfighttactics|1001|null|10200")
+
+        let sampleDetails = """
+NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=com.riotgames.league.teamfighttactics user=UserHandle{0} id=1001 tag=null importance=4 key=0|com.riotgames.league.teamfighttactics|1001|null|10200: Notification(channel=tft_game_channel pri=0 flags=0x10 color=0x00000000 vis=PRIVATE))
+  uid=10200 userId=0
+  icon=Icon(typ=RESOURCE pkg=com.riotgames.league.teamfighttactics id=0x7f080001)
+  channel=NotificationChannel{mId='tft_game_channel', mName=TFT Updates, mImportance=4}
+  extras={
+    android.title=String (Match Found!)
+    android.substName=String (TFT Mobile)
+    android.text=String (Your Teamfight Tactics match is ready.)
+  }
+"""
+        let record = AndroidNotificationParser.parseNotificationRecord(
+            key: "0|com.riotgames.league.teamfighttactics|1001|null|10200",
+            output: sampleDetails
+        )
+        XCTAssertNotNil(record)
+        XCTAssertEqual(record?.packageName, "com.riotgames.league.teamfighttactics")
+        XCTAssertEqual(record?.appName, "TFT Mobile")
+        XCTAssertEqual(record?.title, "Match Found!")
+        XCTAssertEqual(record?.text, "Your Teamfight Tactics match is ready.")
+        XCTAssertFalse(record?.isSystemPackage ?? true)
+
+        let sysRecord = GuestNotificationRecord(
+            key: "0|android|17041793|null|1000",
+            packageName: "android",
+            title: "USB Debugging",
+            text: "USB debugging connected",
+            appDisplayName: "Android System",
+            importance: 1
+        )
+        XCTAssertTrue(sysRecord.isSystemPackage)
+        XCTAssertEqual(sysRecord.appName, "Android System")
     }
 
     func testRapidCombatExperimentHasExactlyTwoNamedPresets() {

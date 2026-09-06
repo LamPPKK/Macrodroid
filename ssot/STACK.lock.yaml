@@ -9,7 +9,7 @@ authority:
   documentation_authority: "facts.md + project.md + dev.md + benchmark.md"
   authority_inputs: "ssot/AUTHORITY_INPUTS.sha256"
   runtime_authority_sha256: "2af6196e08b3f81032b8226fa3a9c25a3b0d99537f0872b7eb21a96aaf2b5d2f"
-  authority_inputs_sha256: "1d85f4f2f64f3b6089c79385b329dfe42bb479b8c65877c39bf01bdef13703ac"
+  authority_inputs_sha256: "ad58e5d3da045916f55ae7324c8fcf94d78f04336731de4ebb4aff18e946a35f"
   zengate_version: "2.3"
   zengate_score: 95.8
   zengate_result: "PASS"

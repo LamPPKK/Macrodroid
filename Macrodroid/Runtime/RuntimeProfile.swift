@@ -101,11 +101,239 @@ struct RuntimeExperimentConfigurationReceipt: Sendable, Equatable {
     let sha256: String
 }
 
+public enum EngineLaunchPolicy: String, CaseIterable, Codable, Sendable {
+    case alwaysBackground = "always_background"
+    case onDemand = "on_demand"
+
+    public static let preferenceKey = "macrodroid.engine_launch_policy"
+
+    public var displayName: String {
+        switch self {
+        case .alwaysBackground:
+            return "Chạy ngầm liên tục (Always in Background)"
+        case .onDemand:
+            return "Chạy khi ấn app (On-Demand)"
+        }
+    }
+
+    public var shortTitle: String {
+        switch self {
+        case .alwaysBackground:
+            return "Chạy ngầm (Always Warm)"
+        case .onDemand:
+            return "Chạy khi mở app (On-Demand)"
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .alwaysBackground:
+            return "Android engine tự động khởi động ngầm khi mở Macrodroid. Mở game/app tức thì không có độ trễ."
+        case .onDemand:
+            return "Chỉ khởi động máy ảo khi bạn bấm mở ứng dụng. Tiết kiệm tài nguyên CPU, RAM và pin khi ở chế độ chờ."
+        }
+    }
+
+    public static func load(from defaults: UserDefaults = .standard) -> Self {
+        guard let raw = defaults.string(forKey: preferenceKey),
+              let policy = Self(rawValue: raw) else {
+            return .alwaysBackground
+        }
+        return policy
+    }
+
+    public func save(to defaults: UserDefaults = .standard) {
+        defaults.set(rawValue, forKey: Self.preferenceKey)
+    }
+}
+
+public enum EngineCloseBehavior: String, CaseIterable, Codable, Sendable {
+    case keepWarm = "keep_warm"
+    case stopEngine = "stop_engine"
+
+    public static let preferenceKey = "macrodroid.engine_close_behavior"
+
+    public var displayName: String {
+        switch self {
+        case .keepWarm:
+            return "Giữ Engine chạy ngầm (Keep Warm)"
+        case .stopEngine:
+            return "Tắt Engine khi đóng app (Stop Engine)"
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .keepWarm:
+            return "Đóng cửa sổ app nhưng giữ engine chạy ngầm để mở app tiếp theo tức thì."
+        case .stopEngine:
+            return "Tắt hoàn toàn máy ảo khi đóng cửa sổ app để giải phóng toàn bộ RAM và CPU."
+        }
+    }
+
+    public static func load(from defaults: UserDefaults = .standard) -> Self {
+        guard let raw = defaults.string(forKey: preferenceKey),
+              let behavior = Self(rawValue: raw) else {
+            return .keepWarm
+        }
+        return behavior
+    }
+
+    public func save(to defaults: UserDefaults = .standard) {
+        defaults.set(rawValue, forKey: Self.preferenceKey)
+    }
+}
+
+public enum NotificationPreferences {
+    public static let mirroringEnabledKey = "macrodroid.notifications.mirroring_enabled"
+    public static let filterSystemKey = "macrodroid.notifications.filter_system"
+
+    public static func isMirroringEnabled(defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: mirroringEnabledKey) as? Bool ?? true
+    }
+
+    public static func setMirroringEnabled(_ enabled: Bool, defaults: UserDefaults = .standard) {
+        defaults.set(enabled, forKey: mirroringEnabledKey)
+    }
+
+    public static func isSystemFilterEnabled(defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: filterSystemKey) as? Bool ?? true
+    }
+
+    public static func setSystemFilterEnabled(_ enabled: Bool, defaults: UserDefaults = .standard) {
+        defaults.set(enabled, forKey: filterSystemKey)
+    }
+}
+
+public struct GuestNotificationRecord: Sendable, Equatable {
+    public let key: String
+    public let packageName: String
+    public let title: String
+    public let text: String
+    public let appDisplayName: String?
+    public let timestamp: Date
+    public let importance: Int
+
+    public var appName: String {
+        appDisplayName ?? packageName.components(separatedBy: ".").last?.capitalized ?? packageName
+    }
+
+    public var isSystemPackage: Bool {
+        AndroidNotificationParser.isSystemPackage(packageName)
+    }
+
+    public init(
+        key: String,
+        packageName: String,
+        title: String,
+        text: String,
+        appDisplayName: String? = nil,
+        timestamp: Date = Date(),
+        importance: Int = 3
+    ) {
+        self.key = key
+        self.packageName = packageName
+        self.title = title
+        self.text = text
+        self.appDisplayName = appDisplayName
+        self.timestamp = timestamp
+        self.importance = importance
+    }
+}
+
+public enum AndroidNotificationParser {
+    public static func isSystemPackage(_ package: String) -> Bool {
+        let lower = package.lowercased()
+        return lower == "android" ||
+               lower == "com.android.systemui" ||
+               lower == "com.google.android.gms" ||
+               lower.hasPrefix("com.android.server") ||
+               lower.hasPrefix("com.android.providers") ||
+               lower == "com.google.android.apps.nexuslauncher"
+    }
+
+    public static func parseNotificationKeys(from listOutput: String) -> [String] {
+        listOutput.split(whereSeparator: \.isNewline).compactMap { line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let colonIdx = trimmed.firstIndex(of: ":") {
+                let candidate = String(trimmed[..<colonIdx]).trimmingCharacters(in: .whitespaces)
+                return candidate.isEmpty ? nil : candidate
+            }
+            return trimmed.isEmpty ? nil : trimmed
+        }
+    }
+
+    public static func parseNotificationRecord(key: String, output: String) -> GuestNotificationRecord? {
+        parseDetails(from: output, key: key)
+    }
+
+    public static func parseKey(_ key: String) -> (userId: Int, packageName: String, id: String)? {
+        let parts = key.split(separator: "|", omittingEmptySubsequences: false)
+        guard parts.count >= 3 else { return nil }
+        let userId = Int(parts[0]) ?? 0
+        let pkg = String(parts[1])
+        let id = String(parts[2])
+        return (userId, pkg, id)
+    }
+
+    public static func parseDetails(from output: String, key: String) -> GuestNotificationRecord? {
+        guard let keyInfo = parseKey(key) else { return nil }
+        var title = ""
+        var text = ""
+        var substName: String?
+        var importance = 3
+
+        for rawLine in output.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("android.title=") {
+                if let extracted = extractStringValue(from: line) {
+                    title = extracted
+                }
+            } else if line.hasPrefix("android.text=") {
+                if let extracted = extractStringValue(from: line) {
+                    text = extracted
+                }
+            } else if line.hasPrefix("android.bigText=") {
+                if let extracted = extractStringValue(from: line), !extracted.isEmpty {
+                    text = extracted
+                }
+            } else if line.hasPrefix("android.substName=") {
+                substName = extractStringValue(from: line)
+            } else if line.hasPrefix("importance=") {
+                if let imp = line.dropFirst("importance=".count).split(separator: " ").first.flatMap({ Int($0) }) {
+                    importance = imp
+                }
+            }
+        }
+
+        guard !title.isEmpty || !text.isEmpty else { return nil }
+        return GuestNotificationRecord(
+            key: key,
+            packageName: keyInfo.packageName,
+            title: title.isEmpty ? (substName ?? keyInfo.packageName) : title,
+            text: text,
+            appDisplayName: substName,
+            timestamp: Date(),
+            importance: importance
+        )
+    }
+
+    private static func extractStringValue(from line: String) -> String? {
+        guard let openIdx = line.firstIndex(of: "("),
+              let closeIdx = line.lastIndex(of: ")"),
+              openIdx < closeIdx else {
+            return nil
+        }
+        let content = String(line[line.index(after: openIdx)..<closeIdx])
+        return content.trimmingCharacters(in: .whitespaces)
+    }
+}
+
 struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
     static let supportedVCPU = [4, 6, 8]
-    static let supportedRAMMiB = [4096, 5120, 6144]
-    static let supportedRefreshHz = [30, 60]
-    static let supportedASGDrawFlushIntervals = [400, 800]
+    static let supportedRAMMiB = [4096, 5120, 6144, 8192]
+    static let supportedRefreshHz = [30, 60, 120]
+    static let supportedASGDrawFlushIntervals = [400, 800, 1600]
 
     static let playable = TFTMACRuntimeProfile(
         identifier: "macrodroid_5gb_native_v1",
@@ -204,7 +432,14 @@ struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
     }
 
     static func load(from defaults: UserDefaults = .standard) -> Self {
-        Self.playable.with(experimentPreset: RuntimeExperimentPreset.load(from: defaults))
+        let preset = RuntimeExperimentPreset.load(from: defaults)
+        let vCPU = defaults.object(forKey: PreferenceKey.vCPU) as? Int ?? Self.playable.vCPU
+        let ramMiB = defaults.object(forKey: PreferenceKey.ramMiB) as? Int ?? Self.playable.ramMiB
+        let refreshHz = defaults.object(forKey: PreferenceKey.refreshHz) as? Int ?? Self.playable.refreshHz
+        let asgDrawFlushInterval = defaults.object(forKey: PreferenceKey.asgDrawFlushInterval) as? Int ?? Self.playable.asgDrawFlushInterval
+        return Self.playable
+            .with(vCPU: vCPU, ramMiB: ramMiB, refreshHz: refreshHz, asgDrawFlushInterval: asgDrawFlushInterval)
+            .with(experimentPreset: preset)
     }
 
     func save(to defaults: UserDefaults = .standard) {

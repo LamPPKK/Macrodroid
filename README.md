@@ -106,7 +106,7 @@ Macrodroid includes a continuous graphics and combat performance logger:
 ## 📁 Project Structure
 
 ```text
-├── tftmac/               # Core Macrodroid Swift application codebase
+├── Macrodroid/           # Core Macrodroid Swift application codebase
 │   ├── App/             # App lifecycle, coordinators, settings window
 │   ├── Presentation/    # EmbeddedEmulatorView (MetalKit), FrameContract, ViewportMapper
 │   ├── Runtime/         # gRPC client, AVD transaction guard, telemetry store, input

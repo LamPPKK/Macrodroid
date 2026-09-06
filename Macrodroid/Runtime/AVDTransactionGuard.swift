@@ -43,13 +43,17 @@ enum AVDTransactionGuard {
         let backup = backupURL.standardizedFileURL.resolvingSymlinksInPath()
         let captures = captureRoot.standardizedFileURL.resolvingSymlinksInPath()
         let capturesPrefix = captures.path.hasSuffix("/") ? captures.path : captures.path + "/"
+        let macrodroidCaptures = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Macrodroid/Captures")
+            .standardizedFileURL.resolvingSymlinksInPath()
+        let macrodroidPrefix = macrodroidCaptures.path.hasSuffix("/") ? macrodroidCaptures.path : macrodroidCaptures.path + "/"
         let legacyCaptures = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/TFTMAC/Captures")
             .standardizedFileURL.resolvingSymlinksInPath()
         let legacyPrefix = legacyCaptures.path.hasSuffix("/") ? legacyCaptures.path : legacyCaptures.path + "/"
 
         guard markerConfig.path == expectedConfig.path,
-              (backup.path.hasPrefix(capturesPrefix) || backup.path.hasPrefix(legacyPrefix)),
+              (backup.path.hasPrefix(capturesPrefix) || backup.path.hasPrefix(macrodroidPrefix) || backup.path.hasPrefix(legacyPrefix)),
               backup.lastPathComponent == "avd-config.before.ini" else {
             throw AVDTransactionGuardError.unexpectedRecoveryPath
         }

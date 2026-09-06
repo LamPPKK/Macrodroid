@@ -2131,11 +2131,13 @@ private final class NativeFrameAdmissionState: @unchecked Sendable {
 actor TFTMACRuntimeService {
     typealias StatusHandler = @MainActor @Sendable (String, Bool) -> Void
     typealias GameFrameHandler = @MainActor @Sendable (GameFrameTelemetryWindow?) -> Void
+    typealias NotificationHandler = @Sendable (GuestNotificationRecord) async -> Void
 
     private let profile: TFTMACRuntimeProfile
     private let mailbox: LatestFrameMailbox
     private let status: StatusHandler
     private let gameFrame: GameFrameHandler
+    private let onNotification: NotificationHandler?
     private var telemetry: TFTMACNativeTelemetry?
     private var labStore: CombatBenchmarkLabStore?
     private var paths: TFTMACRuntimePaths?
@@ -2175,12 +2177,14 @@ actor TFTMACRuntimeService {
         profile: TFTMACRuntimeProfile,
         mailbox: LatestFrameMailbox,
         status: @escaping StatusHandler,
-        gameFrame: @escaping GameFrameHandler
+        gameFrame: @escaping GameFrameHandler,
+        onNotification: NotificationHandler? = nil
     ) {
         self.profile = profile
         self.mailbox = mailbox
         self.status = status
         self.gameFrame = gameFrame
+        self.onNotification = onNotification
     }
 
     func run() async throws {
@@ -2239,6 +2243,9 @@ actor TFTMACRuntimeService {
                 }
                 group.addTask {
                     try await self.sampleGameFrames(paths: paths, telemetry: telemetry)
+                }
+                group.addTask {
+                    try await self.monitorGuestNotifications(paths: paths)
                 }
                 _ = try await group.next()
                 group.cancelAll()
@@ -2855,7 +2862,8 @@ actor TFTMACRuntimeService {
             "-vsync-rate", "\(profile.refreshHz)",
             "-dns-server", "1.1.1.1,8.8.8.8",
             "-cores", "\(profile.vCPU)", "-memory", "\(profile.ramMiB)",
-            "-no-hidpi-scaling", "-no-snapshot", "-no-metrics", "-no-boot-anim",
+            "-accel", "on",
+            "-no-hidpi-scaling", "-no-metrics", "-no-boot-anim",
             "-crash-report-mode", "disabled", "-qt-hide-window",
             "-grpc", "\(profile.controllerPort)", "-grpc-use-token",
             "-idle-grpc-timeout", "300"
@@ -3047,8 +3055,8 @@ actor TFTMACRuntimeService {
             "user": 0,
             "manual_unlock_was_required": manualUnlockRequired
         ])
-        let mode = ProcessInfo.processInfo.environment["MACRODROID_MODE"] ?? "TFT"
-        let isAndroidHome = (mode == "ANDROID")
+        let mode = ProcessInfo.processInfo.environment["MACRODROID_MODE"] ?? "PREWARM"
+        let isAndroidHome = (mode == "ANDROID" || mode == "PREWARM" || mode == "NONE")
         let targetPackage: String? = {
             if isAndroidHome { return nil }
             if mode == "TFT" { return "com.riotgames.league.teamfighttactics" }
@@ -4914,6 +4922,114 @@ actor TFTMACRuntimeService {
         return unique
     }
 
+    func launchPackage(_ package: String) async {
+        guard let paths = self.paths else { return }
+        let isAndroidHome = (package == "ANDROID" || package == "PREWARM" || package == "NONE")
+        if isAndroidHome {
+            _ = try? Self.adb(paths: paths, ["shell", "input", "keyevent", "KEYCODE_HOME"], timeout: 5)
+            return
+        }
+        let resolved = (try? Self.adb(
+            paths: paths,
+            ["shell", "cmd", "package", "resolve-activity", "--brief", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", package],
+            timeout: 10
+        ).output.split(whereSeparator: { $0.isNewline }).last.map(String.init)) ?? nil
+
+        var candidateComponents = [resolved]
+        if package == "com.riotgames.league.teamfighttactics" {
+            candidateComponents.append("\(package)/com.epicgames.unreal.SplashActivity")
+            candidateComponents.append("\(package)/com.epicgames.unreal.GameActivity")
+        }
+        var launched = false
+        for component in candidateComponents.compactMap({ $0 }) {
+            let result = try? Self.adb(paths: paths, ["shell", "am", "start", "-n", component], timeout: 15)
+            if result?.status == 0 {
+                launched = true
+                break
+            }
+        }
+        if !launched {
+            _ = try? Self.adb(paths: paths, ["shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1"], timeout: 15)
+        }
+    }
+
+    func returnToHome(stopPackage: String? = nil) async {
+        guard let paths = self.paths else { return }
+        if let pkg = stopPackage, !pkg.isEmpty, pkg != "ANDROID", pkg != "PREWARM", pkg != "NONE" {
+            _ = try? Self.adb(paths: paths, ["shell", "am", "force-stop", pkg], timeout: 10)
+        }
+        _ = try? Self.adb(paths: paths, ["shell", "input", "keyevent", "KEYCODE_HOME"], timeout: 5)
+    }
+
+    func postTestNotification(title: String, body: String) async {
+        guard let paths = self.paths else { return }
+        let tag = "test_\(Int(Date().timeIntervalSince1970))"
+        _ = try? Self.adb(
+            paths: paths,
+            ["shell", "cmd", "notification", "post", "-S", "bigtext", "-t", title, tag, body],
+            timeout: 5
+        )
+    }
+
+    private func monitorGuestNotifications(paths: TFTMACRuntimePaths) async throws {
+        // Wait until guest finishes booting
+        while !stopping {
+            try Task.checkCancellation()
+            let booted = (try? Self.adb(paths: paths, ["shell", "getprop", "sys.boot_completed"], timeout: 5).output)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if booted == "1" { break }
+            try await Task.sleep(for: .seconds(2))
+        }
+
+        var seenKeys = Set<String>()
+        // Initial prime so already active notifications are not spammed upon startup
+        if let primeOut = try? Self.adb(paths: paths, ["shell", "cmd", "notification", "list"], timeout: 5).output {
+            for rawLine in primeOut.split(whereSeparator: \.isNewline) {
+                let k = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !k.isEmpty { seenKeys.insert(k) }
+            }
+        }
+
+        while !stopping {
+            try Task.checkCancellation()
+            try await Task.sleep(for: .seconds(2))
+            guard !stopping else { break }
+
+            guard NotificationPreferences.isMirroringEnabled() else { continue }
+
+            guard let listOut = try? Self.adb(paths: paths, ["shell", "cmd", "notification", "list"], timeout: 5).output else {
+                continue
+            }
+
+            let filterSystem = NotificationPreferences.isSystemFilterEnabled()
+            var currentKeys = Set<String>()
+
+            for rawLine in listOut.split(whereSeparator: \.isNewline) {
+                let key = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !key.isEmpty else { continue }
+                currentKeys.insert(key)
+
+                if !seenKeys.contains(key) {
+                    seenKeys.insert(key)
+
+                    if let keyInfo = AndroidNotificationParser.parseKey(key) {
+                        if filterSystem && AndroidNotificationParser.isSystemPackage(keyInfo.packageName) {
+                            continue
+                        }
+                    }
+
+                    if let detailOut = try? Self.adb(paths: paths, ["shell", "cmd", "notification", "get", "'\(key)'"], timeout: 5).output {
+                        if let record = AndroidNotificationParser.parseDetails(from: detailOut, key: key) {
+                            await onNotification?(record)
+                        }
+                    }
+                }
+            }
+
+            seenKeys = seenKeys.intersection(currentKeys)
+        }
+    }
+
     nonisolated private static func utcNow() -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -5057,19 +5173,45 @@ private final class AVDConfigurationTransaction: @unchecked Sendable {
     }
 }
 
+private final class NotificationReceiverBox: @unchecked Sendable {
+    var onNotification: ((GuestNotificationRecord) -> Void)?
+    init(onNotification: ((GuestNotificationRecord) -> Void)? = nil) {
+        self.onNotification = onNotification
+    }
+}
+
 @MainActor
 final class TFTMACRuntimeController {
     private let service: TFTMACRuntimeService
+    private let notificationBox: NotificationReceiverBox
     private var runTask: Task<Void, Never>?
     private(set) var failed = false
+
+    public var onNotificationReceived: ((GuestNotificationRecord) -> Void)? {
+        get { notificationBox.onNotification }
+        set { notificationBox.onNotification = newValue }
+    }
 
     init(
         profile: TFTMACRuntimeProfile,
         mailbox: LatestFrameMailbox,
         status: @escaping TFTMACRuntimeService.StatusHandler,
-        gameFrame: @escaping TFTMACRuntimeService.GameFrameHandler
+        gameFrame: @escaping TFTMACRuntimeService.GameFrameHandler,
+        onNotification: ((GuestNotificationRecord) -> Void)? = nil
     ) {
-        service = TFTMACRuntimeService(profile: profile, mailbox: mailbox, status: status, gameFrame: gameFrame)
+        let box = NotificationReceiverBox(onNotification: onNotification)
+        self.notificationBox = box
+        self.service = TFTMACRuntimeService(
+            profile: profile,
+            mailbox: mailbox,
+            status: status,
+            gameFrame: gameFrame,
+            onNotification: { [box] record in
+                await MainActor.run {
+                    box.onNotification?(record)
+                }
+            }
+        )
     }
 
     func start() {
@@ -5081,6 +5223,18 @@ final class TFTMACRuntimeController {
                 await MainActor.run { self.failed = true }
             }
         }
+    }
+
+    var isRunning: Bool {
+        runTask != nil && !failed
+    }
+
+    func launchPackage(_ package: String) {
+        Task { await service.launchPackage(package) }
+    }
+
+    func returnToHome(stopPackage: String? = nil) async {
+        await service.returnToHome(stopPackage: stopPackage)
     }
 
     func sendMouse(x: Int32, y: Int32, buttons: Int32) {
@@ -5122,6 +5276,10 @@ final class TFTMACRuntimeController {
 
     func recordSettingsChange(previous: TFTMACRuntimeProfile, next: TFTMACRuntimeProfile) {
         Task { await service.recordSettingsChange(previous: previous, next: next) }
+    }
+
+    func postTestGuestNotification(title: String, body: String) {
+        Task { await service.postTestNotification(title: title, body: body) }
     }
 
     func stop() async {
