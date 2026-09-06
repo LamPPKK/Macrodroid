@@ -34,5 +34,16 @@
     <string>Macrodroid uses the Android emulator runtime stored on external volumes.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Macrodroid. Teamfight Tactics and Riot Games are property of their respective owners.</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>Macrodroid App Launcher</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>macrodroid</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>

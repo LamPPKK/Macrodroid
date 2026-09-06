@@ -400,6 +400,21 @@ final class LauncherViewModel: ObservableObject {
         saveFeedbackMessage = "Đang gửi thông báo thử nghiệm từ Android guest…"
     }
 
+    func createMacShortcut(for app: PlayApp) {
+        if let _ = AppShortcutManager.createShortcut(for: app) {
+            saveFeedbackMessage = "Đã tạo lối tắt macOS cho \(app.name) tại ~/Applications/Macrodroid Apps"
+        }
+    }
+
+    func createAllMacShortcuts() {
+        AppShortcutManager.createShortcutsForInstalledApps(apps)
+        saveFeedbackMessage = "Đã tạo lối tắt macOS cho toàn bộ \(apps.count) ứng dụng"
+    }
+
+    func revealMacShortcutsFolder() {
+        AppShortcutManager.revealShortcutsInFinder()
+    }
+
     func loadInstalledApps() {
         guard let data = try? Data(contentsOf: storageURL),
               let records = try? JSONDecoder().decode([PersistedAppRecord].self, from: data) else {
@@ -2031,6 +2046,71 @@ struct PlayCoverHardwareView: View {
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(PlayCoverTheme.borderSubtle, lineWidth: 1))
                 }
 
+                // 0.6. macOS App Shortcuts (Spotlight & Dock)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("MAC OS APP WRAPPERS (SPOTLIGHT & DOCK SHORTCUTS)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(PlayCoverTheme.textMuted)
+
+                        Spacer()
+
+                        Text("WSA-Style Integration")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(PlayCoverTheme.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(PlayCoverTheme.accent.opacity(0.12))
+                            .cornerRadius(4)
+                    }
+
+                    VStack(spacing: 14) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Lối tắt ứng dụng độc lập trên macOS")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white)
+                                Text("Tự động sinh các bundle .app trong ~/Applications/Macrodroid Apps để tìm kiếm bằng Spotlight (Cmd+Space) hoặc kéo thả ghim vào Dock.")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(PlayCoverTheme.textMuted)
+                            }
+                            Spacer()
+                        }
+
+                        Divider().background(PlayCoverTheme.borderSubtle)
+
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                viewModel.createAllMacShortcuts()
+                            }) {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "plus.square.dashed")
+                                    Text("Tạo lối tắt cho toàn bộ game")
+                                }
+                                .font(.system(size: 11, weight: .medium))
+                            }
+                            .buttonStyle(.bordered)
+
+                            Spacer()
+
+                            Button(action: {
+                                viewModel.revealMacShortcutsFolder()
+                            }) {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "folder.fill")
+                                    Text("Mở thư mục trong Finder")
+                                }
+                                .font(.system(size: 11, weight: .medium))
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .padding(16)
+                    .background(PlayCoverTheme.cardBackground)
+                    .cornerRadius(10)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(PlayCoverTheme.borderSubtle, lineWidth: 1))
+                }
+
                 // 1. Launch Experiment Section
                 VStack(alignment: .leading, spacing: 10) {
                     Text("LAUNCH EXPERIMENT PRESET")
@@ -2486,7 +2566,7 @@ struct PlayCoverAppInspectorSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(PlayCoverTheme.borderSubtle, lineWidth: 1))
 
             // Action Buttons
-            HStack {
+            HStack(spacing: 10) {
                 Button("Show APK in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([app.url])
                 }
@@ -2495,6 +2575,17 @@ struct PlayCoverAppInspectorSheet: View {
                 .foregroundColor(PlayCoverTheme.accent)
 
                 Spacer()
+
+                Button(action: {
+                    viewModel.createMacShortcut(for: app)
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.forward.app")
+                        Text("Add to Mac / Dock")
+                    }
+                    .font(.system(size: 11))
+                }
+                .buttonStyle(.bordered)
 
                 Button("Launch App", systemImage: "play.fill") {
                     dismiss()

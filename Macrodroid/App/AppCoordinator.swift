@@ -75,6 +75,32 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             launcher.viewModel.isEngineStarting = false
             launcher.viewModel.isEngineRunning = false
         }
+
+        // Direct package launch from command line (--launch-pkg <pkg>)
+        if let idx = CommandLine.arguments.firstIndex(of: "--launch-pkg"),
+           idx + 1 < CommandLine.arguments.count {
+            let pkg = CommandLine.arguments[idx + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.launchPackageDirectly(pkg)
+            }
+        }
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            handleIncomingURL(url)
+        }
+    }
+
+    private func handleIncomingURL(_ url: URL) {
+        guard url.scheme == "macrodroid" else { return }
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+        if components.host == "launch" || components.path.contains("launch") {
+            if let pkgItem = components.queryItems?.first(where: { $0.name == "pkg" || $0.name == "package" }),
+               let pkg = pkgItem.value, !pkg.isEmpty {
+                launchPackageDirectly(pkg)
+            }
+        }
     }
 
     private func startBackgroundEngine(profile: TFTMACRuntimeProfile) {
@@ -427,6 +453,10 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     private func handleNotificationClick(packageName: String) {
+        launchPackageDirectly(packageName)
+    }
+
+    private func launchPackageDirectly(_ packageName: String) {
         guard !packageName.isEmpty else { return }
         if mainWindowController != nil && currentAppPackage == packageName {
             focusGameWindow()
@@ -463,5 +493,97 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             self.handleNotificationClick(packageName: pkg)
         }
         completionHandler()
+    }
+}
+
+// MARK: - AppShortcutManager (WSA-Style Native macOS Shortcuts & Spotlight Integration)
+
+@MainActor
+enum AppShortcutManager {
+    static var shortcutsDirectory: URL {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return home.appendingPathComponent("Applications/Macrodroid Apps", isDirectory: true)
+    }
+
+    @discardableResult
+    static func createShortcut(for app: PlayApp) -> URL? {
+        let dir = shortcutsDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let safeName = app.name
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        let appBundleURL = dir.appendingPathComponent("\(safeName).app", isDirectory: true)
+
+        let contentsURL = appBundleURL.appendingPathComponent("Contents", isDirectory: true)
+        let macosURL = contentsURL.appendingPathComponent("MacOS", isDirectory: true)
+        let resourcesURL = contentsURL.appendingPathComponent("Resources", isDirectory: true)
+
+        try? FileManager.default.createDirectory(at: macosURL, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: resourcesURL, withIntermediateDirectories: true)
+
+        let sanitizedPkg = app.bundleIdentifier
+            .replacingOccurrences(of: "-", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
+        let infoPlistContent = """
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>AppLauncher</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.lamppkk.macrodroid.app.\(sanitizedPkg)</string>
+    <key>CFBundleName</key>
+    <string>\(safeName)</string>
+    <key>CFBundleDisplayName</key>
+    <string>\(safeName)</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>\(app.version)</string>
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>
+"""
+        let infoPlistURL = contentsURL.appendingPathComponent("Info.plist")
+        try? infoPlistContent.write(to: infoPlistURL, atomically: true, encoding: .utf8)
+
+        let launcherScript = """
+#!/bin/sh
+# Open Android app through Macrodroid URL scheme or CLI
+exec open "macrodroid://launch?pkg=\(app.bundleIdentifier)" || open -b "com.lamppkk.macrodroid" --args --launch-pkg "\(app.bundleIdentifier)"
+"""
+        let launcherURL = macosURL.appendingPathComponent("AppLauncher")
+        try? launcherScript.write(to: launcherURL, atomically: true, encoding: .utf8)
+
+        var attrs = (try? FileManager.default.attributesOfItem(atPath: launcherURL.path)) ?? [:]
+        attrs[.posixPermissions] = 0o755
+        try? FileManager.default.setAttributes(attrs, ofItemAtPath: launcherURL.path)
+
+        if let icon = app.customIcon {
+            NSWorkspace.shared.setIcon(icon, forFile: appBundleURL.path, options: [])
+        } else {
+            let iconURL = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Application Support/Macrodroid/Icons/\(app.bundleIdentifier).png")
+            if let iconImg = NSImage(contentsOf: iconURL) {
+                NSWorkspace.shared.setIcon(iconImg, forFile: appBundleURL.path, options: [])
+            }
+        }
+
+        return appBundleURL
+    }
+
+    static func revealShortcutsInFinder() {
+        let dir = shortcutsDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(dir)
+    }
+
+    static func createShortcutsForInstalledApps(_ apps: [PlayApp]) {
+        for app in apps {
+            createShortcut(for: app)
+        }
     }
 }
