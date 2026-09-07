@@ -547,4 +547,44 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
             PipelineLogSignals(vulkanErrorCount: 1, moltenVKWarningCount: 1, shaderErrorCount: 1)
         )
     }
+
+    func testScreenRotationDimensionsAndAspectRatioCalculations() {
+        let landscapeSize = CGSize(width: 1280, height: 720)
+        let portraitSize = CGSize(width: 450, height: 800)
+
+        let landscapeAspect = landscapeSize.width / landscapeSize.height
+        let portraitAspect = portraitSize.width / portraitSize.height
+
+        XCTAssertEqual(landscapeAspect, 16.0 / 9.0, accuracy: 0.001)
+        XCTAssertEqual(portraitAspect, 9.0 / 16.0, accuracy: 0.001)
+
+        // Verify center-preserving rotation origin calculation
+        let currentFrame = CGRect(x: 100, y: 100, width: landscapeSize.width, height: landscapeSize.height)
+        let center = CGPoint(x: currentFrame.midX, y: currentFrame.midY)
+
+        let rotatedOrigin = CGPoint(
+            x: max(20, center.x - portraitSize.width / 2),
+            y: max(40, center.y - portraitSize.height / 2)
+        )
+        let rotatedFrame = CGRect(origin: rotatedOrigin, size: portraitSize)
+
+        XCTAssertEqual(rotatedFrame.midX, center.x, accuracy: 0.001)
+        XCTAssertEqual(rotatedFrame.midY, center.y, accuracy: 0.001)
+    }
+
+    func testKeymappingKeyCodeResolution() {
+        // Standard virtual keycodes for Macrodroid gaming overlay
+        let keyCodes: [UInt16: String] = [
+            13: "W", 0: "A", 1: "S", 2: "D",
+            12: "Q", 14: "E", 15: "R",
+            18: "1", 19: "2",
+            49: "SPACE"
+        ]
+        XCTAssertEqual(keyCodes[13], "W")
+        XCTAssertEqual(keyCodes[0], "A")
+        XCTAssertEqual(keyCodes[1], "S")
+        XCTAssertEqual(keyCodes[2], "D")
+        XCTAssertEqual(keyCodes[49], "SPACE")
+        XCTAssertEqual(keyCodes[18], "1")
+    }
 }

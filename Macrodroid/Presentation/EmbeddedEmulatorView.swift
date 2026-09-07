@@ -149,6 +149,204 @@ private final class HostPresentationTelemetry: @unchecked Sendable {
     }
 }
 
+// MARK: - In-Game Overlay Views
+
+private final class NonInteractiveOverlayView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+@MainActor
+final class KeyBadgeView: NSView {
+    private let label = NSTextField(labelWithString: "")
+    let keyIdentifier: String
+
+    init(key: String) {
+        self.keyIdentifier = key
+        super.init(frame: .zero)
+        wantsLayer = true
+        translatesAutoresizingMaskIntoConstraints = false
+
+        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.65).cgColor
+        layer?.borderColor = NSColor(calibratedRed: 0.0, green: 0.85, blue: 1.0, alpha: 0.6).cgColor
+        layer?.borderWidth = 1.0
+        layer?.cornerRadius = 8
+
+        label.stringValue = key
+        label.font = .monospacedSystemFont(ofSize: 12, weight: .bold)
+        label.textColor = .white
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = min(bounds.width, bounds.height) / 2
+    }
+
+    func setHighlighted(_ highlighted: Bool) {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.12
+            if highlighted {
+                layer?.backgroundColor = NSColor(calibratedRed: 0.0, green: 0.85, blue: 1.0, alpha: 0.95).cgColor
+                layer?.borderColor = NSColor.white.cgColor
+                label.textColor = .black
+            } else {
+                layer?.backgroundColor = NSColor.black.withAlphaComponent(0.65).cgColor
+                layer?.borderColor = NSColor(calibratedRed: 0.0, green: 0.85, blue: 1.0, alpha: 0.6).cgColor
+                label.textColor = .white
+            }
+        }
+    }
+}
+
+@MainActor
+final class KeymappingOverlayView: NSView {
+    private var badges: [String: KeyBadgeView] = [:]
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        translatesAutoresizingMaskIntoConstraints = false
+        setupOverlay()
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil // Pass-through so overlay never blocks game interaction
+    }
+
+    private func setupOverlay() {
+        let dpadKeys = ["W", "A", "S", "D"]
+        for key in dpadKeys {
+            let badge = KeyBadgeView(key: key)
+            badges[key] = badge
+            addSubview(badge)
+        }
+
+        let actionKeys = ["Q", "E", "R", "SPACE", "1", "2"]
+        for key in actionKeys {
+            let badge = KeyBadgeView(key: key)
+            badges[key] = badge
+            addSubview(badge)
+        }
+
+        let hintView = NSVisualEffectView()
+        hintView.material = .hudWindow
+        hintView.blendingMode = .withinWindow
+        hintView.state = .active
+        hintView.wantsLayer = true
+        hintView.layer?.cornerRadius = 10
+        hintView.layer?.masksToBounds = true
+        hintView.translatesAutoresizingMaskIntoConstraints = false
+
+        let hintLabel = NSTextField(labelWithString: "⌨️ KEYMAP OVERLAY · Press ⌘K to toggle")
+        hintLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        hintLabel.textColor = NSColor.white.withAlphaComponent(0.9)
+        hintLabel.alignment = .center
+        hintLabel.translatesAutoresizingMaskIntoConstraints = false
+        hintView.addSubview(hintLabel)
+        addSubview(hintView)
+
+        guard let wBadge = badges["W"],
+              let aBadge = badges["A"],
+              let sBadge = badges["S"],
+              let dBadge = badges["D"],
+              let qBadge = badges["Q"],
+              let eBadge = badges["E"],
+              let rBadge = badges["R"],
+              let spaceBadge = badges["SPACE"],
+              let oneBadge = badges["1"],
+              let twoBadge = badges["2"] else { return }
+
+        let badgeSize: CGFloat = 38
+        let spaceWidth: CGFloat = 96
+        let spaceHeight: CGFloat = 32
+
+        NSLayoutConstraint.activate([
+            hintView.topAnchor.constraint(equalTo: topAnchor, constant: 16),
+            hintView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            hintLabel.topAnchor.constraint(equalTo: hintView.topAnchor, constant: 4),
+            hintLabel.bottomAnchor.constraint(equalTo: hintView.bottomAnchor, constant: -4),
+            hintLabel.leadingAnchor.constraint(equalTo: hintView.leadingAnchor, constant: 12),
+            hintLabel.trailingAnchor.constraint(equalTo: hintView.trailingAnchor, constant: -12),
+
+            sBadge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 80),
+            sBadge.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -50),
+            sBadge.widthAnchor.constraint(equalToConstant: badgeSize),
+            sBadge.heightAnchor.constraint(equalToConstant: badgeSize),
+
+            wBadge.centerXAnchor.constraint(equalTo: sBadge.centerXAnchor),
+            wBadge.bottomAnchor.constraint(equalTo: sBadge.topAnchor, constant: -8),
+            wBadge.widthAnchor.constraint(equalToConstant: badgeSize),
+            wBadge.heightAnchor.constraint(equalToConstant: badgeSize),
+
+            aBadge.trailingAnchor.constraint(equalTo: sBadge.leadingAnchor, constant: -8),
+            aBadge.centerYAnchor.constraint(equalTo: sBadge.centerYAnchor),
+            aBadge.widthAnchor.constraint(equalToConstant: badgeSize),
+            aBadge.heightAnchor.constraint(equalToConstant: badgeSize),
+
+            dBadge.leadingAnchor.constraint(equalTo: sBadge.trailingAnchor, constant: 8),
+            dBadge.centerYAnchor.constraint(equalTo: sBadge.centerYAnchor),
+            dBadge.widthAnchor.constraint(equalToConstant: badgeSize),
+            dBadge.heightAnchor.constraint(equalToConstant: badgeSize),
+
+            spaceBadge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -60),
+            spaceBadge.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -40),
+            spaceBadge.widthAnchor.constraint(equalToConstant: spaceWidth),
+            spaceBadge.heightAnchor.constraint(equalToConstant: spaceHeight),
+
+            eBadge.centerXAnchor.constraint(equalTo: spaceBadge.centerXAnchor),
+            eBadge.bottomAnchor.constraint(equalTo: spaceBadge.topAnchor, constant: -16),
+            eBadge.widthAnchor.constraint(equalToConstant: badgeSize),
+            eBadge.heightAnchor.constraint(equalToConstant: badgeSize),
+
+            qBadge.trailingAnchor.constraint(equalTo: eBadge.leadingAnchor, constant: -12),
+            qBadge.centerYAnchor.constraint(equalTo: eBadge.centerYAnchor),
+            qBadge.widthAnchor.constraint(equalToConstant: badgeSize),
+            qBadge.heightAnchor.constraint(equalToConstant: badgeSize),
+
+            rBadge.leadingAnchor.constraint(equalTo: eBadge.trailingAnchor, constant: 12),
+            rBadge.centerYAnchor.constraint(equalTo: eBadge.centerYAnchor),
+            rBadge.widthAnchor.constraint(equalToConstant: badgeSize),
+            rBadge.heightAnchor.constraint(equalToConstant: badgeSize),
+
+            oneBadge.centerXAnchor.constraint(equalTo: qBadge.centerXAnchor),
+            oneBadge.bottomAnchor.constraint(equalTo: qBadge.topAnchor, constant: -10),
+            oneBadge.widthAnchor.constraint(equalToConstant: 32),
+            oneBadge.heightAnchor.constraint(equalToConstant: 32),
+
+            twoBadge.centerXAnchor.constraint(equalTo: rBadge.centerXAnchor),
+            twoBadge.bottomAnchor.constraint(equalTo: rBadge.topAnchor, constant: -10),
+            twoBadge.widthAnchor.constraint(equalToConstant: 32),
+            twoBadge.heightAnchor.constraint(equalToConstant: 32)
+        ])
+    }
+
+    func highlight(event: NSEvent, isDown: Bool) {
+        let key: String
+        if event.keyCode == 49 {
+            key = "SPACE"
+        } else if let chars = event.charactersIgnoringModifiers?.uppercased(), let first = chars.first {
+            key = String(first)
+        } else {
+            return
+        }
+        badges[key]?.setHighlighted(isDown)
+    }
+}
+
 @MainActor
 final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     var onTouchInput: ((TouchInput) -> Void)?
@@ -159,6 +357,15 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     var onHostPresentationWindow: ((HostPresentationWindow) -> Void)?
     var onFPSChanged: ((Double) -> Void)?
     var onFilesDropped: (([URL]) -> Void)?
+    var onRotateRequested: (() -> Void)?
+    var onScreenshotRequested: (() -> Void)?
+    var onKeymapToggleRequested: (() -> Void)?
+    var onMouseLockToggleRequested: (() -> Void)?
+
+    private(set) var isMouseLocked = false
+    private var previousModifierFlags: NSEvent.ModifierFlags = []
+    private let keymappingOverlay = KeymappingOverlayView()
+    private let shutterFlashView = NonInteractiveOverlayView()
 
     private let mailbox: LatestFrameMailbox
     private let commandQueue: MTLCommandQueue
@@ -224,6 +431,93 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         statusLabel.stringValue = text
         statusLabel.textColor = .systemRed
         statusLabel.isHidden = false
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil, isMouseLocked {
+            setMouseLocked(false)
+        }
+    }
+
+    func flashShutter() {
+        shutterFlashView.alphaValue = 0.75
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.25
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            shutterFlashView.animator().alphaValue = 0.0
+        }
+    }
+
+    func captureScreenshot() -> NSImage? {
+        if let slot = currentTextureSlot, let texture = textures[slot] {
+            let width = texture.width
+            let height = texture.height
+            let bytesPerRow = width * FrameContract.bytesPerPixel
+            var rawData = Data(count: height * bytesPerRow)
+            let copied: Bool = rawData.withUnsafeMutableBytes { ptr in
+                guard let baseAddress = ptr.baseAddress else { return false }
+                texture.getBytes(
+                    baseAddress,
+                    bytesPerRow: bytesPerRow,
+                    from: MTLRegionMake2D(0, 0, width, height),
+                    mipmapLevel: 0
+                )
+                return true
+            }
+            if copied,
+               let provider = CGDataProvider(data: rawData as CFData),
+               let cgImage = CGImage(
+                   width: width,
+                   height: height,
+                   bitsPerComponent: 8,
+                   bitsPerPixel: 32,
+                   bytesPerRow: bytesPerRow,
+                   space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                   provider: provider,
+                   decode: nil,
+                   shouldInterpolate: false,
+                   intent: .defaultIntent
+               ) {
+                return NSImage(cgImage: cgImage, size: NSSize(width: width, height: height))
+            }
+        }
+
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+        guard let rep = bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
+        cacheDisplay(in: bounds, to: rep)
+        let image = NSImage(size: bounds.size)
+        image.addRepresentation(rep)
+        return image
+    }
+
+    @discardableResult
+    func toggleKeymapOverlay() -> Bool {
+        keymappingOverlay.isHidden.toggle()
+        return !keymappingOverlay.isHidden
+    }
+
+    var isKeymapOverlayVisible: Bool {
+        !keymappingOverlay.isHidden
+    }
+
+    @discardableResult
+    func toggleMouseLock() -> Bool {
+        setMouseLocked(!isMouseLocked)
+        return isMouseLocked
+    }
+
+    func setMouseLocked(_ locked: Bool) {
+        guard isMouseLocked != locked else { return }
+        isMouseLocked = locked
+        if locked {
+            NSCursor.hide()
+            CGAssociateMouseAndMouseCursorPosition(boolean_t(0))
+        } else {
+            CGAssociateMouseAndMouseCursorPosition(boolean_t(1))
+            NSCursor.unhide()
+        }
     }
 
     /// The runtime collector owns Android SurfaceFlinger truth. This presenter never substitutes
@@ -300,6 +594,9 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     override func rightMouseUp(with event: NSEvent) { sendMouse(event, buttons: 0) }
 
     override func keyDown(with event: NSEvent) {
+        if !keymappingOverlay.isHidden {
+            keymappingOverlay.highlight(event: event, isDown: true)
+        }
         if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command) {
             super.keyDown(with: event)
             return
@@ -311,13 +608,43 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         }
     }
 
+    override func keyUp(with event: NSEvent) {
+        if !keymappingOverlay.isHidden {
+            keymappingOverlay.highlight(event: event, isDown: false)
+        }
+        super.keyUp(with: event)
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        let current = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if current.contains(.option) && !previousModifierFlags.contains(.option) {
+            onMouseLockToggleRequested?()
+        }
+        previousModifierFlags = current
+        super.flagsChanged(with: event)
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if modifiers == .command, event.charactersIgnoringModifiers?.lowercased() == "v" {
+        guard modifiers == .command, let char = event.charactersIgnoringModifiers?.lowercased() else {
+            return super.performKeyEquivalent(with: event)
+        }
+        switch char {
+        case "r":
+            onRotateRequested?()
+            return true
+        case "s":
+            onScreenshotRequested?()
+            return true
+        case "k":
+            onKeymapToggleRequested?()
+            return true
+        case "v":
             paste(nil)
             return true
+        default:
+            return super.performKeyEquivalent(with: event)
         }
-        return super.performKeyEquivalent(with: event)
     }
 
     @objc func paste(_ sender: Any?) {
@@ -528,6 +855,15 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         dropLabel.translatesAutoresizingMaskIntoConstraints = false
         dropOverlayView.addSubview(dropLabel)
 
+        keymappingOverlay.isHidden = true
+        addSubview(keymappingOverlay)
+
+        shutterFlashView.wantsLayer = true
+        shutterFlashView.layer?.backgroundColor = NSColor.white.cgColor
+        shutterFlashView.alphaValue = 0.0
+        shutterFlashView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(shutterFlashView)
+
         NSLayoutConstraint.activate([
             statusLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
             statusLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -542,7 +878,15 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             dropOverlayView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
             dropOverlayView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
             dropLabel.centerXAnchor.constraint(equalTo: dropOverlayView.centerXAnchor),
-            dropLabel.centerYAnchor.constraint(equalTo: dropOverlayView.centerYAnchor)
+            dropLabel.centerYAnchor.constraint(equalTo: dropOverlayView.centerYAnchor),
+            keymappingOverlay.topAnchor.constraint(equalTo: topAnchor),
+            keymappingOverlay.bottomAnchor.constraint(equalTo: bottomAnchor),
+            keymappingOverlay.leadingAnchor.constraint(equalTo: leadingAnchor),
+            keymappingOverlay.trailingAnchor.constraint(equalTo: trailingAnchor),
+            shutterFlashView.topAnchor.constraint(equalTo: topAnchor),
+            shutterFlashView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            shutterFlashView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            shutterFlashView.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
     }
 

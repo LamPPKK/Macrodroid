@@ -201,7 +201,7 @@ while read -r expected_hash authority_path; do
 done < ssot/AUTHORITY_INPUTS.sha256
 
 readonly TEST_FUNCTION_COUNT="$(grep -r -n '^[[:space:]]*func test' Tests/MacrodroidTests --include '*.swift' | wc -l | tr -d '[:space:]')"
-[[ "$TEST_FUNCTION_COUNT" == "43" ]] || fail "native test inventory drifted: expected 43, found $TEST_FUNCTION_COUNT"
+[[ "$TEST_FUNCTION_COUNT" == "45" ]] || fail "native test inventory drifted: expected 45, found $TEST_FUNCTION_COUNT"
 [[ "$(plutil -extract LSSupportsGameMode raw "$INFO")" == "true" ]] \
   || fail "native app is not eligible for macOS Game Mode"
 [[ "$(shasum -a 256 Macrodroid/Assets/Macrodroid-Official-Icon.png | awk '{print $1}')" == "67f40d296dc8f7699b5b0a944edbaa0b9b178d4caa95a41d3318756b2e5f9633" ]] \
@@ -296,4 +296,4 @@ cmp -s "$STATE_BEFORE" "$STATE_AFTER" || {
   fail "source verification changed tracked or visible generated state"
 }
 
-print "Macrodroid source validation: OK (unsigned Release build; 43 native tests)"
+print "Macrodroid source validation: OK (unsigned Release build; 45 native tests)"

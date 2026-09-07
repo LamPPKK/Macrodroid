@@ -153,7 +153,7 @@ run_phase 4 "$TOTAL_RUN_PHASES" "Direct Control & Engineering Lab Self-Tests" \
   '
 
 # 5. Native Swift Unit Tests (XCTest Debug Target)
-run_phase 5 "$TOTAL_RUN_PHASES" "Native Swift Unit Tests (43 Native Tests)" \
+run_phase 5 "$TOTAL_RUN_PHASES" "Native Swift Unit Tests (45 Native Tests)" \
   /bin/zsh scripts/test-native-app.command
 
 # 6. Release Build & Full Repository Verification Contract (if not --quick)
