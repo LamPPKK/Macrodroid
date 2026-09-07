@@ -322,6 +322,9 @@ final class LauncherViewModel: ObservableObject {
     @Published var isNotificationMirroringEnabled: Bool = true
     @Published var filterSystemNotifications: Bool = true
 
+    // WSA Clipboard Synchronization
+    @Published var isClipboardSyncEnabled: Bool = true
+
     // Inspector Sheet
     @Published var inspectingApp: PlayApp? = nil
 
@@ -366,6 +369,7 @@ final class LauncherViewModel: ObservableObject {
         engineCloseBehavior = EngineCloseBehavior.load()
         isNotificationMirroringEnabled = NotificationPreferences.isMirroringEnabled()
         filterSystemNotifications = NotificationPreferences.isSystemFilterEnabled()
+        isClipboardSyncEnabled = ClipboardPreferences.isSyncEnabled()
     }
 
     func setEngineLaunchPolicy(_ policy: EngineLaunchPolicy) {
@@ -393,6 +397,12 @@ final class LauncherViewModel: ObservableObject {
         filterSystemNotifications = enabled
         NotificationPreferences.setSystemFilterEnabled(enabled)
         saveFeedbackMessage = enabled ? "Đã bật lọc thông báo hệ thống Android" : "Đã tắt lọc thông báo hệ thống Android"
+    }
+
+    func setClipboardSyncEnabled(_ enabled: Bool) {
+        isClipboardSyncEnabled = enabled
+        ClipboardPreferences.setSyncEnabled(enabled)
+        saveFeedbackMessage = enabled ? "Đã bật đồng bộ Clipboard hai chiều (WSA Sync)" : "Đã tắt đồng bộ Clipboard"
     }
 
     func sendTestNotification() {
@@ -2104,6 +2114,46 @@ struct PlayCoverHardwareView: View {
                             }
                             .buttonStyle(.bordered)
                         }
+                    }
+                    .padding(16)
+                    .background(PlayCoverTheme.cardBackground)
+                    .cornerRadius(10)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(PlayCoverTheme.borderSubtle, lineWidth: 1))
+                }
+
+                // 0.7. WSA Two-Way Clipboard Synchronization
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("TWO-WAY CLIPBOARD SYNCHRONIZATION")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(PlayCoverTheme.textMuted)
+
+                        Spacer()
+
+                        Text("WSA Integration")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(PlayCoverTheme.accentGreen)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(PlayCoverTheme.accentGreen.opacity(0.12))
+                            .cornerRadius(4)
+                    }
+
+                    VStack(spacing: 14) {
+                        Toggle(isOn: Binding(
+                            get: { viewModel.isClipboardSyncEnabled },
+                            set: { viewModel.setClipboardSyncEnabled($0) }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Đồng bộ Clipboard hai chiều (macOS ↔ Android)")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white)
+                                Text("Tự động đồng bộ nội dung sao chép (văn bản, link, mã OTP) giữa macOS và các ứng dụng Android theo thời gian thực.")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(PlayCoverTheme.textMuted)
+                            }
+                        }
+                        .toggleStyle(.switch)
                     }
                     .padding(16)
                     .background(PlayCoverTheme.cardBackground)

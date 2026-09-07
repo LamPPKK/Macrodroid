@@ -59,3 +59,90 @@ enum AVDTransactionGuard {
         }
     }
 }
+
+#if canImport(AppKit)
+import AppKit
+#endif
+
+enum ClipboardPreferences {
+    static let preferenceKey = "macrodroid.clipboardSync.enabled"
+
+    static func isSyncEnabled(defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: preferenceKey) as? Bool ?? true
+    }
+
+    static func setSyncEnabled(_ enabled: Bool, defaults: UserDefaults = .standard) {
+        defaults.set(enabled, forKey: preferenceKey)
+    }
+}
+
+actor ClipboardSyncCoordinator {
+    private var lastSyncedText: String?
+    private var lastChangeCount: Int = 0
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        #if canImport(AppKit)
+        let (count, text) = MainActor.assumeIsolated {
+            (NSPasteboard.general.changeCount, NSPasteboard.general.string(forType: .string))
+        }
+        self.lastChangeCount = count
+        self.lastSyncedText = text
+        #else
+        self.lastChangeCount = 0
+        self.lastSyncedText = nil
+        #endif
+    }
+
+    var isEnabled: Bool {
+        ClipboardPreferences.isSyncEnabled(defaults: defaults)
+    }
+
+    func syncToMac(text: String) async -> Bool {
+        guard isEnabled else { return false }
+        guard !text.isEmpty, text != lastSyncedText else { return false }
+        lastSyncedText = text
+        #if canImport(AppKit)
+        let newCount: Int? = await MainActor.run { () -> Int? in
+            let pb = NSPasteboard.general
+            if pb.string(forType: .string) != text {
+                pb.clearContents()
+                pb.setString(text, forType: .string)
+                return pb.changeCount
+            }
+            return nil
+        }
+        if let newCount {
+            self.lastChangeCount = newCount
+            return true
+        }
+        #endif
+        return false
+    }
+
+    func checkMacPasteboard() async -> String? {
+        guard isEnabled else { return nil }
+        #if canImport(AppKit)
+        let (count, text) = await MainActor.run {
+            (NSPasteboard.general.changeCount, NSPasteboard.general.string(forType: .string))
+        }
+        guard count != lastChangeCount else { return nil }
+        lastChangeCount = count
+        guard let text = text, !text.isEmpty, text != lastSyncedText else { return nil }
+        lastSyncedText = text
+        return text
+        #else
+        return nil
+        #endif
+    }
+
+    func simulateSyncState(text: String, changeCount: Int) {
+        self.lastSyncedText = text
+        self.lastChangeCount = changeCount
+    }
+
+    func currentSyncedText() -> String? {
+        lastSyncedText
+    }
+}

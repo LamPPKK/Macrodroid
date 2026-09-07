@@ -200,6 +200,7 @@ private enum EmulatorInput: Sendable {
     case touch(TouchInput)
     case mouse(MouseInput)
     case keyboard(KeyboardInput)
+    case clipboard(String)
 }
 
 struct PresentationSample: Sendable {
@@ -1132,6 +1133,13 @@ final class TFTMACNativeTelemetry: @unchecked Sendable {
                 .text("keyboard"), .null, .null, .null, .null,
                 keyboard.text.map { .integer(Int64($0.count)) } ?? .null,
                 keyboard.key.map(SQLiteValue.text) ?? .null
+            ]
+        case .clipboard(let text):
+            values = [
+                .text(sessionIdentifier), .integer(Int64(bitPattern: DispatchTime.now().uptimeNanoseconds)),
+                .text("clipboard"), .null, .null, .null, .null,
+                .integer(Int64(text.count)),
+                .null
             ]
         }
         enqueue {
@@ -2292,6 +2300,10 @@ actor TFTMACRuntimeService {
     func sendKeyboard(_ input: KeyboardInput) {
         telemetry?.recordInput(.keyboard(input))
         inputContinuation?.yield(.keyboard(input))
+    }
+
+    func sendClipboard(_ text: String) {
+        inputContinuation?.yield(.clipboard(text))
     }
 
     func recordPresentation(_ sample: PresentationSample) {
@@ -4743,12 +4755,99 @@ actor TFTMACRuntimeService {
                                 serializer: GRPCProtobuf.ProtobufSerializer<Android_Emulation_Control_KeyboardEvent>(),
                                 deserializer: GRPCProtobuf.ProtobufDeserializer<SwiftProtobuf.Google_Protobuf_Empty>()
                             )
+                        case .clipboard(let text):
+                            guard ClipboardPreferences.isSyncEnabled() else { break }
+                            var clip = Android_Emulation_Control_ClipData()
+                            clip.text = text
+                            let request = GRPCCore.ClientRequest(message: clip, metadata: metadata)
+                            _ = try await client.setClipboard(
+                                request: request,
+                                serializer: GRPCProtobuf.ProtobufSerializer<Android_Emulation_Control_ClipData>(),
+                                deserializer: GRPCProtobuf.ProtobufDeserializer<SwiftProtobuf.Google_Protobuf_Empty>()
+                            )
+                            telemetry.recordEvent("CLIPBOARD_EXPLICIT_PUSH", payload: ["length": text.count])
                         }
                     }
+                }
+                group.addTask {
+                    await Self.runClipboardSync(
+                        client: client,
+                        metadata: metadata,
+                        telemetry: telemetry
+                    )
                 }
                 _ = try await group.next()
                 group.cancelAll()
             }
+        }
+    }
+
+    private static func runClipboardSync<Transport: GRPCCore.ClientTransport>(
+        client: Android_Emulation_Control_EmulatorController.Client<Transport>,
+        metadata: GRPCCore.Metadata,
+        telemetry: TFTMACNativeTelemetry
+    ) async {
+        let coordinator = ClipboardSyncCoordinator()
+
+        await withTaskGroup(of: Void.self) { subGroup in
+            subGroup.addTask {
+                while !Task.isCancelled {
+                    do {
+                        let request = GRPCCore.ClientRequest(
+                            message: SwiftProtobuf.Google_Protobuf_Empty(),
+                            metadata: metadata
+                        )
+                        try await client.streamClipboard(
+                            request: request,
+                            serializer: GRPCProtobuf.ProtobufSerializer<SwiftProtobuf.Google_Protobuf_Empty>(),
+                            deserializer: GRPCProtobuf.ProtobufDeserializer<Android_Emulation_Control_ClipData>()
+                        ) { response in
+                            for try await clip in response.messages {
+                                try Task.checkCancellation()
+                                let guestText = clip.text
+                                guard !guestText.isEmpty else { continue }
+                                let didUpdate = await coordinator.syncToMac(text: guestText)
+                                if didUpdate {
+                                    telemetry.recordEvent("CLIPBOARD_SYNCED_TO_MAC", payload: [
+                                        "length": guestText.count
+                                    ])
+                                }
+                            }
+                        }
+                    } catch is CancellationError {
+                        break
+                    } catch {
+                        try? await Task.sleep(for: .seconds(2))
+                    }
+                }
+            }
+
+            subGroup.addTask {
+                while !Task.isCancelled {
+                    do {
+                        try await Task.sleep(for: .milliseconds(400))
+                        if let textToSend = await coordinator.checkMacPasteboard() {
+                            var clip = Android_Emulation_Control_ClipData()
+                            clip.text = textToSend
+                            let request = GRPCCore.ClientRequest(message: clip, metadata: metadata)
+                            _ = try await client.setClipboard(
+                                request: request,
+                                serializer: GRPCProtobuf.ProtobufSerializer<Android_Emulation_Control_ClipData>(),
+                                deserializer: GRPCProtobuf.ProtobufDeserializer<SwiftProtobuf.Google_Protobuf_Empty>()
+                            )
+                            telemetry.recordEvent("CLIPBOARD_SYNCED_TO_GUEST", payload: [
+                                "length": textToSend.count
+                            ])
+                        }
+                    } catch is CancellationError {
+                        break
+                    } catch {
+                        try? await Task.sleep(for: .seconds(1))
+                    }
+                }
+            }
+
+            await subGroup.waitForAll()
         }
     }
 
@@ -5248,6 +5347,11 @@ final class TFTMACRuntimeController {
     func sendKeyboard(text: String? = nil, key: String? = nil) {
         guard text?.isEmpty == false || key?.isEmpty == false else { return }
         Task { await service.sendKeyboard(KeyboardInput(text: text, key: key)) }
+    }
+
+    func sendClipboard(_ text: String) {
+        guard !text.isEmpty else { return }
+        Task { await service.sendClipboard(text) }
     }
 
     func recordPresentation(_ sample: PresentationSample) {

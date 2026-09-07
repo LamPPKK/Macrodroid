@@ -154,6 +154,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     var onTouchInput: ((TouchInput) -> Void)?
     var onMouseInput: ((Int32, Int32, Int32) -> Void)?
     var onKeyboardInput: ((String?, String?) -> Void)?
+    var onPasteInput: ((String) -> Void)?
     var onPresentationSample: ((PresentationSample) -> Void)?
     var onHostPresentationWindow: ((HostPresentationWindow) -> Void)?
     var onFPSChanged: ((Double) -> Void)?
@@ -317,6 +318,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
 
     @objc func paste(_ sender: Any?) {
         guard let text = NSPasteboard.general.string(forType: .string), !text.isEmpty else { return }
+        onPasteInput?(text)
         onKeyboardInput?(String(text.prefix(1024)), nil)
     }
 

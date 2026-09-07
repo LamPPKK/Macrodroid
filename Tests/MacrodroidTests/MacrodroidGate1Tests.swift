@@ -198,6 +198,27 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=
         )
         XCTAssertTrue(sysRecord.isSystemPackage)
         XCTAssertEqual(sysRecord.appName, "Android System")
+
+        // Validate ClipboardPreferences and ClipboardSyncCoordinator
+        let clipDefaults = UserDefaults(suiteName: "test.clipboard.prefs")!
+        clipDefaults.removeObject(forKey: ClipboardPreferences.preferenceKey)
+        XCTAssertTrue(ClipboardPreferences.isSyncEnabled(defaults: clipDefaults))
+        ClipboardPreferences.setSyncEnabled(false, defaults: clipDefaults)
+        XCTAssertFalse(ClipboardPreferences.isSyncEnabled(defaults: clipDefaults))
+        ClipboardPreferences.setSyncEnabled(true, defaults: clipDefaults)
+        XCTAssertTrue(ClipboardPreferences.isSyncEnabled(defaults: clipDefaults))
+
+        let coordinator = ClipboardSyncCoordinator(defaults: clipDefaults)
+        let clipExp = expectation(description: "ClipboardSyncCoordinator")
+        Task {
+            await coordinator.simulateSyncState(text: "Hello Android", changeCount: 5)
+            let current = await coordinator.currentSyncedText()
+            XCTAssertEqual(current, "Hello Android")
+            let didUpdate = await coordinator.syncToMac(text: "Hello Android")
+            XCTAssertFalse(didUpdate)
+            clipExp.fulfill()
+        }
+        wait(for: [clipExp], timeout: 2.0)
     }
 
     func testRapidCombatExperimentHasExactlyTwoNamedPresets() {

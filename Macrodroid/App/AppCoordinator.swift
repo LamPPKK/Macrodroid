@@ -168,6 +168,9 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             controller.emulatorView.onKeyboardInput = { [weak self] text, key in
                 self?.runtimeController?.sendKeyboard(text: text, key: key)
             }
+            controller.emulatorView.onPasteInput = { [weak self] text in
+                self?.runtimeController?.sendClipboard(text)
+            }
             controller.emulatorView.onPresentationSample = { [weak self] sample in
                 self?.runtimeController?.recordPresentation(sample)
             }
