@@ -223,6 +223,21 @@ public enum IdleSuspendPreferences {
     }
 }
 
+// MARK: - GoogleEcosystemConfig (Aurora Store & microG Services Integration)
+
+public struct GoogleEcosystemConfig: Sendable {
+    public static let auroraStorePackage = "com.aurora.store"
+    public static let auroraStoreVersion = "4.8.4"
+    public static let auroraStoreURL = URL(string: "https://f-droid.org/repo/com.aurora.store_76.apk")!
+
+    public static let microGGmsPackage = "com.google.android.gms"
+    public static let microGGmsVersion = "0.3.16"
+    public static let microGGmsURL = URL(string: "https://github.com/microg/GmsCore/releases/download/v0.3.16.252432/com.google.android.gms-252432032.apk")!
+
+    public static let microGFakeStorePackage = "com.android.vending"
+    public static let microGFakeStoreURL = URL(string: "https://github.com/microg/GmsCore/releases/download/v0.3.16.252432/com.android.vending-84022632.apk")!
+}
+
 // MARK: - AppShortcutManager (WSA-Style Native macOS Shortcuts & Spotlight Integration)
 
 @MainActor

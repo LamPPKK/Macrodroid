@@ -329,6 +329,13 @@ final class LauncherViewModel: ObservableObject {
     // Inspector Sheet
     @Published var inspectingApp: PlayApp? = nil
 
+    // Google Ecosystem & Aurora Store State
+    @Published var isInstallingGoogleServices: Bool = false
+    @Published var googleServicesInstallStatus: String = ""
+    @Published var googleServicesProgress: Double = 0.0
+    @Published var auroraStoreInstalled: Bool = false
+    @Published var microGInstalled: Bool = false
+
     var onLaunch: ((LaunchMode, TFTMACRuntimeProfile, PlayApp?) -> Void)?
     var onStop: (() -> Void)?
     var onOpenSettings: (() -> Void)?
@@ -456,6 +463,7 @@ final class LauncherViewModel: ObservableObject {
         }
         self.apps = loaded
         self.selectedApp = loaded.first
+        checkGoogleServicesStatus()
     }
 
     func persistInstalledApps() {
@@ -629,6 +637,209 @@ final class LauncherViewModel: ObservableObject {
                     self.statusMessage = "Added \(meta.appName) (Sideload note: \(installLog))"
                 } else {
                     self.statusMessage = "Installed \(meta.appName)"
+                }
+            }
+        }
+    }
+
+    // MARK: - Google Ecosystem & Aurora Store Integration
+
+    func checkGoogleServicesStatus() {
+        auroraStoreInstalled = apps.contains { $0.bundleIdentifier == GoogleEcosystemConfig.auroraStorePackage }
+        microGInstalled = apps.contains { $0.bundleIdentifier == GoogleEcosystemConfig.microGGmsPackage }
+    }
+
+    func launchAuroraStore() {
+        if let app = apps.first(where: { $0.bundleIdentifier == GoogleEcosystemConfig.auroraStorePackage }) {
+            launchApp(app)
+        } else {
+            let launchURL = URL(string: "macrodroid://launch?pkg=\(GoogleEcosystemConfig.auroraStorePackage)")!
+            NSWorkspace.shared.open(launchURL)
+        }
+    }
+
+    func downloadAndInstallAuroraStore() {
+        guard !isInstallingGoogleServices else { return }
+        isInstallingGoogleServices = true
+        googleServicesInstallStatus = "Downloading Aurora Store v\(GoogleEcosystemConfig.auroraStoreVersion)..."
+        googleServicesProgress = 0.15
+
+        Task {
+            do {
+                let tempDir = FileManager.default.temporaryDirectory
+                let targetURL = tempDir.appendingPathComponent("AuroraStore-\(GoogleEcosystemConfig.auroraStoreVersion).apk")
+
+                let (downloadedURL, _) = try await URLSession.shared.download(from: GoogleEcosystemConfig.auroraStoreURL)
+                try? FileManager.default.removeItem(at: targetURL)
+                try FileManager.default.moveItem(at: downloadedURL, to: targetURL)
+
+                await MainActor.run {
+                    self.googleServicesProgress = 0.65
+                    self.googleServicesInstallStatus = "Installing Aurora Store via ADB..."
+                }
+
+                self.installAPK(at: targetURL)
+                _ = AppShortcutManager.createShortcut(
+                    name: "Aurora Store",
+                    bundleIdentifier: GoogleEcosystemConfig.auroraStorePackage,
+                    version: GoogleEcosystemConfig.auroraStoreVersion
+                )
+
+                await MainActor.run {
+                    self.googleServicesProgress = 1.0
+                    self.isInstallingGoogleServices = false
+                    self.auroraStoreInstalled = true
+                    self.googleServicesInstallStatus = "Aurora Store installed successfully! Ready to launch."
+                }
+            } catch {
+                await MainActor.run {
+                    self.isInstallingGoogleServices = false
+                    self.googleServicesInstallStatus = "Download failed: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    func downloadAndInstallMicroG() {
+        guard !isInstallingGoogleServices else { return }
+        isInstallingGoogleServices = true
+        googleServicesInstallStatus = "Downloading microG GmsCore..."
+        googleServicesProgress = 0.15
+
+        Task {
+            do {
+                let tempDir = FileManager.default.temporaryDirectory
+                let gmsTargetURL = tempDir.appendingPathComponent("microG-GmsCore.apk")
+                let fakeStoreTargetURL = tempDir.appendingPathComponent("microG-FakeStore.apk")
+
+                // 1. Download GmsCore
+                let (gmsURL, _) = try await URLSession.shared.download(from: GoogleEcosystemConfig.microGGmsURL)
+                try? FileManager.default.removeItem(at: gmsTargetURL)
+                try FileManager.default.moveItem(at: gmsURL, to: gmsTargetURL)
+
+                await MainActor.run {
+                    self.googleServicesProgress = 0.5
+                    self.googleServicesInstallStatus = "Downloading microG Companion..."
+                }
+
+                // 2. Download FakeStore
+                let (fakeURL, _) = try await URLSession.shared.download(from: GoogleEcosystemConfig.microGFakeStoreURL)
+                try? FileManager.default.removeItem(at: fakeStoreTargetURL)
+                try FileManager.default.moveItem(at: fakeURL, to: fakeStoreTargetURL)
+
+                await MainActor.run {
+                    self.googleServicesProgress = 0.75
+                    self.googleServicesInstallStatus = "Installing microG Google Services via ADB..."
+                }
+
+                self.installAPK(at: gmsTargetURL)
+                self.installAPK(at: fakeStoreTargetURL)
+
+                // 3. Grant Location & Signature permissions via ADB
+                if let paths = try? TFTMACRuntimePaths.discover() {
+                    _ = await Task.detached {
+                        let grantScript = "pm grant com.google.android.gms android.permission.ACCESS_FINE_LOCATION 2>/dev/null; pm grant com.google.android.gms android.permission.ACCESS_COARSE_LOCATION 2>/dev/null"
+                        let process = Process()
+                        process.executableURL = paths.adb
+                        process.arguments = ["-P", "5038", "-s", "emulator-5582", "shell", grantScript]
+                        try? process.run()
+                        process.waitUntilExit()
+                    }.value
+                }
+
+                await MainActor.run {
+                    self.googleServicesProgress = 1.0
+                    self.isInstallingGoogleServices = false
+                    self.microGInstalled = true
+                    self.googleServicesInstallStatus = "microG Google Play Services configured!"
+                }
+            } catch {
+                await MainActor.run {
+                    self.isInstallingGoogleServices = false
+                    self.googleServicesInstallStatus = "Download failed: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    func downloadAndInstallFullEcosystem() {
+        guard !isInstallingGoogleServices else { return }
+        isInstallingGoogleServices = true
+        googleServicesInstallStatus = "Starting Full Google Ecosystem installation..."
+        googleServicesProgress = 0.05
+
+        Task {
+            do {
+                let tempDir = FileManager.default.temporaryDirectory
+                let auroraTarget = tempDir.appendingPathComponent("AuroraStore-\(GoogleEcosystemConfig.auroraStoreVersion).apk")
+                let gmsTarget = tempDir.appendingPathComponent("microG-GmsCore.apk")
+                let fakeStoreTarget = tempDir.appendingPathComponent("microG-FakeStore.apk")
+
+                // Step 1: Aurora Store
+                await MainActor.run {
+                    self.googleServicesInstallStatus = "Downloading Aurora Store v\(GoogleEcosystemConfig.auroraStoreVersion)..."
+                    self.googleServicesProgress = 0.2
+                }
+                let (auroraDownloadURL, _) = try await URLSession.shared.download(from: GoogleEcosystemConfig.auroraStoreURL)
+                try? FileManager.default.removeItem(at: auroraTarget)
+                try FileManager.default.moveItem(at: auroraDownloadURL, to: auroraTarget)
+
+                // Step 2: GmsCore
+                await MainActor.run {
+                    self.googleServicesInstallStatus = "Downloading microG GmsCore..."
+                    self.googleServicesProgress = 0.45
+                }
+                let (gmsDownloadURL, _) = try await URLSession.shared.download(from: GoogleEcosystemConfig.microGGmsURL)
+                try? FileManager.default.removeItem(at: gmsTarget)
+                try FileManager.default.moveItem(at: gmsDownloadURL, to: gmsTarget)
+
+                // Step 3: FakeStore
+                await MainActor.run {
+                    self.googleServicesInstallStatus = "Downloading microG Companion..."
+                    self.googleServicesProgress = 0.65
+                }
+                let (fakeDownloadURL, _) = try await URLSession.shared.download(from: GoogleEcosystemConfig.microGFakeStoreURL)
+                try? FileManager.default.removeItem(at: fakeStoreTarget)
+                try FileManager.default.moveItem(at: fakeDownloadURL, to: fakeStoreTarget)
+
+                // Step 4: Install all
+                await MainActor.run {
+                    self.googleServicesInstallStatus = "Installing packages to guest system via ADB..."
+                    self.googleServicesProgress = 0.85
+                }
+                self.installAPK(at: auroraTarget)
+                self.installAPK(at: gmsTarget)
+                self.installAPK(at: fakeStoreTarget)
+
+                _ = AppShortcutManager.createShortcut(
+                    name: "Aurora Store",
+                    bundleIdentifier: GoogleEcosystemConfig.auroraStorePackage,
+                    version: GoogleEcosystemConfig.auroraStoreVersion
+                )
+
+                // Step 5: ADB permissions
+                if let paths = try? TFTMACRuntimePaths.discover() {
+                    _ = await Task.detached {
+                        let grantScript = "pm grant com.google.android.gms android.permission.ACCESS_FINE_LOCATION 2>/dev/null; pm grant com.google.android.gms android.permission.ACCESS_COARSE_LOCATION 2>/dev/null"
+                        let process = Process()
+                        process.executableURL = paths.adb
+                        process.arguments = ["-P", "5038", "-s", "emulator-5582", "shell", grantScript]
+                        try? process.run()
+                        process.waitUntilExit()
+                    }.value
+                }
+
+                await MainActor.run {
+                    self.googleServicesProgress = 1.0
+                    self.isInstallingGoogleServices = false
+                    self.auroraStoreInstalled = true
+                    self.microGInstalled = true
+                    self.googleServicesInstallStatus = "Full Google Ecosystem ready! Aurora Store & microG are live."
+                }
+            } catch {
+                await MainActor.run {
+                    self.isInstallingGoogleServices = false
+                    self.googleServicesInstallStatus = "Installation failed: \(error.localizedDescription)"
                 }
             }
         }
@@ -2403,7 +2614,10 @@ struct PlayCoverSideloadView: View {
                         .foregroundColor(PlayCoverTheme.textMuted)
                 }
 
-                // 1. Big Dropzone / Sideload Card
+                // 1. Google Play & Aurora Store 1-Click Ecosystem Card
+                GoogleEcosystemCardView(viewModel: viewModel)
+
+                // 2. Big Dropzone / Sideload Card
                 VStack(spacing: 16) {
                     ZStack {
                         Circle()
@@ -2523,6 +2737,278 @@ struct PlayCoverSideloadView: View {
             }
             .padding(28)
         }
+    }
+}
+
+// MARK: - Google Ecosystem & Aurora Store Components
+
+struct GoogleEcosystemCardView: View {
+    @ObservedObject var viewModel: LauncherViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Title & Badges
+            HStack {
+                HStack(spacing: 8) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(LinearGradient(
+                                colors: [Color.green.opacity(0.8), Color.teal.opacity(0.8)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ))
+                            .frame(width: 32, height: 32)
+
+                        Image(systemName: "cart.badge.plus")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Google Play Services & Aurora Store")
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+
+                        Text("One-Click Installer for Google GMS and Open-Source App Store")
+                            .font(.system(size: 11))
+                            .foregroundColor(PlayCoverTheme.textMuted)
+                    }
+                }
+
+                Spacer()
+
+                if viewModel.auroraStoreInstalled && viewModel.microGInstalled {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundColor(PlayCoverTheme.accentGreen)
+                        Text("Ecosystem Ready")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(PlayCoverTheme.accentGreen)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(PlayCoverTheme.accentGreen.opacity(0.12))
+                    .cornerRadius(20)
+                }
+            }
+
+            // Description Features
+            HStack(spacing: 12) {
+                FeaturePill(icon: "lock.shield", text: "Anonymous Login")
+                FeaturePill(icon: "bolt.fill", text: "FCM Push Notifications")
+                FeaturePill(icon: "person.crop.circle.badge.checkmark", text: "Google Sign-In")
+                FeaturePill(icon: "leaf.fill", text: "<50MB RAM Overhead")
+            }
+
+            // Two Cards: Aurora Store & microG
+            HStack(spacing: 14) {
+                // Card 1: Aurora Store
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Image(systemName: "bag.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(PlayCoverTheme.accent)
+                        Text("Aurora Store v4.8.4")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+                        Spacer()
+                        StatusTag(isReady: viewModel.auroraStoreInstalled)
+                    }
+
+                    Text("Download & auto-update any Google Play Store game without account restrictions.")
+                        .font(.system(size: 11))
+                        .foregroundColor(PlayCoverTheme.textMuted)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack {
+                        if viewModel.auroraStoreInstalled {
+                            Button {
+                                viewModel.launchAuroraStore()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.up.right.square")
+                                    Text("Open Store")
+                                }
+                                .font(.system(size: 11, weight: .bold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(PlayCoverTheme.accentGreen)
+                                .foregroundColor(.black)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Button {
+                                viewModel.downloadAndInstallAuroraStore()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.down.circle")
+                                    Text("Install Aurora Store")
+                                }
+                                .font(.system(size: 11, weight: .bold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(PlayCoverTheme.accent)
+                                .foregroundColor(.white)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(viewModel.isInstallingGoogleServices)
+                        }
+                    }
+                }
+                .padding(14)
+                .background(Color.white.opacity(0.04))
+                .cornerRadius(10)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(PlayCoverTheme.borderSubtle, lineWidth: 1))
+
+                // Card 2: microG GmsCore
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Image(systemName: "gearshape.2.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(Color.teal)
+                        Text("microG GmsCore")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+                        Spacer()
+                        StatusTag(isReady: viewModel.microGInstalled)
+                    }
+
+                    Text("Lightweight Google Play Services engine for Google Auth, Games, and In-App Billing.")
+                        .font(.system(size: 11))
+                        .foregroundColor(PlayCoverTheme.textMuted)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack {
+                        if viewModel.microGInstalled {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(PlayCoverTheme.accentGreen)
+                                Text("GMS Active")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(PlayCoverTheme.accentGreen)
+                            }
+                        } else {
+                            Button {
+                                viewModel.downloadAndInstallMicroG()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.down.circle")
+                                    Text("Install microG (GMS)")
+                                }
+                                .font(.system(size: 11, weight: .bold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.teal)
+                                .foregroundColor(.black)
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(viewModel.isInstallingGoogleServices)
+                        }
+                    }
+                }
+                .padding(14)
+                .background(Color.white.opacity(0.04))
+                .cornerRadius(10)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(PlayCoverTheme.borderSubtle, lineWidth: 1))
+            }
+
+            // Install All Button (if either is not installed)
+            if !viewModel.auroraStoreInstalled || !viewModel.microGInstalled {
+                Button {
+                    viewModel.downloadAndInstallFullEcosystem()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "sparkles")
+                        Text("Install Full Google Ecosystem (Aurora Store + microG)")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background(LinearGradient(
+                        colors: [PlayCoverTheme.accent, Color.teal],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ))
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+                .disabled(viewModel.isInstallingGoogleServices)
+            }
+
+            // Progress Bar & Status Text
+            if viewModel.isInstallingGoogleServices || !viewModel.googleServicesInstallStatus.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        if viewModel.isInstallingGoogleServices {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .scaleEffect(0.6)
+                        }
+                        Text(viewModel.googleServicesInstallStatus)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(viewModel.googleServicesInstallStatus.contains("failed") || viewModel.googleServicesInstallStatus.contains("Error") ? Color.red : PlayCoverTheme.accentGreen)
+                    }
+
+                    if viewModel.isInstallingGoogleServices {
+                        ProgressView(value: viewModel.googleServicesProgress, total: 1.0)
+                            .progressViewStyle(.linear)
+                            .tint(PlayCoverTheme.accentGreen)
+                    }
+                }
+                .padding(10)
+                .background(Color.black.opacity(0.3))
+                .cornerRadius(6)
+            }
+        }
+        .padding(20)
+        .background(PlayCoverTheme.cardBackground)
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(PlayCoverTheme.borderSubtle, lineWidth: 1))
+    }
+}
+
+struct FeaturePill: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+                .foregroundColor(PlayCoverTheme.accent)
+            Text(text)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(PlayCoverTheme.textMuted)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(6)
+    }
+}
+
+struct StatusTag: View {
+    let isReady: Bool
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(isReady ? PlayCoverTheme.accentGreen : Color.gray.opacity(0.5))
+                .frame(width: 6, height: 6)
+            Text(isReady ? "Ready" : "Not Installed")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(isReady ? PlayCoverTheme.accentGreen : PlayCoverTheme.textMuted)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(isReady ? PlayCoverTheme.accentGreen.opacity(0.12) : Color.white.opacity(0.05))
+        .cornerRadius(4)
     }
 }
 

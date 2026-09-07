@@ -393,6 +393,21 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=
         }
         wait(for: [shortcutExp], timeout: 3.0)
 
+        // Validate GoogleEcosystemConfig for Aurora Store and microG
+        XCTAssertEqual(GoogleEcosystemConfig.auroraStorePackage, "com.aurora.store")
+        XCTAssertEqual(GoogleEcosystemConfig.auroraStoreVersion, "4.8.4")
+        XCTAssertEqual(GoogleEcosystemConfig.auroraStoreURL.scheme, "https")
+        XCTAssertEqual(GoogleEcosystemConfig.auroraStoreURL.host, "f-droid.org")
+
+        XCTAssertEqual(GoogleEcosystemConfig.microGGmsPackage, "com.google.android.gms")
+        XCTAssertEqual(GoogleEcosystemConfig.microGGmsVersion, "0.3.16")
+        XCTAssertEqual(GoogleEcosystemConfig.microGGmsURL.scheme, "https")
+        XCTAssertEqual(GoogleEcosystemConfig.microGGmsURL.host, "github.com")
+
+        XCTAssertEqual(GoogleEcosystemConfig.microGFakeStorePackage, "com.android.vending")
+        XCTAssertEqual(GoogleEcosystemConfig.microGFakeStoreURL.scheme, "https")
+        XCTAssertEqual(GoogleEcosystemConfig.microGFakeStoreURL.host, "github.com")
+
         // Validate ClipboardSyncCoordinator Bidirectional Echo Cancellation
         let deepCoord = ClipboardSyncCoordinator(defaults: UserDefaults(suiteName: "test.clipboard.prefs.deep")!)
         let clipExp2 = expectation(description: "ClipboardSyncCoordinatorDeep")
