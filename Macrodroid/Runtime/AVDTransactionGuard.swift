@@ -80,19 +80,28 @@ enum ClipboardPreferences {
 actor ClipboardSyncCoordinator {
     private var lastSyncedText: String?
     private var lastChangeCount: Int = 0
+    private var isInitialized: Bool = false
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         #if canImport(AppKit)
-        let (count, text) = MainActor.assumeIsolated {
-            (NSPasteboard.general.changeCount, NSPasteboard.general.string(forType: .string))
+        if Thread.isMainThread {
+            let (count, text) = MainActor.assumeIsolated {
+                (NSPasteboard.general.changeCount, NSPasteboard.general.string(forType: .string))
+            }
+            self.lastChangeCount = count
+            self.lastSyncedText = text
+            self.isInitialized = true
+        } else {
+            self.lastChangeCount = 0
+            self.lastSyncedText = nil
+            self.isInitialized = false
         }
-        self.lastChangeCount = count
-        self.lastSyncedText = text
         #else
         self.lastChangeCount = 0
         self.lastSyncedText = nil
+        self.isInitialized = true
         #endif
     }
 
@@ -114,6 +123,7 @@ actor ClipboardSyncCoordinator {
             return pb.changeCount
         }
         self.lastChangeCount = newCount
+        self.isInitialized = true
         return true
         #else
         return false
@@ -125,6 +135,12 @@ actor ClipboardSyncCoordinator {
         #if canImport(AppKit)
         let (count, text) = await MainActor.run {
             (NSPasteboard.general.changeCount, NSPasteboard.general.string(forType: .string))
+        }
+        guard isInitialized else {
+            isInitialized = true
+            lastChangeCount = count
+            lastSyncedText = text
+            return nil
         }
         guard count != lastChangeCount else { return nil }
         lastChangeCount = count
@@ -139,6 +155,7 @@ actor ClipboardSyncCoordinator {
     func simulateSyncState(text: String, changeCount: Int) {
         self.lastSyncedText = text
         self.lastChangeCount = changeCount
+        self.isInitialized = true
     }
 
     func currentSyncedText() -> String? {
@@ -229,6 +246,15 @@ exec open "macrodroid://launch?pkg=\(package)" || open -b "com.lamppkk.macrodroi
 """
     }
 
+    public static func escapeXML(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
+    }
+
     public static func generateInfoPlist(name: String, package: String, version: String) -> String {
         let safeName = name
             .replacingOccurrences(of: "/", with: "-")
@@ -236,6 +262,9 @@ exec open "macrodroid://launch?pkg=\(package)" || open -b "com.lamppkk.macrodroi
         let sanitizedPkg = package
             .replacingOccurrences(of: "-", with: "_")
             .replacingOccurrences(of: " ", with: "_")
+        let xmlEscapedName = escapeXML(safeName)
+        let xmlEscapedPkg = escapeXML(sanitizedPkg)
+        let xmlEscapedVersion = escapeXML(version)
         return """
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -244,20 +273,53 @@ exec open "macrodroid://launch?pkg=\(package)" || open -b "com.lamppkk.macrodroi
     <key>CFBundleExecutable</key>
     <string>AppLauncher</string>
     <key>CFBundleIdentifier</key>
-    <string>com.lamppkk.macrodroid.app.\(sanitizedPkg)</string>
+    <string>com.lamppkk.macrodroid.app.\(xmlEscapedPkg)</string>
     <key>CFBundleName</key>
-    <string>\(safeName)</string>
+    <string>\(xmlEscapedName)</string>
     <key>CFBundleDisplayName</key>
-    <string>\(safeName)</string>
+    <string>\(xmlEscapedName)</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>\(version)</string>
+    <string>\(xmlEscapedVersion)</string>
     <key>LSUIElement</key>
     <true/>
 </dict>
 </plist>
 """
+    }
+
+    public static func removeShortcut(
+        name: String,
+        bundleIdentifier: String,
+        destinationDirectory: URL? = nil
+    ) {
+        let dir = destinationDirectory ?? shortcutsDirectory
+        let safeName = name
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        let appBundleURL = dir.appendingPathComponent("\(safeName).app", isDirectory: true)
+        try? FileManager.default.removeItem(at: appBundleURL)
+
+        if let contents = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
+            for item in contents where item.pathExtension == "app" {
+                let infoPlist = item.appendingPathComponent("Contents/Info.plist")
+                if let data = try? Data(contentsOf: infoPlist),
+                   let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+                   let cfBundleId = dict["CFBundleIdentifier"] as? String {
+                    let sanitizedPkg = bundleIdentifier
+                        .replacingOccurrences(of: "-", with: "_")
+                        .replacingOccurrences(of: " ", with: "_")
+                    if cfBundleId == "com.lamppkk.macrodroid.app.\(sanitizedPkg)" {
+                        try? FileManager.default.removeItem(at: item)
+                    }
+                }
+            }
+        }
+
+        let iconURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Macrodroid/Icons/\(bundleIdentifier).png")
+        try? FileManager.default.removeItem(at: iconURL)
     }
 
     @discardableResult

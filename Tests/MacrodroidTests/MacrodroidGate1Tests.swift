@@ -220,6 +220,19 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=
         }
         wait(for: [clipExp], timeout: 2.0)
 
+        // Validate safe non-main-thread initialization without runtime executor crash
+        let detachedClipExp = expectation(description: "ClipboardSyncCoordinatorDetached")
+        Task.detached {
+            let bgDefaults = UserDefaults(suiteName: "test.bg.coord") ?? .standard
+            let bgCoordinator = ClipboardSyncCoordinator(defaults: bgDefaults)
+            let enabled = await bgCoordinator.isEnabled
+            XCTAssertTrue(enabled)
+            let checked = await bgCoordinator.checkMacPasteboard()
+            XCTAssertNil(checked)
+            detachedClipExp.fulfill()
+        }
+        wait(for: [detachedClipExp], timeout: 2.0)
+
         // Validate FileTransferResult (Drag & Drop File Sharing)
         let apkResult = FileTransferResult(
             filename: "sample.apk",
@@ -319,6 +332,22 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=
             XCTAssertTrue(plistStr.contains("<key>CFBundleExecutable</key>"))
             XCTAssertTrue(plistStr.contains("<string>AppLauncher</string>"))
 
+            // XML entity escaping verification
+            let specialPlistStr = AppShortcutManager.generateInfoPlist(
+                name: "Dungeons & Dragons: <Heroes>",
+                package: "com.wizards.dnd-game",
+                version: "1.0.0"
+            )
+            XCTAssertTrue(specialPlistStr.contains("&amp;"))
+            XCTAssertTrue(specialPlistStr.contains("&lt;"))
+            XCTAssertTrue(specialPlistStr.contains("&gt;"))
+            if let data = specialPlistStr.data(using: .utf8),
+               let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] {
+                XCTAssertEqual(dict["CFBundleDisplayName"] as? String, "Dungeons & Dragons- <Heroes>")
+            } else {
+                XCTFail("Failed to deserialize special characters Info.plist")
+            }
+
             // 4. End-to-End Shortcut Bundle Creation & Verification in Temporary Directory
             let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("macrodroid_ut_\(UUID().uuidString)", isDirectory: true)
             let createdBundle = AppShortcutManager.createShortcut(
@@ -348,6 +377,14 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=
                 let attrs = try? FileManager.default.attributesOfItem(atPath: launcherFile.path)
                 let permissions = attrs?[.posixPermissions] as? Int
                 XCTAssertEqual(permissions, 0o755)
+
+                // 5. Verify AppShortcutManager.removeShortcut cleans up the bundle
+                AppShortcutManager.removeShortcut(
+                    name: "Test Game",
+                    bundleIdentifier: "com.test.game",
+                    destinationDirectory: tempDir
+                )
+                XCTAssertFalse(FileManager.default.fileExists(atPath: createdBundle.path))
 
                 try? FileManager.default.removeItem(at: tempDir)
             }

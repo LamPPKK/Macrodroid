@@ -545,6 +545,7 @@ final class LauncherViewModel: ObservableObject {
             selectedApp = apps.first
         }
         persistInstalledApps()
+        AppShortcutManager.removeShortcut(name: app.name, bundleIdentifier: app.bundleIdentifier)
 
         Task {
             if let paths = try? TFTMACRuntimePaths.discover() {
