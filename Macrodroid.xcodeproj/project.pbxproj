@@ -15,7 +15,7 @@
 		100000000000000000000007 /* MacrodroidGate1Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* MacrodroidGate1Tests.swift */; };
 		100000000000000000000008 /* ViewportMapper.swift in Tests */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* ViewportMapper.swift */; };
 		100000000000000000000011 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000001 /* GRPCCore */; };
-		100000000000000000000012 /* GRPCNIOTransportHTTP2 in Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000002 /* GRPCNIOTransportHTTP2 */; };
+		100000000000000000000012 /* GRPCNIOTransportHTTP2Posix in Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000002 /* GRPCNIOTransportHTTP2Posix */; };
 		100000000000000000000013 /* GRPCProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000003 /* GRPCProtobuf */; };
 		100000000000000000000014 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000004 /* SwiftProtobuf */; };
 		100000000000000000000015 /* emulator_controller.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* emulator_controller.pb.swift */; };
@@ -23,7 +23,7 @@
 		100000000000000000000017 /* emulator_controller.pb.swift in Probe */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* emulator_controller.pb.swift */; };
 		100000000000000000000018 /* emulator_controller.grpc.swift in Probe */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* emulator_controller.grpc.swift */; };
 		100000000000000000000019 /* GRPCCore in Probe Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000001 /* GRPCCore */; };
-		10000000000000000000001A /* GRPCNIOTransportHTTP2 in Probe Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000002 /* GRPCNIOTransportHTTP2 */; };
+		10000000000000000000001A /* GRPCNIOTransportHTTP2Posix in Probe Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000002 /* GRPCNIOTransportHTTP2Posix */; };
 		10000000000000000000001B /* GRPCProtobuf in Probe Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000003 /* GRPCProtobuf */; };
 		10000000000000000000001C /* SwiftProtobuf in Probe Frameworks */ = {isa = PBXBuildFile; productRef = D00000000000000000000004 /* SwiftProtobuf */; };
 		100000000000000000000020 /* FrameContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000014 /* FrameContract.swift */; };
@@ -93,7 +93,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				100000000000000000000011 /* GRPCCore in Frameworks */,
-				100000000000000000000012 /* GRPCNIOTransportHTTP2 in Frameworks */,
+				100000000000000000000012 /* GRPCNIOTransportHTTP2Posix in Frameworks */,
 				100000000000000000000013 /* GRPCProtobuf in Frameworks */,
 				100000000000000000000014 /* SwiftProtobuf in Frameworks */,
 			);
@@ -175,7 +175,7 @@
 			buildRules = ();
 			dependencies = ();
 			name = Macrodroid;
-			packageProductDependencies = (D00000000000000000000001 /* GRPCCore */, D00000000000000000000002 /* GRPCNIOTransportHTTP2 */, D00000000000000000000003 /* GRPCProtobuf */, D00000000000000000000004 /* SwiftProtobuf */);
+			packageProductDependencies = (D00000000000000000000001 /* GRPCCore */, D00000000000000000000002 /* GRPCNIOTransportHTTP2Posix */, D00000000000000000000003 /* GRPCProtobuf */, D00000000000000000000004 /* SwiftProtobuf */);
 			productName = Macrodroid;
 			productReference = 200000000000000000000011 /* Macrodroid.app */;
 			productType = "com.apple.product-type.application";
@@ -187,7 +187,7 @@
 			buildRules = ();
 			dependencies = ();
 			name = EmbeddedControlProbe;
-			packageProductDependencies = (D00000000000000000000001 /* GRPCCore */, D00000000000000000000002 /* GRPCNIOTransportHTTP2 */, D00000000000000000000003 /* GRPCProtobuf */, D00000000000000000000004 /* SwiftProtobuf */);
+			packageProductDependencies = (D00000000000000000000001 /* GRPCCore */, D00000000000000000000002 /* GRPCNIOTransportHTTP2Posix */, D00000000000000000000003 /* GRPCProtobuf */, D00000000000000000000004 /* SwiftProtobuf */);
 			productName = EmbeddedControlProbe;
 			productReference = 200000000000000000000012 /* EmbeddedControlProbe */;
 			productType = "com.apple.product-type.tool";
@@ -260,7 +260,7 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		D00000000000000000000001 /* GRPCCore */ = {isa = XCSwiftPackageProductDependency; package = A00000000000000000000001 /* XCRemoteSwiftPackageReference "grpc-swift-2" */; productName = GRPCCore; };
-		D00000000000000000000002 /* GRPCNIOTransportHTTP2 */ = {isa = XCSwiftPackageProductDependency; package = A00000000000000000000002 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */; productName = GRPCNIOTransportHTTP2; };
+		D00000000000000000000002 /* GRPCNIOTransportHTTP2Posix */ = {isa = XCSwiftPackageProductDependency; package = A00000000000000000000002 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */; productName = GRPCNIOTransportHTTP2Posix; };
 		D00000000000000000000003 /* GRPCProtobuf */ = {isa = XCSwiftPackageProductDependency; package = A00000000000000000000003 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */; productName = GRPCProtobuf; };
 		D00000000000000000000004 /* SwiftProtobuf */ = {isa = XCSwiftPackageProductDependency; package = A00000000000000000000004 /* XCRemoteSwiftPackageReference "swift-protobuf" */; productName = SwiftProtobuf; };
 /* End XCSwiftPackageProductDependency section */

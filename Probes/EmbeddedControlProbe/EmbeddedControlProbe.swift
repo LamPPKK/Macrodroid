@@ -1,6 +1,6 @@
 import Foundation
 import GRPCCore
-import GRPCNIOTransportHTTP2
+import GRPCNIOTransportHTTP2Posix
 import GRPCProtobuf
 import SwiftProtobuf
 

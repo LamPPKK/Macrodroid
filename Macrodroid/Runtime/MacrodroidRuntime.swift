@@ -3,7 +3,7 @@ import CryptoKit
 import Darwin
 import Foundation
 import GRPCCore
-import GRPCNIOTransportHTTP2
+import GRPCNIOTransportHTTP2Posix
 import GRPCProtobuf
 import Metal
 import SQLite3

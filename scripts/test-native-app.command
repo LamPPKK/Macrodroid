@@ -22,7 +22,6 @@ DERIVED="${ROOT}/.build/native-tests"
   -derivedDataPath "${DERIVED}" \
   ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO \
-  SWIFT_STRICT_CONCURRENCY=targeted \
   build-for-testing
 
 readonly TEST_BUNDLE="${DERIVED}/Build/Products/Debug/MacrodroidTests.xctest"
