@@ -3096,6 +3096,11 @@ actor TFTMACRuntimeService {
             "user": 0,
             "manual_unlock_was_required": manualUnlockRequired
         ])
+
+        // Enable Android Freeform Windowing & ensure guest directories exist
+        _ = try? Self.adb(paths: paths, ["shell", FreeformWindowConfig.enableFreeformScript], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "mkdir", "-p", "/sdcard/Download", "/sdcard/Macrodroid"], timeout: 10)
+
         let mode = ProcessInfo.processInfo.environment["MACRODROID_MODE"] ?? "PREWARM"
         let isAndroidHome = (mode == "ANDROID" || mode == "PREWARM" || mode == "NONE")
         let targetPackage: String? = {
@@ -5113,6 +5118,12 @@ actor TFTMACRuntimeService {
         )
     }
 
+    func toggleFreeform(enable: Bool) async {
+        guard let paths = self.paths else { return }
+        let script = enable ? FreeformWindowConfig.enableFreeformScript : FreeformWindowConfig.disableFreeformScript
+        _ = try? Self.adb(paths: paths, ["shell", script], timeout: 5)
+    }
+
     func importFiles(urls: [URL]) async -> [FileTransferResult] {
         guard let paths = self.paths else {
             return urls.map { url in
@@ -5519,6 +5530,28 @@ final class TFTMACRuntimeController {
 
     func resumeVM() {
         Task { await service.resumeVM() }
+    }
+
+    func toggleFreeformWindowing(enable: Bool) {
+        Task { await service.toggleFreeform(enable: enable) }
+    }
+
+    func syncSharedFolder(completion: ((@Sendable ([FileTransferResult]) -> Void))? = nil) {
+        Task { [service] in
+            let coordinator = SharedFolderSyncCoordinator()
+            let pendingURLs = await coordinator.discoverPendingTransfers()
+            guard !pendingURLs.isEmpty else {
+                completion?([])
+                return
+            }
+            let results = await service.importFiles(urls: pendingURLs)
+            for res in results where res.success {
+                if let matchedURL = pendingURLs.first(where: { $0.lastPathComponent == res.filename }) {
+                    await coordinator.markFileProcessed(matchedURL)
+                }
+            }
+            completion?(results)
+        }
     }
 
     var isVMSuspended: Bool {

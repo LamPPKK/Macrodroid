@@ -361,6 +361,8 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     var onScreenshotRequested: (() -> Void)?
     var onKeymapToggleRequested: (() -> Void)?
     var onMouseLockToggleRequested: (() -> Void)?
+    var onFreeformRequested: (() -> Void)?
+    var onSharedFolderRequested: (() -> Void)?
 
     private(set) var isMouseLocked = false
     private var previousModifierFlags: NSEvent.ModifierFlags = []
@@ -638,6 +640,12 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             return true
         case "k":
             onKeymapToggleRequested?()
+            return true
+        case "m":
+            onFreeformRequested?()
+            return true
+        case "o":
+            onSharedFolderRequested?()
             return true
         case "v":
             paste(nil)

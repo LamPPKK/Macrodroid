@@ -391,3 +391,85 @@ exec open "macrodroid://launch?pkg=\(package)" || open -b "com.macrodroid" --arg
         NSWorkspace.shared.open(dir)
     }
 }
+
+// MARK: - SharedFolderConfig (Bi-directional File System Sharing)
+
+public struct SharedFolderConfig: Sendable {
+    public static var defaultSharedDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Macrodroid/Shared", isDirectory: true)
+    }
+
+    public static var toAndroidDirectory: URL {
+        defaultSharedDirectory.appendingPathComponent("To Android", isDirectory: true)
+    }
+
+    public static var fromAndroidDirectory: URL {
+        defaultSharedDirectory.appendingPathComponent("From Android", isDirectory: true)
+    }
+
+    public static let guestDestinationPath = "/sdcard/Download"
+    public static let guestSharedPath = "/sdcard/Macrodroid"
+
+    public static func ensureDirectoriesExist(at base: URL? = nil) {
+        let root = base ?? defaultSharedDirectory
+        let toAndroid = root.appendingPathComponent("To Android", isDirectory: true)
+        let fromAndroid = root.appendingPathComponent("From Android", isDirectory: true)
+        let fm = FileManager.default
+        try? fm.createDirectory(at: root, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: toAndroid, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: fromAndroid, withIntermediateDirectories: true)
+    }
+}
+
+// MARK: - SharedFolderSyncCoordinator
+
+public actor SharedFolderSyncCoordinator {
+    private var processedFiles: Set<String> = []
+    private let sharedURL: URL
+    private let toAndroidURL: URL
+
+    public init(sharedDirectory: URL? = nil) {
+        let base = sharedDirectory ?? SharedFolderConfig.defaultSharedDirectory
+        self.sharedURL = base
+        self.toAndroidURL = base.appendingPathComponent("To Android", isDirectory: true)
+        SharedFolderConfig.ensureDirectoriesExist(at: base)
+    }
+
+    public func discoverPendingTransfers() -> [URL] {
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: toAndroidURL,
+            includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+
+        return contents.filter { url in
+            !processedFiles.contains(url.resolvingSymlinksInPath().path)
+        }
+    }
+
+    public func markFileProcessed(_ url: URL) {
+        processedFiles.insert(url.resolvingSymlinksInPath().path)
+    }
+
+    public func resetTracking() {
+        processedFiles.removeAll()
+    }
+
+    public func processedCount() -> Int {
+        processedFiles.count
+    }
+}
+
+// MARK: - FreeformWindowConfig
+
+public struct FreeformWindowConfig: Sendable {
+    public static let enableFreeformScript =
+        "settings put global enable_freeform_support 1; " +
+        "settings put global force_resizable_activities 1; " +
+        "setprop persist.sys.freeform_window 1"
+
+    public static let disableFreeformScript =
+        "settings put global enable_freeform_support 0; " +
+        "setprop persist.sys.freeform_window 0"
+}

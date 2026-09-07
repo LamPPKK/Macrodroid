@@ -87,6 +87,8 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
                 self?.launchPackageDirectly(pkg)
             }
         }
+
+        setupPersistentMenuBar()
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -184,6 +186,15 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             controller.emulatorView.onFilesDropped = { [weak self] urls in
                 self?.handleDroppedFiles(urls)
             }
+            controller.onFreeformToggleRequested = { [weak self] in
+                guard let self else { return }
+                self.runtimeController?.toggleFreeformWindowing(enable: controller.isFreeformActive)
+            }
+            controller.onOpenSharedFolderRequested = { [weak self] in
+                self?.runtimeController?.syncSharedFolder { results in
+                    NSLog("[SharedFolderSync] Synced \(results.count) files")
+                }
+            }
 
             if let window = controller.window {
                 NotificationCenter.default.addObserver(
@@ -236,61 +247,171 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func hideDockAndShowMenuBar(appName: String) {
-        isDockHidden = true
-        // Set activation policy to .accessory: removes application icon from Dock
-        NSApp.setActivationPolicy(.accessory)
-
+    private func setupPersistentMenuBar() {
         if statusItem == nil {
             statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         }
-
         guard let statusItem else { return }
-
         if let button = statusItem.button {
             let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
-            if let img = NSImage(systemSymbolName: "play.circle.fill", accessibilityDescription: "Macrodroid")?.withSymbolConfiguration(config) {
+            if let img = NSImage(
+                systemSymbolName: "play.circle.fill",
+                accessibilityDescription: "Macrodroid"
+            )?.withSymbolConfiguration(config) {
                 img.isTemplate = true
                 button.image = img
             }
-            button.title = " \(appName)"
+            button.title = currentAppName.isEmpty ? " Macrodroid" : " \(currentAppName)"
         }
-
         updateMenuBarMenu()
+    }
+
+    private func hideDockAndShowMenuBar(appName: String) {
+        isDockHidden = true
+        NSApp.setActivationPolicy(.accessory)
+        setupPersistentMenuBar()
     }
 
     private func updateMenuBarMenu() {
         guard let statusItem else { return }
         let menu = NSMenu()
 
-        let titleItem = NSMenuItem(title: "🎮 \(currentAppName) (Running)", action: nil, keyEquivalent: "")
-        titleItem.isEnabled = false
-        menu.addItem(titleItem)
+        let isRunning = runtimeController?.isRunning == true
+        let isSuspended = (launcherWindowController?.viewModel.statusMessage.contains("Standby") == true)
+        let statusTitle: String
+        if isSuspended {
+            statusTitle = "🟡 Engine: Idle Standby (0% CPU)"
+        } else if isRunning {
+            statusTitle = "🟢 Engine: Running (\(activeProfile.vCPU) vCPU, \(activeProfile.ramMiB) MB)"
+        } else {
+            statusTitle = "⚪ Engine: Stopped"
+        }
+        let statusItemHeader = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
+        statusItemHeader.isEnabled = false
+        menu.addItem(statusItemHeader)
+
+        if !currentAppName.isEmpty && mainWindowController != nil {
+            let gameItem = NSMenuItem(
+                title: "🎮 Active: \(currentAppName)",
+                action: #selector(focusGameWindow),
+                keyEquivalent: ""
+            )
+            gameItem.target = self
+            menu.addItem(gameItem)
+        }
 
         menu.addItem(NSMenuItem.separator())
 
-        let showGameItem = NSMenuItem(title: "Show Game Window", action: #selector(focusGameWindow), keyEquivalent: "")
-        showGameItem.target = self
-        menu.addItem(showGameItem)
+        // Quick Launch Submenu
+        let quickLaunchMenu = NSMenu()
+        let apps = launcherWindowController?.viewModel.apps ?? []
+        if !apps.isEmpty {
+            for app in apps {
+                let item = NSMenuItem(title: app.name, action: #selector(quickLaunchAppMenuItem(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = app.bundleIdentifier
+                quickLaunchMenu.addItem(item)
+            }
+        } else {
+            let emptyItem = NSMenuItem(title: "No installed apps found", action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            quickLaunchMenu.addItem(emptyItem)
+        }
+        let quickLaunchParent = NSMenuItem(title: "Quick Launch App…", action: nil, keyEquivalent: "")
+        quickLaunchParent.submenu = quickLaunchMenu
+        menu.addItem(quickLaunchParent)
 
-        let toggleDockTitle = isDockHidden ? "Show Dock Icon" : "Hide Dock Icon"
-        let toggleDockItem = NSMenuItem(title: toggleDockTitle, action: #selector(toggleDockIcon), keyEquivalent: "")
-        toggleDockItem.target = self
-        menu.addItem(toggleDockItem)
+        let auroraItem = NSMenuItem(
+            title: "Open Aurora Store",
+            action: #selector(openAuroraStoreMenuAction),
+            keyEquivalent: ""
+        )
+        auroraItem.target = self
+        menu.addItem(auroraItem)
 
-        let showLauncherItem = NSMenuItem(title: "Show Launcher Window", action: #selector(showLauncher), keyEquivalent: "")
+        let sharedFolderItem = NSMenuItem(
+            title: "Open Shared Folder (Mac ⇋ Android)",
+            action: #selector(openSharedFolderMenuAction),
+            keyEquivalent: ""
+        )
+        sharedFolderItem.target = self
+        menu.addItem(sharedFolderItem)
+
+        let syncSharedItem = NSMenuItem(
+            title: "Sync Shared Files Now",
+            action: #selector(syncSharedFilesMenuAction),
+            keyEquivalent: ""
+        )
+        syncSharedItem.target = self
+        menu.addItem(syncSharedItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        if mainWindowController != nil {
+            let showGameItem = NSMenuItem(
+                title: "Focus Game Window",
+                action: #selector(focusGameWindow),
+                keyEquivalent: ""
+            )
+            showGameItem.target = self
+            menu.addItem(showGameItem)
+        }
+
+        let showLauncherItem = NSMenuItem(
+            title: "Show Launcher Window",
+            action: #selector(showLauncher),
+            keyEquivalent: ""
+        )
         showLauncherItem.target = self
         menu.addItem(showLauncherItem)
 
+        let toggleDockTitle = isDockHidden ? "Show Dock Icon" : "Hide Dock Icon"
+        let toggleDockItem = NSMenuItem(
+            title: toggleDockTitle,
+            action: #selector(toggleDockIcon),
+            keyEquivalent: ""
+        )
+        toggleDockItem.target = self
+        menu.addItem(toggleDockItem)
+
+        if isRunning {
+            let sleepResumeTitle = isSuspended ? "Resume Engine" : "Sleep Engine (Save 100% Battery)"
+            let sleepResumeItem = NSMenuItem(
+                title: sleepResumeTitle,
+                action: #selector(toggleSleepResumeMenuAction),
+                keyEquivalent: ""
+            )
+            sleepResumeItem.target = self
+            menu.addItem(sleepResumeItem)
+        }
+
         menu.addItem(NSMenuItem.separator())
 
-        let stopItem = NSMenuItem(title: "Stop Game Session", action: #selector(stopEmulatorMenuAction), keyEquivalent: "")
-        stopItem.target = self
-        menu.addItem(stopItem)
+        if isRunning {
+            let stopItem = NSMenuItem(
+                title: "Stop Background Engine",
+                action: #selector(stopEmulatorMenuAction),
+                keyEquivalent: ""
+            )
+            stopItem.target = self
+            menu.addItem(stopItem)
+        } else {
+            let startItem = NSMenuItem(
+                title: "Start Background Engine",
+                action: #selector(startEngineMenuAction),
+                keyEquivalent: ""
+            )
+            startItem.target = self
+            menu.addItem(startItem)
+        }
 
         menu.addItem(NSMenuItem.separator())
 
-        let quitItem = NSMenuItem(title: "Quit Macrodroid", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quitItem = NSMenuItem(
+            title: "Quit Macrodroid",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
         menu.addItem(quitItem)
 
         statusItem.menu = menu
@@ -298,13 +419,49 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     private func restoreDockAndHideMenuBar() {
         isDockHidden = false
-        // Restore standard application Dock icon
         NSApp.setActivationPolicy(.regular)
+        currentAppName = ""
+        currentAppPackage = ""
+        setupPersistentMenuBar()
+    }
 
-        if let item = statusItem {
-            NSStatusBar.system.removeStatusItem(item)
-            statusItem = nil
+    @objc func quickLaunchAppMenuItem(_ sender: NSMenuItem) {
+        if let pkg = sender.representedObject as? String {
+            launchPackageDirectly(pkg)
         }
+    }
+
+    @objc func openAuroraStoreMenuAction() {
+        launchPackageDirectly(GoogleEcosystemConfig.auroraStorePackage)
+    }
+
+    @objc func openSharedFolderMenuAction() {
+        SharedFolderConfig.ensureDirectoriesExist()
+        NSWorkspace.shared.open(SharedFolderConfig.defaultSharedDirectory)
+    }
+
+    @objc func syncSharedFilesMenuAction() {
+        runtimeController?.syncSharedFolder { [weak self] results in
+            Task { @MainActor in
+                self?.mainWindowController?.showToast(
+                    icon: "folder.fill",
+                    message: "Synced \(results.count) file(s) with Android"
+                )
+            }
+        }
+    }
+
+    @objc func toggleSleepResumeMenuAction() {
+        if launcherWindowController?.viewModel.statusMessage.contains("Standby") == true {
+            cancelIdleSuspendAndResume()
+        } else {
+            runtimeController?.suspendVM()
+        }
+        updateMenuBarMenu()
+    }
+
+    @objc func startEngineMenuAction() {
+        startBackgroundEngine(profile: .playable)
     }
 
     @objc func focusGameWindow() {
@@ -440,7 +597,10 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        sender.windows.allSatisfy { !$0.isVisible }
+        if runtimeController?.isRunning == true || statusItem != nil {
+            return false
+        }
+        return sender.windows.allSatisfy { !$0.isVisible }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

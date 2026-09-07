@@ -2617,7 +2617,10 @@ struct PlayCoverSideloadView: View {
                 // 1. Google Play & Aurora Store 1-Click Ecosystem Card
                 GoogleEcosystemCardView(viewModel: viewModel)
 
-                // 2. Big Dropzone / Sideload Card
+                // 2. Bi-directional Shared Folder & Data Sync Card
+                SharedFolderSyncCardView(viewModel: viewModel)
+
+                // 3. Big Dropzone / Sideload Card
                 VStack(spacing: 16) {
                     ZStack {
                         Circle()
@@ -2967,6 +2970,82 @@ struct GoogleEcosystemCardView: View {
             }
         }
         .padding(20)
+        .background(PlayCoverTheme.cardBackground)
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(PlayCoverTheme.borderSubtle, lineWidth: 1))
+    }
+}
+
+// MARK: - SharedFolderSyncCardView (Data Sync & File Sharing)
+
+struct SharedFolderSyncCardView: View {
+    @ObservedObject var viewModel: LauncherViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "folder.fill.badge.gearshape")
+                    .font(.system(size: 15))
+                    .foregroundColor(PlayCoverTheme.accentGreen)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Bi-directional Data & File System Sharing")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                    Text("Automatic sync between Mac (~/Macrodroid/Shared) and Android (/sdcard/Download)")
+                        .font(.system(size: 11))
+                        .foregroundColor(PlayCoverTheme.textMuted)
+                }
+
+                Spacer()
+
+                StatusTag(isReady: true)
+            }
+
+            HStack(spacing: 10) {
+                FeaturePill(icon: "arrow.triangle.2.circlepath", text: "Two-Way Clipboard")
+                FeaturePill(icon: "folder", text: "~/Macrodroid/Shared")
+                FeaturePill(icon: "arrow.down.circle", text: "MediaScanner Auto-Scan")
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    SharedFolderConfig.ensureDirectoriesExist()
+                    NSWorkspace.shared.open(SharedFolderConfig.defaultSharedDirectory)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder.fill")
+                        Text("Open Shared Folder in Finder")
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(Color.white.opacity(0.08))
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    SharedFolderConfig.ensureDirectoriesExist()
+                    let toAndroid = SharedFolderConfig.toAndroidDirectory
+                    NSWorkspace.shared.open(toAndroid)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.right.doc.on.clipboard")
+                        Text("Drop to 'To Android'")
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(PlayCoverTheme.accentGreen.opacity(0.15))
+                    .foregroundColor(PlayCoverTheme.accentGreen)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(16)
         .background(PlayCoverTheme.cardBackground)
         .cornerRadius(12)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(PlayCoverTheme.borderSubtle, lineWidth: 1))

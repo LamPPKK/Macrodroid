@@ -408,6 +408,42 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=
         XCTAssertEqual(GoogleEcosystemConfig.microGFakeStoreURL.scheme, "https")
         XCTAssertEqual(GoogleEcosystemConfig.microGFakeStoreURL.host, "github.com")
 
+        // Validate SharedFolderConfig and FreeformWindowConfig
+        let testSharedBase = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TestMacrodroidShared_\(UUID().uuidString)", isDirectory: true)
+        SharedFolderConfig.ensureDirectoriesExist(at: testSharedBase)
+        let toDir = testSharedBase.appendingPathComponent("To Android", isDirectory: true)
+        let fromDir = testSharedBase.appendingPathComponent("From Android", isDirectory: true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: toDir.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fromDir.path))
+        XCTAssertEqual(SharedFolderConfig.guestDestinationPath, "/sdcard/Download")
+        XCTAssertEqual(SharedFolderConfig.guestSharedPath, "/sdcard/Macrodroid")
+
+        XCTAssertTrue(FreeformWindowConfig.enableFreeformScript.contains("enable_freeform_support 1"))
+        XCTAssertTrue(FreeformWindowConfig.enableFreeformScript.contains("force_resizable_activities 1"))
+        XCTAssertTrue(FreeformWindowConfig.disableFreeformScript.contains("enable_freeform_support 0"))
+
+        // Validate SharedFolderSyncCoordinator
+        let sharedCoord = SharedFolderSyncCoordinator(sharedDirectory: testSharedBase)
+        let sampleFile = toDir.appendingPathComponent("sample_document.txt")
+        try? "Test content".write(to: sampleFile, atomically: true, encoding: .utf8)
+        let sharedExp = expectation(description: "SharedFolderSyncCoordinator")
+        Task {
+            let pending = await sharedCoord.discoverPendingTransfers()
+            XCTAssertEqual(pending.count, 1)
+            XCTAssertEqual(pending.first?.lastPathComponent, "sample_document.txt")
+
+            await sharedCoord.markFileProcessed(sampleFile)
+            let processedPending = await sharedCoord.discoverPendingTransfers()
+            XCTAssertEqual(processedPending.count, 0)
+            let count = await sharedCoord.processedCount()
+            XCTAssertEqual(count, 1)
+
+            try? FileManager.default.removeItem(at: testSharedBase)
+            sharedExp.fulfill()
+        }
+        wait(for: [sharedExp], timeout: 2.0)
+
         // Validate ClipboardSyncCoordinator Bidirectional Echo Cancellation
         let deepCoord = ClipboardSyncCoordinator(defaults: UserDefaults(suiteName: "test.clipboard.prefs.deep")!)
         let clipExp2 = expectation(description: "ClipboardSyncCoordinatorDeep")

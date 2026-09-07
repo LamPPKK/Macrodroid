@@ -107,6 +107,9 @@ final class MainWindowController: NSWindowController {
     let emulatorView: EmbeddedEmulatorView
     let appName: String
     private(set) var isPortrait: Bool
+    private(set) var isFreeformActive: Bool = false
+    var onFreeformToggleRequested: (() -> Void)?
+    var onOpenSharedFolderRequested: (() -> Void)?
     private let fpsLabel = NSTextField(labelWithString: "— fps")
     private let statusDot = NSView()
     private let toastView = HUDToastView()
@@ -189,9 +192,9 @@ final class MainWindowController: NSWindowController {
         let accessory = NSTitlebarAccessoryViewController()
         accessory.layoutAttribute = .trailing
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 226, height: 26))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 274, height: 26))
 
-        let pill = NSVisualEffectView(frame: NSRect(x: 4, y: 2, width: 218, height: 22))
+        let pill = NSVisualEffectView(frame: NSRect(x: 4, y: 2, width: 266, height: 22))
         pill.material = .hudWindow
         pill.blendingMode = .withinWindow
         pill.state = .active
@@ -237,12 +240,30 @@ final class MainWindowController: NSWindowController {
         mouseLockBtn.frame = NSRect(x: 77, y: 1, width: 20, height: 20)
         pill.addSubview(mouseLockBtn)
 
-        let divider = NSView(frame: NSRect(x: 104, y: 5, width: 1, height: 12))
+        let freeformBtn = makeActionButton(
+            symbolName: "square.on.square",
+            fallbackText: "⧉",
+            tooltip: "Toggle Freeform Multi-Window (⌘M)",
+            action: #selector(freeformClicked)
+        )
+        freeformBtn.frame = NSRect(x: 101, y: 1, width: 20, height: 20)
+        pill.addSubview(freeformBtn)
+
+        let sharedFolderBtn = makeActionButton(
+            symbolName: "folder.fill",
+            fallbackText: "📁",
+            tooltip: "Open Shared Folder (⌘O)",
+            action: #selector(sharedFolderClicked)
+        )
+        sharedFolderBtn.frame = NSRect(x: 125, y: 1, width: 20, height: 20)
+        pill.addSubview(sharedFolderBtn)
+
+        let divider = NSView(frame: NSRect(x: 151, y: 5, width: 1, height: 12))
         divider.wantsLayer = true
         divider.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
         pill.addSubview(divider)
 
-        statusDot.frame = NSRect(x: 114, y: 8, width: 6, height: 6)
+        statusDot.frame = NSRect(x: 159, y: 8, width: 6, height: 6)
         statusDot.wantsLayer = true
         statusDot.layer?.cornerRadius = 3
         statusDot.layer?.backgroundColor = NSColor(calibratedRed: 0.0, green: 0.88, blue: 0.38, alpha: 0.9).cgColor
@@ -251,7 +272,7 @@ final class MainWindowController: NSWindowController {
         fpsLabel.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .semibold)
         fpsLabel.textColor = NSColor.white.withAlphaComponent(0.92)
         fpsLabel.alignment = .left
-        fpsLabel.frame = NSRect(x: 124, y: 1, width: 88, height: 20)
+        fpsLabel.frame = NSRect(x: 169, y: 1, width: 88, height: 20)
         pill.addSubview(fpsLabel)
 
         container.addSubview(pill)
@@ -296,6 +317,14 @@ final class MainWindowController: NSWindowController {
 
         emulatorView.onMouseLockToggleRequested = { [weak self] in
             self?.toggleMouseLock()
+        }
+
+        emulatorView.onFreeformRequested = { [weak self] in
+            self?.toggleFreeform()
+        }
+
+        emulatorView.onSharedFolderRequested = { [weak self] in
+            self?.openSharedFolder()
         }
     }
 
@@ -400,6 +429,30 @@ final class MainWindowController: NSWindowController {
             icon: "scope",
             message: locked ? "Mouse Aim Lock: Enabled (Press ⌥ to exit)" : "Mouse Aim Lock: Released"
         )
+    }
+
+    @objc func freeformClicked() {
+        toggleFreeform()
+    }
+
+    func toggleFreeform() {
+        isFreeformActive.toggle()
+        onFreeformToggleRequested?()
+        showToast(
+            icon: "square.on.square",
+            message: isFreeformActive ? "Multi-Window Freeform: Enabled" : "Multi-Window Freeform: Standard"
+        )
+    }
+
+    @objc func sharedFolderClicked() {
+        openSharedFolder()
+    }
+
+    func openSharedFolder() {
+        SharedFolderConfig.ensureDirectoriesExist()
+        NSWorkspace.shared.open(SharedFolderConfig.defaultSharedDirectory)
+        onOpenSharedFolderRequested?()
+        showToast(icon: "folder.fill", message: "Opened ~/Macrodroid/Shared")
     }
 
     func showToast(icon: String?, message: String) {
