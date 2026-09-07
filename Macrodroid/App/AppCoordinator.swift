@@ -18,6 +18,9 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
     private var currentAppPackage: String = ""
     private var latestGameFrameWindow: GameFrameTelemetryWindow?
 
+    // Smart Idle Suspend / Power Efficiency
+    private var idleSuspendTask: Task<Void, Never>?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Apply official emerald Macrodroid icon to running application
         if let path = Bundle.main.path(forResource: "Macrodroid-Logo", ofType: "png"),
@@ -137,6 +140,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     private func openAppWindow(mode: LaunchMode, profile: TFTMACRuntimeProfile, app: PlayApp? = nil) {
+        cancelIdleSuspendAndResume()
         self.activeProfile = profile
         let appName = app?.name ?? (mode == .android ? "Android Home" : "Application")
         let pkg = app?.bundleIdentifier ?? (mode == .android ? "ANDROID" : "TFT")
@@ -196,6 +200,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
                         } else {
                             // Keep background engine running! Just return Android guest to home
                             await self.runtimeController?.returnToHome(stopPackage: self.currentAppPackage)
+                            self.scheduleIdleSuspendIfNeeded()
                         }
 
                         self.mainWindowController = nil
@@ -334,6 +339,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             if mainWindowController != nil {
                 // If game window is open, close the game window and return Android to home (keep background engine hot)
                 await runtimeController?.returnToHome(stopPackage: currentAppPackage)
+                scheduleIdleSuspendIfNeeded()
                 mainWindowController?.close()
                 mainWindowController = nil
                 restoreDockAndHideMenuBar()
@@ -349,6 +355,8 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     private func stopEmulator() {
+        idleSuspendTask?.cancel()
+        idleSuspendTask = nil
         Task { @MainActor in
             restoreDockAndHideMenuBar()
             await runtimeController?.stop()
@@ -364,6 +372,29 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             launcherWindowController?.window?.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
+    }
+
+    private func scheduleIdleSuspendIfNeeded() {
+        idleSuspendTask?.cancel()
+        let timeout = IdleSuspendPreferences.loadTimeout()
+        guard let seconds = timeout.seconds else { return }
+        if seconds == 0 {
+            runtimeController?.suspendVM()
+            return
+        }
+        idleSuspendTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                self?.runtimeController?.suspendVM()
+            } catch { }
+        }
+    }
+
+    private func cancelIdleSuspendAndResume() {
+        idleSuspendTask?.cancel()
+        idleSuspendTask = nil
+        runtimeController?.resumeVM()
     }
 
     @objc func showSettings(_ sender: Any?) {
@@ -464,6 +495,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     private func launchPackageDirectly(_ packageName: String) {
         guard !packageName.isEmpty else { return }
+        cancelIdleSuspendAndResume()
         if mainWindowController != nil && currentAppPackage == packageName {
             focusGameWindow()
             return
@@ -510,7 +542,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
                     content: content,
                     trigger: nil
                 )
-                UNUserNotificationCenter.current().add(req)
+                try? await UNUserNotificationCenter.current().add(req)
             }
         }
     }

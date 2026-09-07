@@ -162,3 +162,47 @@ public struct FileTransferResult: Sendable, Equatable {
         self.message = message
     }
 }
+
+public enum IdleSuspendTimeout: String, CaseIterable, Codable, Sendable {
+    case immediately = "immediately"
+    case oneMinute = "1m"
+    case fiveMinutes = "5m"
+    case fifteenMinutes = "15m"
+    case never = "never"
+
+    public var seconds: TimeInterval? {
+        switch self {
+        case .immediately: return 0
+        case .oneMinute: return 60
+        case .fiveMinutes: return 300
+        case .fifteenMinutes: return 900
+        case .never: return nil
+        }
+    }
+
+    public var displayName: String {
+        switch self {
+        case .immediately: return "Ngay lập tức (Immediately)"
+        case .oneMinute: return "Sau 1 phút (1 minute)"
+        case .fiveMinutes: return "Sau 5 phút (5 minutes - Khuyên dùng)"
+        case .fifteenMinutes: return "Sau 15 phút (15 minutes)"
+        case .never: return "Không bao giờ (Never)"
+        }
+    }
+}
+
+public enum IdleSuspendPreferences {
+    public static let preferenceKey = "macrodroid.idle.suspend.timeout"
+
+    public static func loadTimeout(defaults: UserDefaults = .standard) -> IdleSuspendTimeout {
+        guard let raw = defaults.string(forKey: preferenceKey),
+              let timeout = IdleSuspendTimeout(rawValue: raw) else {
+            return .fiveMinutes
+        }
+        return timeout
+    }
+
+    public static func saveTimeout(_ timeout: IdleSuspendTimeout, defaults: UserDefaults = .standard) {
+        defaults.set(timeout.rawValue, forKey: preferenceKey)
+    }
+}

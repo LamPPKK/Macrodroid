@@ -317,6 +317,7 @@ final class LauncherViewModel: ObservableObject {
     @Published var isEngineStarting: Bool = false
     @Published var engineLaunchPolicy: EngineLaunchPolicy = .alwaysBackground
     @Published var engineCloseBehavior: EngineCloseBehavior = .keepWarm
+    @Published var idleSuspendTimeout: IdleSuspendTimeout = .fiveMinutes
 
     // Notification Mirroring Preferences
     @Published var isNotificationMirroringEnabled: Bool = true
@@ -367,6 +368,7 @@ final class LauncherViewModel: ObservableObject {
         asgDrawFlushInterval = profile.asgDrawFlushInterval
         engineLaunchPolicy = EngineLaunchPolicy.load()
         engineCloseBehavior = EngineCloseBehavior.load()
+        idleSuspendTimeout = IdleSuspendPreferences.loadTimeout()
         isNotificationMirroringEnabled = NotificationPreferences.isMirroringEnabled()
         filterSystemNotifications = NotificationPreferences.isSystemFilterEnabled()
         isClipboardSyncEnabled = ClipboardPreferences.isSyncEnabled()
@@ -385,6 +387,12 @@ final class LauncherViewModel: ObservableObject {
         engineCloseBehavior = behavior
         behavior.save()
         saveFeedbackMessage = "Đã lưu hành vi khi đóng app: \(behavior.displayName)"
+    }
+
+    func setIdleSuspendTimeout(_ timeout: IdleSuspendTimeout) {
+        idleSuspendTimeout = timeout
+        IdleSuspendPreferences.saveTimeout(timeout)
+        saveFeedbackMessage = "Đã lưu thời gian tạm dừng vCPU: \(timeout.displayName)"
     }
 
     func setNotificationMirroringEnabled(_ enabled: Bool) {
@@ -1943,6 +1951,41 @@ struct PlayCoverHardwareView: View {
                                 .font(.system(size: 11))
                                 .foregroundColor(PlayCoverTheme.textMuted)
                                 .padding(.top, 2)
+                        }
+
+                        if viewModel.engineCloseBehavior == .keepWarm {
+                            Divider().background(PlayCoverTheme.borderSubtle)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text("Tạm dừng vCPU khi không dùng (Idle Suspend)")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    Text("Tiết kiệm pin & CPU")
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundColor(PlayCoverTheme.accentGreen)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(PlayCoverTheme.accentGreen.opacity(0.12))
+                                        .cornerRadius(4)
+                                }
+
+                                Picker("", selection: Binding(
+                                    get: { viewModel.idleSuspendTimeout },
+                                    set: { viewModel.setIdleSuspendTimeout($0) }
+                                )) {
+                                    ForEach(IdleSuspendTimeout.allCases, id: \.self) { timeout in
+                                        Text(timeout.displayName).tag(timeout)
+                                    }
+                                }
+                                .labelsHidden()
+
+                                Text("Tự động pause vCPU máy ảo qua gRPC khi không có cửa sổ hoạt động để CPU Mac về 0%, và tức thì đánh thức khi mở lại ứng dụng.")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(PlayCoverTheme.textMuted)
+                                    .padding(.top, 2)
+                            }
                         }
 
                         Divider().background(PlayCoverTheme.borderSubtle)

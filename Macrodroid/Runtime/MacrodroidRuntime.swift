@@ -201,6 +201,7 @@ private enum EmulatorInput: Sendable {
     case mouse(MouseInput)
     case keyboard(KeyboardInput)
     case clipboard(String)
+    case setVmRunState(Android_Emulation_Control_VmRunState.RunState)
 }
 
 struct PresentationSample: Sendable {
@@ -1140,6 +1141,13 @@ final class TFTMACNativeTelemetry: @unchecked Sendable {
                 .text("clipboard"), .null, .null, .null, .null,
                 .integer(Int64(text.count)),
                 .null
+            ]
+        case .setVmRunState(let state):
+            values = [
+                .text(sessionIdentifier), .integer(Int64(bitPattern: DispatchTime.now().uptimeNanoseconds)),
+                .text("vm_state"), .null, .null, .null, .null,
+                .null,
+                .text("\(state)")
             ]
         }
         enqueue {
@@ -2180,6 +2188,7 @@ actor TFTMACRuntimeService {
     private var latestGameFrameWindow: GameFrameTelemetryWindow?
     private var tftPackageVersion = "unknown"
     private var stopping = false
+    private var isVMSuspended = false
 
     init(
         profile: TFTMACRuntimeProfile,
@@ -2232,6 +2241,7 @@ actor TFTMACRuntimeService {
 
             let (inputStream, continuation) = AsyncStream.makeStream(of: EmulatorInput.self, bufferingPolicy: .bufferingNewest(256))
             inputContinuation = continuation
+            let serviceSelf = self
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask { [profile, mailbox] in
                     try await Self.runController(
@@ -2240,7 +2250,8 @@ actor TFTMACRuntimeService {
                         mailbox: mailbox,
                         telemetry: telemetry,
                         inputStream: inputStream,
-                        status: self.status
+                        status: serviceSelf.status,
+                        isSuspended: { await serviceSelf.getVMSuspended() }
                     )
                 }
                 group.addTask {
@@ -2304,6 +2315,24 @@ actor TFTMACRuntimeService {
 
     func sendClipboard(_ text: String) {
         inputContinuation?.yield(.clipboard(text))
+    }
+
+    func suspendVM() {
+        guard !isVMSuspended else { return }
+        isVMSuspended = true
+        telemetry?.recordInput(.setVmRunState(.paused))
+        inputContinuation?.yield(.setVmRunState(.paused))
+    }
+
+    func resumeVM() {
+        guard isVMSuspended else { return }
+        isVMSuspended = false
+        telemetry?.recordInput(.setVmRunState(.running))
+        inputContinuation?.yield(.setVmRunState(.running))
+    }
+
+    func getVMSuspended() -> Bool {
+        isVMSuspended
     }
 
     func recordPresentation(_ sample: PresentationSample) {
@@ -4614,7 +4643,8 @@ actor TFTMACRuntimeService {
         mailbox: LatestFrameMailbox,
         telemetry: TFTMACNativeTelemetry,
         inputStream: AsyncStream<EmulatorInput>,
-        status: @escaping StatusHandler
+        status: @escaping StatusHandler,
+        isSuspended: @escaping @Sendable () async -> Bool = { false }
     ) async throws {
         let transport = try HTTP2ClientTransport.Posix(
             target: .ipv4(address: "127.0.0.1", port: discovery.port),
@@ -4766,6 +4796,16 @@ actor TFTMACRuntimeService {
                                 deserializer: GRPCProtobuf.ProtobufDeserializer<SwiftProtobuf.Google_Protobuf_Empty>()
                             )
                             telemetry.recordEvent("CLIPBOARD_EXPLICIT_PUSH", payload: ["length": text.count])
+                        case .setVmRunState(let targetState):
+                            var vmState = Android_Emulation_Control_VmRunState()
+                            vmState.state = targetState
+                            let request = GRPCCore.ClientRequest(message: vmState, metadata: metadata)
+                            _ = try await client.setVmState(
+                                request: request,
+                                serializer: GRPCProtobuf.ProtobufSerializer<Android_Emulation_Control_VmRunState>(),
+                                deserializer: GRPCProtobuf.ProtobufDeserializer<SwiftProtobuf.Google_Protobuf_Empty>()
+                            )
+                            telemetry.recordEvent("VM_RUN_STATE_CHANGED", payload: ["target_state": "\(targetState)"])
                         }
                     }
                 }
@@ -4773,7 +4813,8 @@ actor TFTMACRuntimeService {
                     await Self.runClipboardSync(
                         client: client,
                         metadata: metadata,
-                        telemetry: telemetry
+                        telemetry: telemetry,
+                        isSuspended: isSuspended
                     )
                 }
                 _ = try await group.next()
@@ -4785,7 +4826,8 @@ actor TFTMACRuntimeService {
     private static func runClipboardSync<Transport: GRPCCore.ClientTransport>(
         client: Android_Emulation_Control_EmulatorController.Client<Transport>,
         metadata: GRPCCore.Metadata,
-        telemetry: TFTMACNativeTelemetry
+        telemetry: TFTMACNativeTelemetry,
+        isSuspended: @escaping @Sendable () async -> Bool = { false }
     ) async {
         let coordinator = ClipboardSyncCoordinator()
 
@@ -4826,6 +4868,7 @@ actor TFTMACRuntimeService {
                 while !Task.isCancelled {
                     do {
                         try await Task.sleep(for: .milliseconds(400))
+                        guard await !isSuspended() else { continue }
                         if let textToSend = await coordinator.checkMacPasteboard() {
                             var clip = Android_Emulation_Control_ClipData()
                             clip.text = textToSend
@@ -5099,7 +5142,7 @@ actor TFTMACRuntimeService {
                         message: success ? "Installed successfully" : res.output.trimmingCharacters(in: .whitespacesAndNewlines)
                     ))
                     if success {
-                        await recordMarker("APK_INSTALLED_VIA_DRAG_DROP:\(filename)")
+                        recordMarker("APK_INSTALLED_VIA_DRAG_DROP:\(filename)")
                     }
                 } catch {
                     results.append(FileTransferResult(
@@ -5121,7 +5164,7 @@ actor TFTMACRuntimeService {
                             ["shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d", "file://\(guestPath)"],
                             timeout: 10
                         )
-                        await recordMarker("FILE_PUSHED_VIA_DRAG_DROP:\(filename)")
+                        recordMarker("FILE_PUSHED_VIA_DRAG_DROP:\(filename)")
                     }
                     results.append(FileTransferResult(
                         filename: filename,
@@ -5168,6 +5211,7 @@ actor TFTMACRuntimeService {
             try await Task.sleep(for: .seconds(2))
             guard !stopping else { break }
 
+            guard !isVMSuspended else { continue }
             guard NotificationPreferences.isMirroringEnabled() else { continue }
 
             guard let listOut = try? Self.adb(paths: paths, ["shell", "cmd", "notification", "list"], timeout: 5).output else {
@@ -5467,6 +5511,18 @@ final class TFTMACRuntimeController {
                 completion(results)
             }
         }
+    }
+
+    func suspendVM() {
+        Task { await service.suspendVM() }
+    }
+
+    func resumeVM() {
+        Task { await service.resumeVM() }
+    }
+
+    var isVMSuspended: Bool {
+        get async { await service.getVMSuspended() }
     }
 
     func stop() async {

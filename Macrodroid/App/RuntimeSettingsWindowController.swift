@@ -9,6 +9,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
     private let flushButton = NSPopUpButton()
     private let policyButton = NSPopUpButton()
     private let closeBehaviorButton = NSPopUpButton()
+    private let idleSuspendButton = NSPopUpButton()
     private let resultLabel = NSTextField(labelWithString: "")
     private var originalProfile: TFTMACRuntimeProfile
     var onSave: ((TFTMACRuntimeProfile, TFTMACRuntimeProfile) -> Void)?
@@ -16,7 +17,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
     init(profile: TFTMACRuntimeProfile) {
         originalProfile = profile
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 580),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 610),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -39,6 +40,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
         select(originalProfile.asgDrawFlushInterval, in: flushButton)
         select(EngineLaunchPolicy.load(), in: policyButton)
         select(EngineCloseBehavior.load(), in: closeBehaviorButton)
+        select(IdleSuspendPreferences.loadTimeout(), in: idleSuspendButton)
         resultLabel.stringValue = "Changes are validated, logged, and applied on the next app launch."
     }
 
@@ -59,8 +61,10 @@ final class RuntimeSettingsWindowController: NSWindowController {
 
         policyButton.addItems(withTitles: EngineLaunchPolicy.allCases.map(\.displayName))
         closeBehaviorButton.addItems(withTitles: EngineCloseBehavior.allCases.map(\.displayName))
+        idleSuspendButton.addItems(withTitles: IdleSuspendTimeout.allCases.map(\.displayName))
         select(EngineLaunchPolicy.load(), in: policyButton)
         select(EngineCloseBehavior.load(), in: closeBehaviorButton)
+        select(IdleSuspendPreferences.loadTimeout(), in: idleSuspendButton)
 
         experimentButton.addItems(withTitles: RuntimeExperimentPreset.selectableCases.map(\.displayName))
         vCPUButton.addItems(withTitles: TFTMACRuntimeProfile.supportedVCPU.map(String.init))
@@ -80,6 +84,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
         let grid = NSGridView(views: [
             [fieldLabel("Engine startup mode"), policyButton],
             [fieldLabel("When window closes"), closeBehaviorButton],
+            [fieldLabel("Idle suspend (vCPU sleep)"), idleSuspendButton],
             [fieldLabel("Launch experiment"), experimentButton],
             [fieldLabel("Virtual CPUs"), vCPUButton],
             [fieldLabel("Android RAM"), ramButton],
@@ -154,6 +159,10 @@ final class RuntimeSettingsWindowController: NSWindowController {
         button.selectItem(withTitle: behavior.displayName)
     }
 
+    private func select(_ timeout: IdleSuspendTimeout, in button: NSPopUpButton) {
+        button.selectItem(withTitle: timeout.displayName)
+    }
+
     @objc private func restoreBaseline(_ sender: Any?) {
         let baseline = TFTMACRuntimeProfile.playable
         select(.control, in: experimentButton)
@@ -163,6 +172,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
         select(baseline.asgDrawFlushInterval, in: flushButton)
         select(EngineLaunchPolicy.alwaysBackground, in: policyButton)
         select(EngineCloseBehavior.keepWarm, in: closeBehaviorButton)
+        select(IdleSuspendTimeout.fiveMinutes, in: idleSuspendButton)
         resultLabel.stringValue = "Proven baseline values selected. Save to keep them."
     }
 
@@ -174,6 +184,10 @@ final class RuntimeSettingsWindowController: NSWindowController {
         if let closeTitle = closeBehaviorButton.titleOfSelectedItem,
            let closeBehavior = EngineCloseBehavior.allCases.first(where: { $0.displayName == closeTitle }) {
             closeBehavior.save()
+        }
+        if let idleTitle = idleSuspendButton.titleOfSelectedItem,
+           let timeout = IdleSuspendTimeout.allCases.first(where: { $0.displayName == idleTitle }) {
+            IdleSuspendPreferences.saveTimeout(timeout)
         }
 
         guard let preset = selectedExperimentPreset() else { return }

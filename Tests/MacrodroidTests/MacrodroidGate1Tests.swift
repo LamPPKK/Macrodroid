@@ -244,6 +244,22 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=
         XCTAssertFalse(fileResult.isAPK)
         XCTAssertTrue(fileResult.success)
         XCTAssertEqual(fileResult.destination, "/sdcard/Download/photo.jpg")
+
+        // Validate IdleSuspendTimeout and IdleSuspendPreferences
+        XCTAssertEqual(IdleSuspendTimeout.allCases.count, 5)
+        XCTAssertEqual(IdleSuspendTimeout.immediately.seconds, 0)
+        XCTAssertEqual(IdleSuspendTimeout.oneMinute.seconds, 60)
+        XCTAssertEqual(IdleSuspendTimeout.fiveMinutes.seconds, 300)
+        XCTAssertEqual(IdleSuspendTimeout.fifteenMinutes.seconds, 900)
+        XCTAssertNil(IdleSuspendTimeout.never.seconds)
+
+        let idleDefaults = UserDefaults(suiteName: "test.idle.suspend")!
+        idleDefaults.removeObject(forKey: IdleSuspendPreferences.preferenceKey)
+        XCTAssertEqual(IdleSuspendPreferences.loadTimeout(defaults: idleDefaults), .fiveMinutes)
+        IdleSuspendPreferences.saveTimeout(.immediately, defaults: idleDefaults)
+        XCTAssertEqual(IdleSuspendPreferences.loadTimeout(defaults: idleDefaults), .immediately)
+        IdleSuspendPreferences.saveTimeout(.never, defaults: idleDefaults)
+        XCTAssertEqual(IdleSuspendPreferences.loadTimeout(defaults: idleDefaults), .never)
     }
 
     func testRapidCombatExperimentHasExactlyTwoNamedPresets() {
