@@ -321,13 +321,13 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=
             let script = AppShortcutManager.generateLauncherScript(package: "com.test.game")
             XCTAssertTrue(script.contains("#!/bin/sh"))
             XCTAssertTrue(script.contains("macrodroid://launch?pkg=com.test.game"))
-            XCTAssertTrue(script.contains("open -b \"com.lamppkk.macrodroid\" --args --launch-pkg \"com.test.game\""))
+            XCTAssertTrue(script.contains("open -b \"com.macrodroid\" --args --launch-pkg \"com.test.game\""))
 
             // 3. Info.plist Generation
             let plistStr = AppShortcutManager.generateInfoPlist(name: "My:Cool/App", package: "com.my-cool app.game", version: "2.5.1")
             XCTAssertTrue(plistStr.contains("<key>CFBundleName</key>"))
             XCTAssertTrue(plistStr.contains("<string>My-Cool-App</string>"))
-            XCTAssertTrue(plistStr.contains("<string>com.lamppkk.macrodroid.app.com.my_cool_app.game</string>"))
+            XCTAssertTrue(plistStr.contains("<string>com.macrodroid.app.com.my_cool_app.game</string>"))
             XCTAssertTrue(plistStr.contains("<string>2.5.1</string>"))
             XCTAssertTrue(plistStr.contains("<key>CFBundleExecutable</key>"))
             XCTAssertTrue(plistStr.contains("<string>AppLauncher</string>"))
@@ -366,7 +366,7 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=
                 if let data = try? Data(contentsOf: infoPlistFile),
                    let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] {
                     XCTAssertEqual(dict["CFBundleDisplayName"] as? String, "Test Game")
-                    XCTAssertEqual(dict["CFBundleIdentifier"] as? String, "com.lamppkk.macrodroid.app.com.test.game")
+                    XCTAssertEqual(dict["CFBundleIdentifier"] as? String, "com.macrodroid.app.com.test.game")
                     XCTAssertEqual(dict["CFBundleExecutable"] as? String, "AppLauncher")
                 } else {
                     XCTFail("Failed to deserialize generated Info.plist")

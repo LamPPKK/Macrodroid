@@ -11,7 +11,7 @@
     <key>CFBundleIconFile</key>
     <string>Macrodroid.icns</string>
     <key>CFBundleIdentifier</key>
-    <string>com.lamppkk.macrodroid</string>
+    <string>com.macrodroid</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

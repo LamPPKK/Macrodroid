@@ -242,7 +242,7 @@ public enum AppShortcutManager {
         """
 #!/bin/sh
 # Open Android app through Macrodroid URL scheme or CLI
-exec open "macrodroid://launch?pkg=\(package)" || open -b "com.lamppkk.macrodroid" --args --launch-pkg "\(package)"
+exec open "macrodroid://launch?pkg=\(package)" || open -b "com.macrodroid" --args --launch-pkg "\(package)"
 """
     }
 
@@ -273,7 +273,7 @@ exec open "macrodroid://launch?pkg=\(package)" || open -b "com.lamppkk.macrodroi
     <key>CFBundleExecutable</key>
     <string>AppLauncher</string>
     <key>CFBundleIdentifier</key>
-    <string>com.lamppkk.macrodroid.app.\(xmlEscapedPkg)</string>
+    <string>com.macrodroid.app.\(xmlEscapedPkg)</string>
     <key>CFBundleName</key>
     <string>\(xmlEscapedName)</string>
     <key>CFBundleDisplayName</key>
@@ -310,7 +310,7 @@ exec open "macrodroid://launch?pkg=\(package)" || open -b "com.lamppkk.macrodroi
                     let sanitizedPkg = bundleIdentifier
                         .replacingOccurrences(of: "-", with: "_")
                         .replacingOccurrences(of: " ", with: "_")
-                    if cfBundleId == "com.lamppkk.macrodroid.app.\(sanitizedPkg)" {
+                    if cfBundleId == "com.macrodroid.app.\(sanitizedPkg)" {
                         try? FileManager.default.removeItem(at: item)
                     }
                 }

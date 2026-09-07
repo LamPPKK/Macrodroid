@@ -408,7 +408,7 @@ final class TFTMACNativeTelemetry: @unchecked Sendable {
     let sessionIdentifier: String
     let captureDirectory: URL
 
-    private let queue = DispatchQueue(label: "com.lamppkk.macrodroid.telemetry")
+    private let queue = DispatchQueue(label: "com.macrodroid.telemetry")
     private let configurationSHA256: String
     private let targetFPS: Int
     private var database: OpaquePointer?

@@ -8,7 +8,7 @@ Use an Apple Silicon Mac with macOS 15 or later, Xcode 26.6, zsh, Node.js 24, `j
 
 ## Rules
 
-- Preserve `com.lamppkk.macrodroid` as the application identity.
+- Preserve `com.macrodroid` as the application identity.
 - Preserve the stock Google Android Emulator as runtime authority unless a separately approved measured blocker requires a different architecture.
 - Do not add Riot APKs, credentials, Android userdata, tokens, runtime disks, or private session data to the repository.
 - Do not add hosted game feeds, APK repacking, re-signing, or binary patching.

@@ -56,7 +56,7 @@ done
 plutil -lint "$INFO" >/dev/null || fail "Info.plist is invalid"
 [[ "$(plutil -extract CFBundleDisplayName raw "$INFO")" == "Macrodroid" ]] || fail "unexpected app display name"
 [[ "$(plutil -extract CFBundleExecutable raw "$INFO")" == "Macrodroid" ]] || fail "unexpected app executable"
-[[ "$(plutil -extract CFBundleIdentifier raw "$INFO")" == "com.lamppkk.macrodroid" ]] || fail "unexpected bundle identifier"
+[[ "$(plutil -extract CFBundleIdentifier raw "$INFO")" == "com.macrodroid" ]] || fail "unexpected bundle identifier"
 readonly INFO_VERSION="$(plutil -extract CFBundleShortVersionString raw "$INFO")"
 readonly INFO_BUILD="$(plutil -extract CFBundleVersion raw "$INFO")"
 readonly AUTHORITY_VERSION="$(jq -r '.finalInstalledRelease.version' ssot/runtime-authority.json)"
