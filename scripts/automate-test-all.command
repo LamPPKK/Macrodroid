@@ -117,8 +117,10 @@ run_phase() {
   fi
 }
 
+TOTAL_RUN_PHASES=$([[ "$QUICK_MODE" == true ]] && echo 5 || echo 6)
+
 # 1. Environment & Required Tools
-run_phase 1 "$([[ "$QUICK_MODE" == true ]] && echo 4 || echo 5)" "Environment & Toolchain Integrity" \
+run_phase 1 "$TOTAL_RUN_PHASES" "Environment & Toolchain Integrity" \
   /bin/zsh -c '
     set -euo pipefail
     for tool in git jq node plutil grep shasum xcodebuild zsh; do
@@ -128,8 +130,12 @@ run_phase 1 "$([[ "$QUICK_MODE" == true ]] && echo 4 || echo 5)" "Environment & 
     plutil -lint "Macrodroid/Info.plist" >/dev/null
   '
 
-# 2. Scripts Syntax Integrity (zsh -n)
-run_phase 2 "$([[ "$QUICK_MODE" == true ]] && echo 4 || echo 5)" "Shell Scripts Syntax Validation" \
+# 2. SwiftLint Static Code Analysis
+run_phase 2 "$TOTAL_RUN_PHASES" "SwiftLint Static Code Analysis" \
+  /bin/zsh scripts/swiftlint.command
+
+# 3. Scripts Syntax Integrity (zsh -n)
+run_phase 3 "$TOTAL_RUN_PHASES" "Shell Scripts Syntax Validation" \
   /bin/zsh -c '
     set -euo pipefail
     while IFS= read -r script; do
@@ -137,8 +143,8 @@ run_phase 2 "$([[ "$QUICK_MODE" == true ]] && echo 4 || echo 5)" "Shell Scripts 
     done < <(find scripts -type f \( -name "*.command" -o -name "*.sh" \) | LC_ALL=C sort)
   '
 
-# 3. Node & Database Engineering Lab Self-Tests
-run_phase 3 "$([[ "$QUICK_MODE" == true ]] && echo 4 || echo 5)" "Direct Control & Engineering Lab Self-Tests" \
+# 4. Node & Database Engineering Lab Self-Tests
+run_phase 4 "$TOTAL_RUN_PHASES" "Direct Control & Engineering Lab Self-Tests" \
   /bin/zsh -c '
     set -euo pipefail
     node --check tools/macrodroid-direct-control.mjs >/dev/null
@@ -146,13 +152,13 @@ run_phase 3 "$([[ "$QUICK_MODE" == true ]] && echo 4 || echo 5)" "Direct Control
     node tools/macrodroid-direct-control.mjs lab-selftest >/dev/null
   '
 
-# 4. Native Swift Unit Tests (XCTest Debug Target)
-run_phase 4 "$([[ "$QUICK_MODE" == true ]] && echo 4 || echo 5)" "Native Swift Unit Tests (43 Native Tests)" \
+# 5. Native Swift Unit Tests (XCTest Debug Target)
+run_phase 5 "$TOTAL_RUN_PHASES" "Native Swift Unit Tests (43 Native Tests)" \
   /bin/zsh scripts/test-native-app.command
 
-# 5. Release Build & Full Repository Verification Contract (if not --quick)
+# 6. Release Build & Full Repository Verification Contract (if not --quick)
 if [[ "$QUICK_MODE" == false ]]; then
-  run_phase 5 5 "Full Project Contract & Release Verification" \
+  run_phase 6 6 "Full Project Contract & Release Verification" \
     /bin/zsh scripts/verify-macrodroid.command
 fi
 

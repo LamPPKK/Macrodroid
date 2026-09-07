@@ -18,6 +18,10 @@ struct PipelineLogSignals: Equatable, Sendable {
             fenceTimeoutCount: lhs.fenceTimeoutCount + rhs.fenceTimeoutCount
         )
     }
+
+    static func += (lhs: inout Self, rhs: Self) {
+        lhs = lhs + rhs
+    }
 }
 
 enum TelemetrySignalClassifier {

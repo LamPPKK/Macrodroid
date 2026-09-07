@@ -4598,7 +4598,7 @@ actor TFTMACRuntimeService {
             let lines = String(decoding: data, as: UTF8.self).split(whereSeparator: \.isNewline)
             var signals = PipelineLogSignals()
             for line in lines {
-                signals = signals + TelemetrySignalClassifier.pipelineSignals(in: String(line))
+                signals += TelemetrySignalClassifier.pipelineSignals(in: String(line))
             }
             return PipelineLogAggregate(
                 sourceStream: sourceStream,
