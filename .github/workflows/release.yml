@@ -1,0 +1,133 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag name (e.g. v2.3.0)'
+        required: false
+        default: 'v2.3.0'
+      is_draft:
+        description: 'Mark as Draft release'
+        type: boolean
+        required: false
+        default: false
+      is_prerelease:
+        description: 'Mark as Pre-release'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build & Package Release
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install validation and build dependencies
+        run: |
+          command -v jq >/dev/null || brew install jq
+          command -v rg >/dev/null || brew install ripgrep
+          command -v swiftlint >/dev/null || brew install swiftlint
+
+      - name: Verify Environment & Run Automated Test Suite
+        run: /bin/zsh scripts/test-all.command
+
+      - name: Build Native Release App (Universal arm64 & x86_64)
+        run: /bin/zsh scripts/build-native-app.command
+
+      - name: Package Release Assets (DMG, ZIP, Checksums)
+        id: package
+        run: |
+          TAG="${{ github.ref_name || inputs.tag_name || 'v2.3.0' }}"
+          # Clean tag if triggered on a branch
+          if [[ "$TAG" == "master" || -z "$TAG" ]]; then
+            TAG="v2.3.0"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+          mkdir -p release-artifacts
+
+          # 1. Zip package
+          echo "Packaging ZIP..."
+          /usr/bin/ditto -c -k --keepParent "dist/Macrodroid.app" "release-artifacts/Macrodroid-${TAG}-macOS-Universal.zip"
+
+          # 2. DMG package with Applications link
+          echo "Packaging DMG..."
+          DMG_STAGE="$(mktemp -d /tmp/macrodroid-dmg-stage.XXXXXX)"
+          /bin/cp -R "dist/Macrodroid.app" "${DMG_STAGE}/"
+          /bin/ln -s /Applications "${DMG_STAGE}/Applications"
+          /usr/bin/hdiutil create \
+            -volname "Macrodroid" \
+            -srcfolder "${DMG_STAGE}" \
+            -ov \
+            -format UDZO \
+            "release-artifacts/Macrodroid-${TAG}-macOS-Universal.dmg"
+          /bin/rm -rf "${DMG_STAGE}"
+
+          # 3. Compute SHA256 checksums
+          echo "Computing SHA256 checksums..."
+          (
+            cd release-artifacts
+            /usr/bin/shasum -a 256 "Macrodroid-${TAG}-macOS-Universal.zip" "Macrodroid-${TAG}-macOS-Universal.dmg" > SHA256SUMS.txt
+            cat SHA256SUMS.txt
+          )
+
+      - name: Upload Artifacts to Workflow Run
+        uses: actions/upload-artifact@v4
+        with:
+          name: Macrodroid-${{ steps.package.outputs.tag }}-macOS
+          path: release-artifacts/*
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        with:
+          tag_name: ${{ steps.package.outputs.tag }}
+          name: Macrodroid ${{ steps.package.outputs.tag }}
+          draft: ${{ inputs.is_draft || false }}
+          prerelease: ${{ inputs.is_prerelease || false }}
+          files: |
+            release-artifacts/Macrodroid-*-macOS-Universal.zip
+            release-artifacts/Macrodroid-*-macOS-Universal.dmg
+            release-artifacts/SHA256SUMS.txt
+          generate_release_notes: true
+          body: |
+            ## 🤖 Macrodroid macOS Release ${{ steps.package.outputs.tag }}
+
+            High-performance native Android gaming & application subsystem for Apple Silicon & Intel Macs.
+
+            ### ✨ Key Features & Highlights
+            - **In-Game Window HUD (`MainWindowController`)**: Sleek titlebar glass toolbar with FPS meter, emerald pulse dot, and quick-action controls.
+            - **16:9 Landscape ↔ 9:16 Portrait Screen Rotation (`⌘ + R`)**: Smooth animated aspect ratio resizing and constraint management.
+            - **Lossless Screenshot Capture (`⌘ + S`)**: Crystal-clear Metal buffer capture saved to Desktop & Clipboard with full-screen shutter flash.
+            - **On-Screen Keymapping Overlay (`⌘ + K`)**: D-Pad (`W`,`A`,`S`,`D`), Actions (`Space`, `Q`,`E`,`R`, `1`,`2`) with responsive tactile press animations.
+            - **Mouse Aim Lock (`⌥ Option`)**: Cursor capture for FPS and action games.
+            - **Smart Idle Suspend**: Auto-pauses guest vCPU to drop Mac host CPU to 0% and maximize battery life.
+            - **Two-Way Clipboard Synchronization**: Real-time bidirectional clipboard sync between macOS and Android.
+            - **Drag & Drop File Sharing**: Drag files or APKs straight into game windows.
+            - **Spotlight & Dock Per-App Shortcuts**: Launch installed Android apps as independent Mac apps.
+            - **Headless Engine & Notification Mirroring**: Android notifications forwarded directly to macOS User Notifications.
+
+            ### 📦 Downloads & Verification
+            | Artifact | Format | Description |
+            | :--- | :--- | :--- |
+            | `Macrodroid-${{ steps.package.outputs.tag }}-macOS-Universal.dmg` | Apple Disk Image (DMG) | Drag-and-drop installer for Applications |
+            | `Macrodroid-${{ steps.package.outputs.tag }}-macOS-Universal.zip` | ZIP Archive | Standalone portable bundle |
+            | `SHA256SUMS.txt` | Text | SHA-256 Checksums |

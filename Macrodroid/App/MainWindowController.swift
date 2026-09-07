@@ -89,8 +89,11 @@ final class HUDToastView: NSVisualEffectView {
                 context.timingFunction = CAMediaTimingFunction(name: .easeIn)
                 self.animator().alphaValue = 0.0
             }, completionHandler: {
-                if self.alphaValue <= 0.05 {
-                    self.removeFromSuperview()
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if self.alphaValue <= 0.05 {
+                        self.removeFromSuperview()
+                    }
                 }
             })
         }

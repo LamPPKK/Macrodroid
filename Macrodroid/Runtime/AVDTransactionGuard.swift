@@ -115,8 +115,9 @@ actor ClipboardSyncCoordinator {
         }
         self.lastChangeCount = newCount
         return true
-        #endif
+        #else
         return false
+        #endif
     }
 
     func checkMacPasteboard() async -> String? {
