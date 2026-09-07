@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 enum AVDTransactionRestoreDecision: Equatable, Sendable {
@@ -104,19 +105,16 @@ actor ClipboardSyncCoordinator {
         guard !text.isEmpty, text != lastSyncedText else { return false }
         lastSyncedText = text
         #if canImport(AppKit)
-        let newCount: Int? = await MainActor.run { () -> Int? in
+        let newCount: Int = await MainActor.run { () -> Int in
             let pb = NSPasteboard.general
             if pb.string(forType: .string) != text {
                 pb.clearContents()
                 pb.setString(text, forType: .string)
-                return pb.changeCount
             }
-            return nil
+            return pb.changeCount
         }
-        if let newCount {
-            self.lastChangeCount = newCount
-            return true
-        }
+        self.lastChangeCount = newCount
+        return true
         #endif
         return false
     }
@@ -204,5 +202,114 @@ public enum IdleSuspendPreferences {
 
     public static func saveTimeout(_ timeout: IdleSuspendTimeout, defaults: UserDefaults = .standard) {
         defaults.set(timeout.rawValue, forKey: preferenceKey)
+    }
+}
+
+// MARK: - AppShortcutManager (WSA-Style Native macOS Shortcuts & Spotlight Integration)
+
+@MainActor
+public enum AppShortcutManager {
+    public static var shortcutsDirectory: URL {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return home.appendingPathComponent("Applications/Macrodroid Apps", isDirectory: true)
+    }
+
+    public static func parseLaunchURL(_ url: URL) -> String? {
+        guard url.scheme == "macrodroid", url.host == "launch" else { return nil }
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        return components.queryItems?.first(where: { $0.name == "pkg" || $0.name == "package" })?.value
+    }
+
+    public static func generateLauncherScript(package: String) -> String {
+        """
+#!/bin/sh
+# Open Android app through Macrodroid URL scheme or CLI
+exec open "macrodroid://launch?pkg=\(package)" || open -b "com.lamppkk.macrodroid" --args --launch-pkg "\(package)"
+"""
+    }
+
+    public static func generateInfoPlist(name: String, package: String, version: String) -> String {
+        let safeName = name
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        let sanitizedPkg = package
+            .replacingOccurrences(of: "-", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
+        return """
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>AppLauncher</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.lamppkk.macrodroid.app.\(sanitizedPkg)</string>
+    <key>CFBundleName</key>
+    <string>\(safeName)</string>
+    <key>CFBundleDisplayName</key>
+    <string>\(safeName)</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>\(version)</string>
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>
+"""
+    }
+
+    @discardableResult
+    public static func createShortcut(
+        name: String,
+        bundleIdentifier: String,
+        version: String = "1.0",
+        customIcon: NSImage? = nil,
+        destinationDirectory: URL? = nil
+    ) -> URL? {
+        let dir = destinationDirectory ?? shortcutsDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let safeName = name
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        let appBundleURL = dir.appendingPathComponent("\(safeName).app", isDirectory: true)
+
+        let contentsURL = appBundleURL.appendingPathComponent("Contents", isDirectory: true)
+        let macosURL = contentsURL.appendingPathComponent("MacOS", isDirectory: true)
+        let resourcesURL = contentsURL.appendingPathComponent("Resources", isDirectory: true)
+
+        try? FileManager.default.createDirectory(at: macosURL, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: resourcesURL, withIntermediateDirectories: true)
+
+        let infoPlistContent = generateInfoPlist(name: name, package: bundleIdentifier, version: version)
+        let infoPlistURL = contentsURL.appendingPathComponent("Info.plist")
+        try? infoPlistContent.write(to: infoPlistURL, atomically: true, encoding: .utf8)
+
+        let launcherScript = generateLauncherScript(package: bundleIdentifier)
+        let launcherURL = macosURL.appendingPathComponent("AppLauncher")
+        try? launcherScript.write(to: launcherURL, atomically: true, encoding: .utf8)
+
+        var attrs = (try? FileManager.default.attributesOfItem(atPath: launcherURL.path)) ?? [:]
+        attrs[.posixPermissions] = 0o755
+        try? FileManager.default.setAttributes(attrs, ofItemAtPath: launcherURL.path)
+
+        if let icon = customIcon {
+            NSWorkspace.shared.setIcon(icon, forFile: appBundleURL.path, options: [])
+        } else {
+            let iconURL = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Application Support/Macrodroid/Icons/\(bundleIdentifier).png")
+            if let iconImg = NSImage(contentsOf: iconURL) {
+                NSWorkspace.shared.setIcon(iconImg, forFile: appBundleURL.path, options: [])
+            }
+        }
+
+        return appBundleURL
+    }
+
+    public static func revealShortcutsInFinder(directory: URL? = nil) {
+        let dir = directory ?? shortcutsDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(dir)
     }
 }
