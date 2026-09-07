@@ -177,6 +177,9 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             controller.emulatorView.onHostPresentationWindow = { [weak self] sample in
                 self?.runtimeController?.recordHostPresentation(sample)
             }
+            controller.emulatorView.onFilesDropped = { [weak self] urls in
+                self?.handleDroppedFiles(urls)
+            }
 
             if let window = controller.window {
                 NotificationCenter.default.addObserver(
@@ -474,6 +477,42 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             url: URL(fileURLWithPath: "/tmp")
         )
         openAppWindow(mode: .tft, profile: activeProfile, app: targetApp)
+    }
+
+    // MARK: - Drag & Drop File Sharing
+
+    private func handleDroppedFiles(_ urls: [URL]) {
+        guard let runtimeController else { return }
+        runtimeController.importDroppedFiles(urls: urls) { results in
+            Task { @MainActor in
+                let successfulCount = results.filter { $0.success }.count
+                let apks = results.filter { $0.isAPK }
+                let regularFiles = results.filter { !$0.isAPK }
+
+                let content = UNMutableNotificationContent()
+                content.title = "File Transfer Complete"
+                if !apks.isEmpty && regularFiles.isEmpty {
+                    let apkNames = apks.map { $0.filename }.joined(separator: ", ")
+                    content.body = apks.allSatisfy { $0.success }
+                        ? "Installed: \(apkNames)"
+                        : "Failed to install some APKs"
+                } else if apks.isEmpty && !regularFiles.isEmpty {
+                    content.body = regularFiles.allSatisfy { $0.success }
+                        ? "Saved \(regularFiles.count) file(s) to Android Downloads"
+                        : "Some files failed to transfer"
+                } else {
+                    content.body = "\(successfulCount) of \(results.count) items processed successfully"
+                }
+                content.sound = .default
+
+                let req = UNNotificationRequest(
+                    identifier: "transfer_\(Int(Date().timeIntervalSince1970))",
+                    content: content,
+                    trigger: nil
+                )
+                UNUserNotificationCenter.current().add(req)
+            }
+        }
     }
 
     // MARK: - UNUserNotificationCenterDelegate

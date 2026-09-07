@@ -146,3 +146,19 @@ actor ClipboardSyncCoordinator {
         lastSyncedText
     }
 }
+
+public struct FileTransferResult: Sendable, Equatable {
+    public let filename: String
+    public let isAPK: Bool
+    public let success: Bool
+    public let destination: String
+    public let message: String
+
+    public init(filename: String, isAPK: Bool, success: Bool, destination: String, message: String) {
+        self.filename = filename
+        self.isAPK = isAPK
+        self.success = success
+        self.destination = destination
+        self.message = message
+    }
+}

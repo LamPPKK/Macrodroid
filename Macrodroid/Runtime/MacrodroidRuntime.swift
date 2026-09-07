@@ -5070,6 +5070,80 @@ actor TFTMACRuntimeService {
         )
     }
 
+    func importFiles(urls: [URL]) async -> [FileTransferResult] {
+        guard let paths = self.paths else {
+            return urls.map { url in
+                FileTransferResult(
+                    filename: url.lastPathComponent,
+                    isAPK: url.pathExtension.lowercased() == "apk",
+                    success: false,
+                    destination: "",
+                    message: "Runtime paths not initialized"
+                )
+            }
+        }
+
+        var results: [FileTransferResult] = []
+        for url in urls {
+            let filename = url.lastPathComponent
+            let isAPK = url.pathExtension.lowercased() == "apk"
+            if isAPK {
+                do {
+                    let res = try Self.adb(paths: paths, ["install", "-r", url.path], timeout: 120)
+                    let success = res.status == 0 && res.output.localizedCaseInsensitiveContains("Success")
+                    results.append(FileTransferResult(
+                        filename: filename,
+                        isAPK: true,
+                        success: success,
+                        destination: "Application",
+                        message: success ? "Installed successfully" : res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ))
+                    if success {
+                        await recordMarker("APK_INSTALLED_VIA_DRAG_DROP:\(filename)")
+                    }
+                } catch {
+                    results.append(FileTransferResult(
+                        filename: filename,
+                        isAPK: true,
+                        success: false,
+                        destination: "Application",
+                        message: error.localizedDescription
+                    ))
+                }
+            } else {
+                let guestPath = "/sdcard/Download/\(filename)"
+                do {
+                    let res = try Self.adb(paths: paths, ["push", url.path, guestPath], timeout: 60)
+                    let success = res.status == 0
+                    if success {
+                        _ = try? Self.adb(
+                            paths: paths,
+                            ["shell", "am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE", "-d", "file://\(guestPath)"],
+                            timeout: 10
+                        )
+                        await recordMarker("FILE_PUSHED_VIA_DRAG_DROP:\(filename)")
+                    }
+                    results.append(FileTransferResult(
+                        filename: filename,
+                        isAPK: false,
+                        success: success,
+                        destination: guestPath,
+                        message: success ? "Pushed to Downloads" : res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ))
+                } catch {
+                    results.append(FileTransferResult(
+                        filename: filename,
+                        isAPK: false,
+                        success: false,
+                        destination: guestPath,
+                        message: error.localizedDescription
+                    ))
+                }
+            }
+        }
+        return results
+    }
+
     private func monitorGuestNotifications(paths: TFTMACRuntimePaths) async throws {
         // Wait until guest finishes booting
         while !stopping {
@@ -5384,6 +5458,15 @@ final class TFTMACRuntimeController {
 
     func postTestGuestNotification(title: String, body: String) {
         Task { await service.postTestNotification(title: title, body: body) }
+    }
+
+    func importDroppedFiles(urls: [URL], completion: ((@Sendable ([FileTransferResult]) -> Void))? = nil) {
+        Task { [service] in
+            let results = await service.importFiles(urls: urls)
+            if let completion {
+                completion(results)
+            }
+        }
     }
 
     func stop() async {

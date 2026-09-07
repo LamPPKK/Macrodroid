@@ -158,6 +158,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     var onPresentationSample: ((PresentationSample) -> Void)?
     var onHostPresentationWindow: ((HostPresentationWindow) -> Void)?
     var onFPSChanged: ((Double) -> Void)?
+    var onFilesDropped: (([URL]) -> Void)?
 
     private let mailbox: LatestFrameMailbox
     private let commandQueue: MTLCommandQueue
@@ -177,6 +178,8 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     private var primaryTouchSequence = PrimaryTouchSequence()
     private let statusLabel = NSTextField(labelWithString: "Preparing native Android runtime…")
     private let fpsLabel = NSTextField(labelWithString: "0 FPS")
+    private let dropOverlayView = NSView()
+    private let dropLabel = NSTextField(labelWithString: "Drop files to transfer to Android\nor drop .apk to install")
 
     init(frame: NSRect, mailbox: LatestFrameMailbox) {
         guard let device = MTLCreateSystemDefaultDevice() else {
@@ -200,6 +203,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         isPaused = false
         clearColor = MTLClearColorMake(0.015, 0.018, 0.025, 1.0)
         delegate = self
+        registerForDraggedTypes([.fileURL])
         configureOverlays()
         updatePerformanceOverlay()
     }
@@ -320,6 +324,48 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         guard let text = NSPasteboard.general.string(forType: .string), !text.isEmpty else { return }
         onPasteInput?(text)
         onKeyboardInput?(String(text.prefix(1024)), nil)
+    }
+
+    // MARK: - Drag & Drop File Sharing
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let pboard = sender.draggingPasteboard
+        if let urls = pboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+           urls.contains(where: { $0.isFileURL }) {
+            dropOverlayView.isHidden = false
+            return .copy
+        }
+        return []
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let pboard = sender.draggingPasteboard
+        if let urls = pboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+           urls.contains(where: { $0.isFileURL }) {
+            return .copy
+        }
+        return []
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        dropOverlayView.isHidden = true
+    }
+
+    override func draggingEnded(_ sender: NSDraggingInfo) {
+        dropOverlayView.isHidden = true
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        dropOverlayView.isHidden = true
+        let pboard = sender.draggingPasteboard
+        if let urls = pboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            let fileURLs = urls.filter { $0.isFileURL }
+            if !fileURLs.isEmpty {
+                onFilesDropped?(fileURLs)
+                return true
+            }
+        }
+        return false
     }
 
     @discardableResult
@@ -466,6 +512,22 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         fpsLabel.isHidden = true
         addSubview(fpsLabel)
 
+        dropOverlayView.wantsLayer = true
+        dropOverlayView.layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.25).cgColor
+        dropOverlayView.layer?.borderColor = NSColor.systemBlue.cgColor
+        dropOverlayView.layer?.borderWidth = 3
+        dropOverlayView.layer?.cornerRadius = 12
+        dropOverlayView.translatesAutoresizingMaskIntoConstraints = false
+        dropOverlayView.isHidden = true
+        addSubview(dropOverlayView)
+
+        dropLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        dropLabel.textColor = .white
+        dropLabel.alignment = .center
+        dropLabel.maximumNumberOfLines = 2
+        dropLabel.translatesAutoresizingMaskIntoConstraints = false
+        dropOverlayView.addSubview(dropLabel)
+
         NSLayoutConstraint.activate([
             statusLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
             statusLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -474,7 +536,13 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             fpsLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
             fpsLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
             fpsLabel.widthAnchor.constraint(equalToConstant: 300),
-            fpsLabel.heightAnchor.constraint(equalToConstant: 46)
+            fpsLabel.heightAnchor.constraint(equalToConstant: 46),
+            dropOverlayView.topAnchor.constraint(equalTo: topAnchor, constant: 20),
+            dropOverlayView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -20),
+            dropOverlayView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+            dropOverlayView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
+            dropLabel.centerXAnchor.constraint(equalTo: dropOverlayView.centerXAnchor),
+            dropLabel.centerYAnchor.constraint(equalTo: dropOverlayView.centerYAnchor)
         ])
     }
 

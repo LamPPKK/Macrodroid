@@ -219,6 +219,31 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=
             clipExp.fulfill()
         }
         wait(for: [clipExp], timeout: 2.0)
+
+        // Validate FileTransferResult (Drag & Drop File Sharing)
+        let apkResult = FileTransferResult(
+            filename: "sample.apk",
+            isAPK: true,
+            success: true,
+            destination: "Application",
+            message: "Installed successfully"
+        )
+        XCTAssertTrue(apkResult.isAPK)
+        XCTAssertTrue(apkResult.success)
+        XCTAssertEqual(apkResult.filename, "sample.apk")
+        XCTAssertEqual(apkResult.destination, "Application")
+        XCTAssertEqual(apkResult.message, "Installed successfully")
+
+        let fileResult = FileTransferResult(
+            filename: "photo.jpg",
+            isAPK: false,
+            success: true,
+            destination: "/sdcard/Download/photo.jpg",
+            message: "Pushed to Downloads"
+        )
+        XCTAssertFalse(fileResult.isAPK)
+        XCTAssertTrue(fileResult.success)
+        XCTAssertEqual(fileResult.destination, "/sdcard/Download/photo.jpg")
     }
 
     func testRapidCombatExperimentHasExactlyTwoNamedPresets() {
