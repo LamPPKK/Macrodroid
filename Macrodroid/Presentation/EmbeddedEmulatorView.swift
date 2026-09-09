@@ -159,12 +159,34 @@ private final class NonInteractiveOverlayView: NSView {
 final class KeyBadgeView: NSView {
     private let label = NSTextField(labelWithString: "")
     let keyIdentifier: String
+    var keyCode: UInt16
+    var buttonId: UUID?
+    var normalizedX: Double
+    var normalizedY: Double
+    var isEditing: Bool = false {
+        didSet {
+            updateAppearance()
+        }
+    }
+    var onPositionChanged: ((Double, Double) -> Void)?
 
-    init(key: String) {
+    private var initialDragPoint: NSPoint?
+    private var initialFrameOrigin: NSPoint?
+
+    init(
+        key: String,
+        keyCode: UInt16 = 0,
+        normalizedX: Double = 0.5,
+        normalizedY: Double = 0.5,
+        buttonId: UUID? = nil
+    ) {
         self.keyIdentifier = key
+        self.keyCode = keyCode
+        self.normalizedX = normalizedX
+        self.normalizedY = normalizedY
+        self.buttonId = buttonId
         super.init(frame: .zero)
         wantsLayer = true
-        translatesAutoresizingMaskIntoConstraints = false
 
         layer?.backgroundColor = NSColor.black.withAlphaComponent(0.65).cgColor
         layer?.borderColor = NSColor(calibratedRed: 0.0, green: 0.85, blue: 1.0, alpha: 0.6).cgColor
@@ -193,6 +215,16 @@ final class KeyBadgeView: NSView {
         layer?.cornerRadius = min(bounds.width, bounds.height) / 2
     }
 
+    private func updateAppearance() {
+        if isEditing {
+            layer?.borderColor = NSColor.systemOrange.cgColor
+            layer?.borderWidth = 1.5
+        } else {
+            layer?.borderColor = NSColor(calibratedRed: 0.0, green: 0.85, blue: 1.0, alpha: 0.6).cgColor
+            layer?.borderWidth = 1.0
+        }
+    }
+
     func setHighlighted(_ highlighted: Bool) {
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.12
@@ -202,21 +234,65 @@ final class KeyBadgeView: NSView {
                 label.textColor = .black
             } else {
                 layer?.backgroundColor = NSColor.black.withAlphaComponent(0.65).cgColor
-                layer?.borderColor = NSColor(calibratedRed: 0.0, green: 0.85, blue: 1.0, alpha: 0.6).cgColor
+                layer?.borderColor = isEditing
+                    ? NSColor.systemOrange.cgColor
+                    : NSColor(calibratedRed: 0.0, green: 0.85, blue: 1.0, alpha: 0.6).cgColor
                 label.textColor = .white
             }
         }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEditing else { return }
+        initialDragPoint = event.locationInWindow
+        initialFrameOrigin = frame.origin
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard isEditing, let start = initialDragPoint, let origin = initialFrameOrigin, let parent = superview else { return }
+        let current = event.locationInWindow
+        let deltaX = current.x - start.x
+        let deltaY = current.y - start.y
+
+        var newOrigin = NSPoint(x: origin.x + deltaX, y: origin.y + deltaY)
+        newOrigin.x = max(0, min(parent.bounds.width - bounds.width, newOrigin.x))
+        newOrigin.y = max(0, min(parent.bounds.height - bounds.height, newOrigin.y))
+        frame.origin = newOrigin
+
+        let midX = frame.midX
+        let midY = frame.midY
+        let normX = max(0.0, min(1.0, midX / parent.bounds.width))
+        let normY = max(0.0, min(1.0, 1.0 - (midY / parent.bounds.height)))
+        self.normalizedX = normX
+        self.normalizedY = normY
+        onPositionChanged?(normX, normY)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard isEditing else { return }
+        initialDragPoint = nil
+        initialFrameOrigin = nil
     }
 }
 
 @MainActor
 final class KeymappingOverlayView: NSView {
+    private(set) var profile: KeymapProfile
     private var badges: [String: KeyBadgeView] = [:]
+    private let hintView = NSVisualEffectView()
+    private let hintLabel = NSTextField(labelWithString: "⌨️ KEYMAP OVERLAY · Press ⌘K to toggle · ⌥⌘K to edit")
+
+    var isEditing: Bool = false {
+        didSet {
+            updateEditingState()
+        }
+    }
 
     override init(frame frameRect: NSRect) {
+        self.profile = KeymapProfile.defaultPreset(package: "default", appName: "Game")
         super.init(frame: frameRect)
         translatesAutoresizingMaskIntoConstraints = false
-        setupOverlay()
+        setupOverlayUI()
     }
 
     required init?(coder: NSCoder) {
@@ -224,25 +300,13 @@ final class KeymappingOverlayView: NSView {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        nil // Pass-through so overlay never blocks game interaction
+        if !isEditing {
+            return nil
+        }
+        return super.hitTest(point)
     }
 
-    private func setupOverlay() {
-        let dpadKeys = ["W", "A", "S", "D"]
-        for key in dpadKeys {
-            let badge = KeyBadgeView(key: key)
-            badges[key] = badge
-            addSubview(badge)
-        }
-
-        let actionKeys = ["Q", "E", "R", "SPACE", "1", "2"]
-        for key in actionKeys {
-            let badge = KeyBadgeView(key: key)
-            badges[key] = badge
-            addSubview(badge)
-        }
-
-        let hintView = NSVisualEffectView()
+    private func setupOverlayUI() {
         hintView.material = .hudWindow
         hintView.blendingMode = .withinWindow
         hintView.state = .active
@@ -251,7 +315,6 @@ final class KeymappingOverlayView: NSView {
         hintView.layer?.masksToBounds = true
         hintView.translatesAutoresizingMaskIntoConstraints = false
 
-        let hintLabel = NSTextField(labelWithString: "⌨️ KEYMAP OVERLAY · Press ⌘K to toggle")
         hintLabel.font = .systemFont(ofSize: 11, weight: .semibold)
         hintLabel.textColor = NSColor.white.withAlphaComponent(0.9)
         hintLabel.alignment = .center
@@ -259,79 +322,123 @@ final class KeymappingOverlayView: NSView {
         hintView.addSubview(hintLabel)
         addSubview(hintView)
 
-        guard let wBadge = badges["W"],
-              let aBadge = badges["A"],
-              let sBadge = badges["S"],
-              let dBadge = badges["D"],
-              let qBadge = badges["Q"],
-              let eBadge = badges["E"],
-              let rBadge = badges["R"],
-              let spaceBadge = badges["SPACE"],
-              let oneBadge = badges["1"],
-              let twoBadge = badges["2"] else { return }
-
-        let badgeSize: CGFloat = 38
-        let spaceWidth: CGFloat = 96
-        let spaceHeight: CGFloat = 32
-
         NSLayoutConstraint.activate([
             hintView.topAnchor.constraint(equalTo: topAnchor, constant: 16),
             hintView.centerXAnchor.constraint(equalTo: centerXAnchor),
             hintLabel.topAnchor.constraint(equalTo: hintView.topAnchor, constant: 4),
             hintLabel.bottomAnchor.constraint(equalTo: hintView.bottomAnchor, constant: -4),
             hintLabel.leadingAnchor.constraint(equalTo: hintView.leadingAnchor, constant: 12),
-            hintLabel.trailingAnchor.constraint(equalTo: hintView.trailingAnchor, constant: -12),
-
-            sBadge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 80),
-            sBadge.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -50),
-            sBadge.widthAnchor.constraint(equalToConstant: badgeSize),
-            sBadge.heightAnchor.constraint(equalToConstant: badgeSize),
-
-            wBadge.centerXAnchor.constraint(equalTo: sBadge.centerXAnchor),
-            wBadge.bottomAnchor.constraint(equalTo: sBadge.topAnchor, constant: -8),
-            wBadge.widthAnchor.constraint(equalToConstant: badgeSize),
-            wBadge.heightAnchor.constraint(equalToConstant: badgeSize),
-
-            aBadge.trailingAnchor.constraint(equalTo: sBadge.leadingAnchor, constant: -8),
-            aBadge.centerYAnchor.constraint(equalTo: sBadge.centerYAnchor),
-            aBadge.widthAnchor.constraint(equalToConstant: badgeSize),
-            aBadge.heightAnchor.constraint(equalToConstant: badgeSize),
-
-            dBadge.leadingAnchor.constraint(equalTo: sBadge.trailingAnchor, constant: 8),
-            dBadge.centerYAnchor.constraint(equalTo: sBadge.centerYAnchor),
-            dBadge.widthAnchor.constraint(equalToConstant: badgeSize),
-            dBadge.heightAnchor.constraint(equalToConstant: badgeSize),
-
-            spaceBadge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -60),
-            spaceBadge.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -40),
-            spaceBadge.widthAnchor.constraint(equalToConstant: spaceWidth),
-            spaceBadge.heightAnchor.constraint(equalToConstant: spaceHeight),
-
-            eBadge.centerXAnchor.constraint(equalTo: spaceBadge.centerXAnchor),
-            eBadge.bottomAnchor.constraint(equalTo: spaceBadge.topAnchor, constant: -16),
-            eBadge.widthAnchor.constraint(equalToConstant: badgeSize),
-            eBadge.heightAnchor.constraint(equalToConstant: badgeSize),
-
-            qBadge.trailingAnchor.constraint(equalTo: eBadge.leadingAnchor, constant: -12),
-            qBadge.centerYAnchor.constraint(equalTo: eBadge.centerYAnchor),
-            qBadge.widthAnchor.constraint(equalToConstant: badgeSize),
-            qBadge.heightAnchor.constraint(equalToConstant: badgeSize),
-
-            rBadge.leadingAnchor.constraint(equalTo: eBadge.trailingAnchor, constant: 12),
-            rBadge.centerYAnchor.constraint(equalTo: eBadge.centerYAnchor),
-            rBadge.widthAnchor.constraint(equalToConstant: badgeSize),
-            rBadge.heightAnchor.constraint(equalToConstant: badgeSize),
-
-            oneBadge.centerXAnchor.constraint(equalTo: qBadge.centerXAnchor),
-            oneBadge.bottomAnchor.constraint(equalTo: qBadge.topAnchor, constant: -10),
-            oneBadge.widthAnchor.constraint(equalToConstant: 32),
-            oneBadge.heightAnchor.constraint(equalToConstant: 32),
-
-            twoBadge.centerXAnchor.constraint(equalTo: rBadge.centerXAnchor),
-            twoBadge.bottomAnchor.constraint(equalTo: rBadge.topAnchor, constant: -10),
-            twoBadge.widthAnchor.constraint(equalToConstant: 32),
-            twoBadge.heightAnchor.constraint(equalToConstant: 32)
+            hintLabel.trailingAnchor.constraint(equalTo: hintView.trailingAnchor, constant: -12)
         ])
+
+        rebuildBadges()
+    }
+
+    func loadProfile(_ newProfile: KeymapProfile) {
+        self.profile = newProfile
+        alphaValue = CGFloat(newProfile.overlayOpacity)
+        rebuildBadges()
+    }
+
+    private func rebuildBadges() {
+        for (_, badge) in badges {
+            badge.removeFromSuperview()
+        }
+        badges.removeAll()
+
+        for btn in profile.buttons {
+            let badge = KeyBadgeView(
+                key: btn.key,
+                keyCode: btn.keyCode,
+                normalizedX: btn.normalizedX,
+                normalizedY: btn.normalizedY,
+                buttonId: btn.id
+            )
+            badge.isEditing = isEditing
+            let id = btn.id
+            badge.onPositionChanged = { [weak self] normX, normY in
+                guard let self else { return }
+                if let idx = self.profile.buttons.firstIndex(where: { $0.id == id }) {
+                    self.profile.buttons[idx].normalizedX = normX
+                    self.profile.buttons[idx].normalizedY = normY
+                }
+            }
+            badges[btn.key] = badge
+            addSubview(badge)
+        }
+
+        if let dpad = profile.dpad {
+            let dpadOffset: Double = 0.05
+            let dpadConfigs: [(key: String, code: UInt16, offX: Double, offY: Double)] = [
+                ("W", dpad.wKeyCode, 0.0, -dpadOffset),
+                ("A", dpad.aKeyCode, -dpadOffset, 0.0),
+                ("S", dpad.sKeyCode, 0.0, dpadOffset),
+                ("D", dpad.dKeyCode, dpadOffset, 0.0)
+            ]
+            for (k, code, offX, offY) in dpadConfigs {
+                let badge = KeyBadgeView(
+                    key: k,
+                    keyCode: code,
+                    normalizedX: max(0.05, min(0.95, dpad.normalizedCenterX + offX)),
+                    normalizedY: max(0.05, min(0.95, dpad.normalizedCenterY + offY))
+                )
+                badge.isEditing = isEditing
+                badges[k] = badge
+                addSubview(badge)
+            }
+        }
+
+        layoutBadges()
+    }
+
+    override func layout() {
+        super.layout()
+        layoutBadges()
+    }
+
+    private func layoutBadges() {
+        let mapper = ViewportMapper(
+            sourceSize: CGSize(width: FrameContract.width, height: FrameContract.height),
+            viewportSize: bounds.size
+        )
+        let displayedRect = mapper.displayedRect
+        guard displayedRect.width > 0, displayedRect.height > 0 else { return }
+
+        for (_, badge) in badges {
+            let badgeSize: CGFloat = badge.keyIdentifier == "SPACE" ? 72 : 36
+            let badgeHeight: CGFloat = 36
+            let centerX = displayedRect.minX + CGFloat(badge.normalizedX) * displayedRect.width
+            let centerY = displayedRect.minY + CGFloat(1.0 - badge.normalizedY) * displayedRect.height
+
+            badge.frame = NSRect(
+                x: centerX - badgeSize / 2,
+                y: centerY - badgeHeight / 2,
+                width: badgeSize,
+                height: badgeHeight
+            )
+        }
+    }
+
+    private func updateEditingState() {
+        for (_, badge) in badges {
+            badge.isEditing = isEditing
+        }
+        if isEditing {
+            hintLabel.stringValue = "🎯 KEYMAP EDITOR · Drag keys to position · Press ⌥⌘K to save & finish"
+            hintView.layer?.backgroundColor = NSColor.systemOrange.withAlphaComponent(0.35).cgColor
+        } else {
+            hintLabel.stringValue = "⌨️ KEYMAP OVERLAY · Press ⌘K to toggle · ⌥⌘K to edit"
+            hintView.layer?.backgroundColor = nil
+        }
+    }
+
+    @discardableResult
+    func toggleEditing() -> Bool {
+        isEditing.toggle()
+        if !isEditing {
+            KeymapProfileStore.saveProfile(profile)
+        }
+        return isEditing
     }
 
     func highlight(event: NSEvent, isDown: Bool) {
@@ -367,7 +474,9 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     var onPinchGesture: ((Int32, Int32, CGFloat) -> Void)?
     var onIMEToggleRequested: (() -> Void)?
     var onTaskSwitcherRequested: (() -> Void)?
+    var onKeymapEditorToggleRequested: (() -> Void)?
 
+    var isKeymapEnabled = true
     var isVietnameseIMEEnabled = true
     private var markedTextStorage = NSMutableAttributedString()
     private var markedTextSelectionRange = NSRange(location: NSNotFound, length: 0)
@@ -376,6 +485,14 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     private var previousModifierFlags: NSEvent.ModifierFlags = []
     private let keymappingOverlay = KeymappingOverlayView()
     private let shutterFlashView = NonInteractiveOverlayView()
+    private var dpadWPressed = false
+    private var dpadAPressed = false
+    private var dpadSPressed = false
+    private var dpadDPressed = false
+    private var lastDpadTouch: (x: Int32, y: Int32)?
+    private var activeKeymapTouches: [String: (x: Int32, y: Int32)] = [:]
+    private(set) var currentPackageName: String?
+    private(set) var currentAppName: String?
 
     private let mailbox: LatestFrameMailbox
     private let commandQueue: MTLCommandQueue
@@ -513,6 +630,34 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     }
 
     @discardableResult
+    func toggleKeymapEditor() -> Bool {
+        if keymappingOverlay.isHidden {
+            keymappingOverlay.isHidden = false
+        }
+        return keymappingOverlay.toggleEditing()
+    }
+
+    var isKeymapEditorActive: Bool {
+        keymappingOverlay.isEditing
+    }
+
+    func configureForPackage(_ packageName: String, appName: String? = nil) {
+        currentPackageName = packageName
+        currentAppName = appName
+        let resolvedAppName = appName ?? packageName
+        let profile = KeymapProfileStore.loadProfile(for: packageName, appName: resolvedAppName)
+        keymappingOverlay.loadProfile(profile)
+        let appProfile = AppProfileStore.loadProfile(for: packageName, appName: resolvedAppName)
+        isKeymapEnabled = appProfile.isKeymapEnabled
+        isVietnameseIMEEnabled = appProfile.isVietnameseIMEEnabled
+        setTargetFPS(appProfile.targetFPS.maxFPS)
+    }
+
+    func setTargetFPS(_ fps: Int) {
+        preferredFramesPerSecond = fps
+    }
+
+    @discardableResult
     func toggleMouseLock() -> Bool {
         setMouseLocked(!isMouseLocked)
         return isMouseLocked
@@ -624,12 +769,113 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         onPinchGesture?(point.x, point.y, scale)
     }
 
+    private func handleKeymapKeyDown(event: NSEvent) -> Bool {
+        guard isKeymapEnabled && !keymappingOverlay.isEditing else { return false }
+
+        if let dpad = keymappingOverlay.profile.dpad {
+            var matched = false
+            if event.keyCode == dpad.wKeyCode {
+                dpadWPressed = true
+                matched = true
+            } else if event.keyCode == dpad.aKeyCode {
+                dpadAPressed = true
+                matched = true
+            } else if event.keyCode == dpad.sKeyCode {
+                dpadSPressed = true
+                matched = true
+            } else if event.keyCode == dpad.dKeyCode {
+                dpadDPressed = true
+                matched = true
+            }
+
+            if matched {
+                if let pt = dpad.touchPoint(
+                    wPressed: dpadWPressed,
+                    aPressed: dpadAPressed,
+                    sPressed: dpadSPressed,
+                    dPressed: dpadDPressed,
+                    sourceWidth: Int32(FrameContract.width),
+                    sourceHeight: Int32(FrameContract.height)
+                ) {
+                    lastDpadTouch = pt
+                    onTouchInput?(TouchInput(x: pt.x, y: pt.y, identifier: 10, phase: .contact))
+                }
+                return true
+            }
+        }
+
+        if let btn = keymappingOverlay.profile.buttons.first(where: { $0.keyCode == event.keyCode }) {
+            let coord = btn.screenCoordinate(
+                sourceWidth: Int32(FrameContract.width),
+                sourceHeight: Int32(FrameContract.height)
+            )
+            activeKeymapTouches[btn.key] = coord
+            let identifier = Int32(btn.keyCode) + 100
+            onTouchInput?(TouchInput(x: coord.x, y: coord.y, identifier: identifier, phase: .contact))
+            return true
+        }
+
+        return false
+    }
+
+    private func handleKeymapKeyUp(event: NSEvent) -> Bool {
+        guard isKeymapEnabled && !keymappingOverlay.isEditing else { return false }
+
+        if let dpad = keymappingOverlay.profile.dpad {
+            var matched = false
+            if event.keyCode == dpad.wKeyCode {
+                dpadWPressed = false
+                matched = true
+            } else if event.keyCode == dpad.aKeyCode {
+                dpadAPressed = false
+                matched = true
+            } else if event.keyCode == dpad.sKeyCode {
+                dpadSPressed = false
+                matched = true
+            } else if event.keyCode == dpad.dKeyCode {
+                dpadDPressed = false
+                matched = true
+            }
+
+            if matched {
+                if let pt = dpad.touchPoint(
+                    wPressed: dpadWPressed,
+                    aPressed: dpadAPressed,
+                    sPressed: dpadSPressed,
+                    dPressed: dpadDPressed,
+                    sourceWidth: Int32(FrameContract.width),
+                    sourceHeight: Int32(FrameContract.height)
+                ) {
+                    lastDpadTouch = pt
+                    onTouchInput?(TouchInput(x: pt.x, y: pt.y, identifier: 10, phase: .contact))
+                } else if let pt = lastDpadTouch {
+                    lastDpadTouch = nil
+                    onTouchInput?(TouchInput(x: pt.x, y: pt.y, identifier: 10, phase: .release))
+                }
+                return true
+            }
+        }
+
+        if let btn = keymappingOverlay.profile.buttons.first(where: { $0.keyCode == event.keyCode }) {
+            if let coord = activeKeymapTouches.removeValue(forKey: btn.key) {
+                let identifier = Int32(btn.keyCode) + 100
+                onTouchInput?(TouchInput(x: coord.x, y: coord.y, identifier: identifier, phase: .release))
+            }
+            return true
+        }
+
+        return false
+    }
+
     override func keyDown(with event: NSEvent) {
         if !keymappingOverlay.isHidden {
             keymappingOverlay.highlight(event: event, isDown: true)
         }
         if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command) {
             super.keyDown(with: event)
+            return
+        }
+        if handleKeymapKeyDown(event: event) {
             return
         }
         if isVietnameseIMEEnabled && keymappingOverlay.isHidden {
@@ -647,6 +893,9 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         if !keymappingOverlay.isHidden {
             keymappingOverlay.highlight(event: event, isDown: false)
         }
+        if handleKeymapKeyUp(event: event) {
+            return
+        }
         super.keyUp(with: event)
     }
 
@@ -661,6 +910,12 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if modifiers == [.command, .option] || modifiers == [.option, .command] {
+            if let char = event.charactersIgnoringModifiers?.lowercased(), char == "k" {
+                onKeymapEditorToggleRequested?()
+                return true
+            }
+        }
         guard modifiers == .command, let char = event.charactersIgnoringModifiers?.lowercased() else {
             return super.performKeyEquivalent(with: event)
         }

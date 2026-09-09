@@ -94,7 +94,27 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
-            handleIncomingURL(url)
+            if url.isFileURL {
+                handleIncomingFile(url)
+            } else {
+                handleIncomingURL(url)
+            }
+        }
+    }
+
+    func application(_ application: NSApplication, openFiles filenames: [String]) {
+        for filename in filenames {
+            let url = URL(fileURLWithPath: filename)
+            handleIncomingFile(url)
+        }
+    }
+
+    private func handleIncomingFile(_ url: URL) {
+        let ext = url.pathExtension.lowercased()
+        if ext == "apk" || ext == "xapk" || ext == "apks" {
+            launcherWindowController?.showWindow(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            launcherWindowController?.viewModel.installAPK(at: url)
         }
     }
 
@@ -160,12 +180,13 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
         if let existing = activeAppWindows[pkg] {
             // Package already has a live window — just focus it.
             mainWindowController = existing
-            existing.updateTitle(appName: appName)
+            existing.updateTitle(appName: appName, packageName: pkg)
         } else {
             // New package: create a fresh independent window.
             let controller = MainWindowController(
                 mailbox: mailbox,
                 appName: appName,
+                packageName: pkg,
                 isPortrait: isPortrait
             )
             mainWindowController = controller

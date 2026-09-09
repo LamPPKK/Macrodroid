@@ -1043,6 +1043,165 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
         let home = tasks.first { $0.package.isEmpty }
         XCTAssertNil(home, "Tasks with empty package must not appear in results")
     }
+
+    func testKeymappingProfileSerializationAndDefaults() throws {
+        let preset = KeymapProfile.defaultPreset(package: "com.example.game", appName: "Example Game")
+        XCTAssertEqual(preset.packageName, "com.example.game")
+        XCTAssertEqual(preset.appName, "Example Game")
+        XCTAssertFalse(preset.buttons.isEmpty)
+        XCTAssertNotNil(preset.dpad)
+        XCTAssertNotNil(preset.mouseAim)
+
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(preset)
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(KeymapProfile.self, from: data)
+
+        XCTAssertEqual(decoded.packageName, preset.packageName)
+        XCTAssertEqual(decoded.buttons.count, preset.buttons.count)
+        XCTAssertEqual(decoded.dpad?.radius, preset.dpad?.radius)
+        XCTAssertEqual(decoded.overlayOpacity, preset.overlayOpacity, accuracy: 0.001)
+    }
+
+    func testKeymapDPadDirectionalTouchCalculation() {
+        let dpad = KeymapDPad(
+            normalizedCenterX: 0.2,
+            normalizedCenterY: 0.7,
+            radius: 50.0
+        )
+
+        // When no keys are pressed, no touch is produced
+        let noTouch = dpad.touchPoint(
+            wPressed: false,
+            aPressed: false,
+            sPressed: false,
+            dPressed: false,
+            sourceWidth: 1920,
+            sourceHeight: 1080
+        )
+        XCTAssertNil(noTouch)
+
+        // Center is (0.2 * 1920, 0.7 * 1080) = (384, 756)
+        // Pressing W moves direction Y up (negative Y in guest coordinate)
+        let upTouch = dpad.touchPoint(
+            wPressed: true,
+            aPressed: false,
+            sPressed: false,
+            dPressed: false,
+            sourceWidth: 1920,
+            sourceHeight: 1080
+        )
+        XCTAssertNotNil(upTouch)
+        XCTAssertEqual(upTouch?.x, 384)
+        XCTAssertEqual(upTouch?.y, 756 - 50)
+
+        // Pressing D moves direction X right
+        let rightTouch = dpad.touchPoint(
+            wPressed: false,
+            aPressed: false,
+            sPressed: false,
+            dPressed: true,
+            sourceWidth: 1920,
+            sourceHeight: 1080
+        )
+        XCTAssertNotNil(rightTouch)
+        XCTAssertEqual(rightTouch?.x, 384 + 50)
+        XCTAssertEqual(rightTouch?.y, 756)
+    }
+
+    func testKeymapButtonNormalizedToScreenCoordinate() {
+        let button = KeymapButton(
+            key: "Q",
+            keyCode: 12,
+            normalizedX: 0.5,
+            normalizedY: 0.25,
+            label: "Skill 1"
+        )
+        let coord = button.screenCoordinate(sourceWidth: 1920, sourceHeight: 1080)
+        XCTAssertEqual(coord.x, 960)
+        XCTAssertEqual(coord.y, 270)
+
+        let clampedButton = KeymapButton(
+            key: "SPACE",
+            keyCode: 49,
+            normalizedX: 1.5,
+            normalizedY: -0.2
+        )
+        let clampedCoord = clampedButton.screenCoordinate(sourceWidth: 1920, sourceHeight: 1080)
+        XCTAssertEqual(clampedCoord.x, 1920)
+        XCTAssertEqual(clampedCoord.y, 0)
+    }
+
+    func testAppProfilePersistenceAndDefaults() {
+        let tiktokProfile = AppProfile.defaultProfile(for: "com.zhiliaoapp.musically", appName: "TikTok")
+        XCTAssertEqual(tiktokProfile.orientation, .portrait)
+        XCTAssertTrue(tiktokProfile.isVietnameseIMEEnabled)
+        XCTAssertFalse(tiktokProfile.isKeymapEnabled)
+
+        let gameProfile = AppProfile.defaultProfile(for: "com.tencent.ig", appName: "PUBG Mobile")
+        XCTAssertEqual(gameProfile.orientation, .landscape)
+        XCTAssertFalse(gameProfile.isVietnameseIMEEnabled)
+        XCTAssertTrue(gameProfile.isKeymapEnabled)
+
+        let testPkg = "com.test.persistence.\(UUID().uuidString)"
+        var custom = AppProfile.defaultProfile(for: testPkg, appName: "Custom App")
+        custom.targetFPS = .fps120
+        custom.resolution = .retina4K
+
+        AppProfileStore.saveProfile(custom)
+        defer { AppProfileStore.deleteProfile(for: testPkg) }
+
+        let loaded = AppProfileStore.loadProfile(for: testPkg, appName: "Custom App")
+        XCTAssertEqual(loaded.targetFPS, .fps120)
+        XCTAssertEqual(loaded.resolution, .retina4K)
+        XCTAssertEqual(loaded.packageName, testPkg)
+    }
+
+    func testAppProfileOrientationAndTargetFPSPacing() {
+        XCTAssertEqual(AppFrameRate.fps30.maxFPS, 30)
+        XCTAssertEqual(AppFrameRate.fps60.maxFPS, 60)
+        XCTAssertEqual(AppFrameRate.fps120.maxFPS, 120)
+
+        let landscapeAspect = AppOrientation.landscape.aspectRatio
+        XCTAssertEqual(landscapeAspect?.width, 16.0)
+        XCTAssertEqual(landscapeAspect?.height, 9.0)
+
+        let portraitAspect = AppOrientation.portrait.aspectRatio
+        XCTAssertEqual(portraitAspect?.width, 9.0)
+        XCTAssertEqual(portraitAspect?.height, 16.0)
+
+        XCTAssertEqual(AppResolution.p720.dimensions.width, 1280)
+        XCTAssertEqual(AppResolution.p720.dimensions.height, 720)
+        XCTAssertEqual(AppResolution.p1080.dimensions.width, 1920)
+        XCTAssertEqual(AppResolution.p1080.dimensions.height, 1080)
+        XCTAssertEqual(AppResolution.retina4K.dimensions.width, 3840)
+        XCTAssertEqual(AppResolution.retina4K.dimensions.height, 2160)
+    }
+
+    func testKeymappingStoreProfilePersistence() {
+        let testPkg = "com.test.keymap.\(UUID().uuidString)"
+        let customProfile = KeymapProfile(
+            packageName: testPkg,
+            appName: "Test Game",
+            buttons: [
+                KeymapButton(key: "Z", keyCode: 6, normalizedX: 0.3, normalizedY: 0.4, label: "Fire")
+            ],
+            dpad: KeymapDPad(normalizedCenterX: 0.15, normalizedCenterY: 0.65, radius: 55.0),
+            mouseAim: KeymapMouseAim(toggleKeyCode: 58, sensitivity: 1.5),
+            overlayOpacity: 0.85
+        )
+
+        KeymapProfileStore.saveProfile(customProfile)
+        defer { KeymapProfileStore.deleteProfile(for: testPkg) }
+
+        let loaded = KeymapProfileStore.loadProfile(for: testPkg, appName: "Test Game")
+        XCTAssertEqual(loaded.packageName, testPkg)
+        XCTAssertEqual(loaded.buttons.count, 1)
+        XCTAssertEqual(loaded.buttons.first?.key, "Z")
+        XCTAssertEqual(loaded.dpad?.radius, 55.0)
+        XCTAssertEqual(loaded.mouseAim?.sensitivity, 1.5)
+        XCTAssertEqual(loaded.overlayOpacity, 0.85, accuracy: 0.001)
+    }
 }
 
 typealias TFTMACGate1Tests = MacrodroidGate1Tests

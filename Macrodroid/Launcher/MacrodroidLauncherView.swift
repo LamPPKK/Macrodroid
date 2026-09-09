@@ -510,7 +510,7 @@ final class LauncherViewModel: ObservableObject {
                 let result = await Task.detached { () -> (Bool, String) in
                     let process = Process()
                     process.executableURL = paths.adb
-                    process.arguments = ["-P", "5038", "-s", "emulator-5582", "install", "-r", url.path]
+                    process.arguments = ["-P", "5038", "-s", "emulator-5582", "install", "-r", "-g", url.path]
                     let pipe = Pipe()
                     process.standardOutput = pipe
                     process.standardError = pipe
@@ -540,6 +540,14 @@ final class LauncherViewModel: ObservableObject {
                     bundleIdentifier: meta.packageName,
                     version: meta.versionName,
                     url: url,
+                    customIcon: realIcon
+                )
+
+                // Automatically generate macOS .app shortcut for Spotlight/Dock integration
+                AppShortcutManager.createShortcut(
+                    name: meta.appName,
+                    bundleIdentifier: meta.packageName,
+                    version: meta.versionName,
                     customIcon: realIcon
                 )
 

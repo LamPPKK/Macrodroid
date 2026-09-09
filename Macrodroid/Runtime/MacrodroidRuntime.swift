@@ -5192,7 +5192,7 @@ actor TFTMACRuntimeService {
             let isAPK = url.pathExtension.lowercased() == "apk"
             if isAPK {
                 do {
-                    let res = try Self.adb(paths: paths, ["install", "-r", url.path], timeout: 120)
+                    let res = try Self.adb(paths: paths, ["install", "-r", "-g", url.path], timeout: 120)
                     let success = res.status == 0 && res.output.localizedCaseInsensitiveContains("Success")
                     results.append(FileTransferResult(
                         filename: filename,

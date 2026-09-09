@@ -120,6 +120,7 @@ final class MainWindowController: NSWindowController {
     init(
         mailbox: LatestFrameMailbox,
         appName: String = "Android Application",
+        packageName: String? = nil,
         contentSize: NSSize = NSSize(width: 1280, height: 720),
         isPortrait: Bool = false
     ) {
@@ -160,6 +161,10 @@ final class MainWindowController: NSWindowController {
 
         setupTitlebarAccessory(window: window)
         setupEmulatorCallbacks()
+
+        if let packageName {
+            emulatorView.configureForPackage(packageName, appName: appName)
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -227,7 +232,7 @@ final class MainWindowController: NSWindowController {
         let keymapBtn = makeActionButton(
             symbolName: "keyboard.fill",
             fallbackText: "⌨️",
-            tooltip: "Toggle Keymapping Overlay (⌘K)",
+            tooltip: "Toggle Keymap Overlay (⌘K, Edit: ⌥⌘K)",
             action: #selector(keymapClicked)
         )
         keymapBtn.frame = NSRect(x: 53, y: 1, width: 20, height: 20)
@@ -334,6 +339,10 @@ final class MainWindowController: NSWindowController {
 
         emulatorView.onKeymapToggleRequested = { [weak self] in
             self?.toggleKeymapOverlay()
+        }
+
+        emulatorView.onKeymapEditorToggleRequested = { [weak self] in
+            self?.toggleKeymapEditor()
         }
 
         emulatorView.onMouseLockToggleRequested = { [weak self] in
@@ -448,6 +457,14 @@ final class MainWindowController: NSWindowController {
         )
     }
 
+    func toggleKeymapEditor() {
+        let editing = emulatorView.toggleKeymapEditor()
+        showToast(
+            icon: "hand.draw.fill",
+            message: editing ? "Keymap Editor: Active (Drag keys, ⌥⌘K to save)" : "Keymap Saved & Editor Closed"
+        )
+    }
+
     @objc func mouseLockClicked() {
         toggleMouseLock()
     }
@@ -506,8 +523,11 @@ final class MainWindowController: NSWindowController {
         toastView.present(icon: icon, message: message, in: emulatorView)
     }
 
-    func updateTitle(appName: String) {
+    func updateTitle(appName: String, packageName: String? = nil) {
         window?.title = "Macrodroid: \(appName)"
+        if let packageName {
+            emulatorView.configureForPackage(packageName, appName: appName)
+        }
     }
 
     func enterNativeFullscreen() {
