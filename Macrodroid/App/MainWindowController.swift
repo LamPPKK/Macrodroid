@@ -110,6 +110,8 @@ final class MainWindowController: NSWindowController {
     private(set) var isFreeformActive: Bool = false
     var onFreeformToggleRequested: (() -> Void)?
     var onOpenSharedFolderRequested: (() -> Void)?
+    var onIMEToggled: ((Bool) -> Void)?
+    var onTaskSwitcherRequested: (() -> Void)?
     private let fpsLabel = NSTextField(labelWithString: "— fps")
     private let statusDot = NSView()
     private let toastView = HUDToastView()
@@ -192,9 +194,9 @@ final class MainWindowController: NSWindowController {
         let accessory = NSTitlebarAccessoryViewController()
         accessory.layoutAttribute = .trailing
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 274, height: 26))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 26))
 
-        let pill = NSVisualEffectView(frame: NSRect(x: 4, y: 2, width: 266, height: 22))
+        let pill = NSVisualEffectView(frame: NSRect(x: 4, y: 2, width: 312, height: 22))
         pill.material = .hudWindow
         pill.blendingMode = .withinWindow
         pill.state = .active
@@ -258,12 +260,30 @@ final class MainWindowController: NSWindowController {
         sharedFolderBtn.frame = NSRect(x: 125, y: 1, width: 20, height: 20)
         pill.addSubview(sharedFolderBtn)
 
-        let divider = NSView(frame: NSRect(x: 151, y: 5, width: 1, height: 12))
+        let imeBtn = makeActionButton(
+            symbolName: "character.bubble.fill",
+            fallbackText: "VN",
+            tooltip: "Toggle Vietnamese IME (⌘I)",
+            action: #selector(imeClicked)
+        )
+        imeBtn.frame = NSRect(x: 149, y: 1, width: 20, height: 20)
+        pill.addSubview(imeBtn)
+
+        let taskSwitcherBtn = makeActionButton(
+            symbolName: "rectangle.stack.fill",
+            fallbackText: "🗂",
+            tooltip: "Switch Running App / Tasks (⌘T)",
+            action: #selector(taskSwitcherClicked)
+        )
+        taskSwitcherBtn.frame = NSRect(x: 173, y: 1, width: 20, height: 20)
+        pill.addSubview(taskSwitcherBtn)
+
+        let divider = NSView(frame: NSRect(x: 199, y: 5, width: 1, height: 12))
         divider.wantsLayer = true
         divider.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
         pill.addSubview(divider)
 
-        statusDot.frame = NSRect(x: 159, y: 8, width: 6, height: 6)
+        statusDot.frame = NSRect(x: 207, y: 8, width: 6, height: 6)
         statusDot.wantsLayer = true
         statusDot.layer?.cornerRadius = 3
         statusDot.layer?.backgroundColor = NSColor(calibratedRed: 0.0, green: 0.88, blue: 0.38, alpha: 0.9).cgColor
@@ -272,10 +292,11 @@ final class MainWindowController: NSWindowController {
         fpsLabel.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .semibold)
         fpsLabel.textColor = NSColor.white.withAlphaComponent(0.92)
         fpsLabel.alignment = .left
-        fpsLabel.frame = NSRect(x: 169, y: 1, width: 88, height: 20)
+        fpsLabel.frame = NSRect(x: 217, y: 1, width: 88, height: 20)
         pill.addSubview(fpsLabel)
 
         container.addSubview(pill)
+        accessory.view = container
         accessory.view = container
 
         window.addTitlebarAccessoryViewController(accessory)
@@ -321,6 +342,14 @@ final class MainWindowController: NSWindowController {
 
         emulatorView.onFreeformRequested = { [weak self] in
             self?.toggleFreeform()
+        }
+
+        emulatorView.onIMEToggleRequested = { [weak self] in
+            self?.toggleVietnameseIME()
+        }
+
+        emulatorView.onTaskSwitcherRequested = { [weak self] in
+            self?.taskSwitcherClicked()
         }
 
         emulatorView.onSharedFolderRequested = { [weak self] in
@@ -453,6 +482,24 @@ final class MainWindowController: NSWindowController {
         NSWorkspace.shared.open(SharedFolderConfig.defaultSharedDirectory)
         onOpenSharedFolderRequested?()
         showToast(icon: "folder.fill", message: "Opened ~/Macrodroid/Shared")
+    }
+
+    @objc func imeClicked() {
+        toggleVietnameseIME()
+    }
+
+    func toggleVietnameseIME() {
+        emulatorView.isVietnameseIMEEnabled.toggle()
+        let isEnabled = emulatorView.isVietnameseIMEEnabled
+        onIMEToggled?(isEnabled)
+        showToast(
+            icon: isEnabled ? "character.bubble.fill" : "keyboard.fill",
+            message: isEnabled ? "Vietnamese IME: Telex/VNI Enabled" : "Vietnamese IME: Disabled (Direct Keys)"
+        )
+    }
+
+    @objc func taskSwitcherClicked() {
+        onTaskSwitcherRequested?()
     }
 
     func showToast(icon: String?, message: String) {

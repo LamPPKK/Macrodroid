@@ -21,7 +21,7 @@ The runtime root is external to the repository so application source changes do 
 `tftmac/App/` owns application lifecycle and the main window.
 `tftmac/Presentation/` owns the Metal presentation shell and viewport mapping.
 The source target is Apple Silicon and the application bundle identifier is
-`com.flashls1.tftmac`.
+`com.macrodroid`.
 
 The presentation layer maintains the game aspect ratio and maps native viewport coordinates into the 1920x1080 Android source coordinate space while rejecting input in letterbox regions.
 

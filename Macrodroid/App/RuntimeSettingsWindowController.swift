@@ -10,14 +10,15 @@ final class RuntimeSettingsWindowController: NSWindowController {
     private let policyButton = NSPopUpButton()
     private let closeBehaviorButton = NSPopUpButton()
     private let idleSuspendButton = NSPopUpButton()
+    private let microphoneButton = NSButton(checkboxWithTitle: "Enable Host Microphone Input", target: nil, action: nil)
     private let resultLabel = NSTextField(labelWithString: "")
-    private var originalProfile: TFTMACRuntimeProfile
-    var onSave: ((TFTMACRuntimeProfile, TFTMACRuntimeProfile) -> Void)?
+    private var originalProfile: MacrodroidRuntimeProfile
+    var onSave: ((MacrodroidRuntimeProfile, MacrodroidRuntimeProfile) -> Void)?
 
-    init(profile: TFTMACRuntimeProfile) {
+    init(profile: MacrodroidRuntimeProfile) {
         originalProfile = profile
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 610),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 640),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -32,7 +33,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
     required init?(coder: NSCoder) { nil }
 
     func refreshFromSavedProfile() {
-        originalProfile = TFTMACRuntimeProfile.load()
+        originalProfile = MacrodroidRuntimeProfile.load()
         select(originalProfile.experimentPreset, in: experimentButton)
         select(originalProfile.vCPU, in: vCPUButton)
         select(originalProfile.ramMiB, in: ramButton)
@@ -41,10 +42,11 @@ final class RuntimeSettingsWindowController: NSWindowController {
         select(EngineLaunchPolicy.load(), in: policyButton)
         select(EngineCloseBehavior.load(), in: closeBehaviorButton)
         select(IdleSuspendPreferences.loadTimeout(), in: idleSuspendButton)
+        microphoneButton.state = originalProfile.microphoneEnabled ? .on : .off
         resultLabel.stringValue = "Changes are validated, logged, and applied on the next app launch."
     }
 
-    private func configureContent(profile: TFTMACRuntimeProfile) {
+    private func configureContent(profile: MacrodroidRuntimeProfile) {
         guard let window else { return }
         let effect = NSVisualEffectView()
         effect.material = .windowBackground
@@ -67,10 +69,10 @@ final class RuntimeSettingsWindowController: NSWindowController {
         select(IdleSuspendPreferences.loadTimeout(), in: idleSuspendButton)
 
         experimentButton.addItems(withTitles: RuntimeExperimentPreset.selectableCases.map(\.displayName))
-        vCPUButton.addItems(withTitles: TFTMACRuntimeProfile.supportedVCPU.map(String.init))
-        ramButton.addItems(withTitles: TFTMACRuntimeProfile.supportedRAMMiB.map { "\($0) MiB" })
-        refreshButton.addItems(withTitles: TFTMACRuntimeProfile.supportedRefreshHz.map { "\($0) Hz" })
-        flushButton.addItems(withTitles: TFTMACRuntimeProfile.supportedASGDrawFlushIntervals.map { "\($0) µs" })
+        vCPUButton.addItems(withTitles: MacrodroidRuntimeProfile.supportedVCPU.map(String.init))
+        ramButton.addItems(withTitles: MacrodroidRuntimeProfile.supportedRAMMiB.map { "\($0) MiB" })
+        refreshButton.addItems(withTitles: MacrodroidRuntimeProfile.supportedRefreshHz.map { "\($0) Hz" })
+        flushButton.addItems(withTitles: MacrodroidRuntimeProfile.supportedASGDrawFlushIntervals.map { "\($0) µs" })
         for button in [vCPUButton, ramButton, refreshButton, flushButton] {
             button.isEnabled = false
             button.toolTip = "Locked for the controlled Combat Benchmark so the preset is the only changed variable."
@@ -81,10 +83,13 @@ final class RuntimeSettingsWindowController: NSWindowController {
         select(profile.refreshHz, in: refreshButton)
         select(profile.asgDrawFlushInterval, in: flushButton)
 
+        microphoneButton.state = profile.microphoneEnabled ? .on : .off
+
         let grid = NSGridView(views: [
             [fieldLabel("Engine startup mode"), policyButton],
             [fieldLabel("When window closes"), closeBehaviorButton],
             [fieldLabel("Idle suspend (vCPU sleep)"), idleSuspendButton],
+            [fieldLabel("Host microphone input"), microphoneButton],
             [fieldLabel("Launch experiment"), experimentButton],
             [fieldLabel("Virtual CPUs"), vCPUButton],
             [fieldLabel("Android RAM"), ramButton],
@@ -164,7 +169,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
     }
 
     @objc private func restoreBaseline(_ sender: Any?) {
-        let baseline = TFTMACRuntimeProfile.playable
+        let baseline = MacrodroidRuntimeProfile.playable
         select(.control, in: experimentButton)
         select(baseline.vCPU, in: vCPUButton)
         select(baseline.ramMiB, in: ramButton)
@@ -173,6 +178,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
         select(EngineLaunchPolicy.alwaysBackground, in: policyButton)
         select(EngineCloseBehavior.keepWarm, in: closeBehaviorButton)
         select(IdleSuspendTimeout.fiveMinutes, in: idleSuspendButton)
+        microphoneButton.state = baseline.microphoneEnabled ? .on : .off
         resultLabel.stringValue = "Proven baseline values selected. Save to keep them."
     }
 
@@ -191,7 +197,10 @@ final class RuntimeSettingsWindowController: NSWindowController {
         }
 
         guard let preset = selectedExperimentPreset() else { return }
-        let next = TFTMACRuntimeProfile.playable.with(experimentPreset: preset)
+        let micEnabled = microphoneButton.state == .on
+        let next = MacrodroidRuntimeProfile.playable
+            .with(experimentPreset: preset)
+            .with(microphoneEnabled: micEnabled)
         next.save()
         onSave?(originalProfile, next)
         originalProfile = next

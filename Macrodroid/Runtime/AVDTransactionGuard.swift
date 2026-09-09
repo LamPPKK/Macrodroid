@@ -13,9 +13,9 @@ enum AVDTransactionGuardError: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .conflictingCurrentConfiguration:
-            return "The AVD config changed after TFTMAC applied its profile; automatic restore stopped without overwriting it."
+            return "The AVD config changed after Macrodroid applied its profile; automatic restore stopped without overwriting it."
         case .unexpectedRecoveryPath:
-            return "The interrupted AVD transaction names a path outside TFTMAC's exact config and capture roots; recovery stopped safely."
+            return "The interrupted AVD transaction names a path outside Macrodroid's exact config and capture roots; recovery stopped safely."
         }
     }
 }
@@ -60,10 +60,6 @@ enum AVDTransactionGuard {
         }
     }
 }
-
-#if canImport(AppKit)
-import AppKit
-#endif
 
 enum ClipboardPreferences {
     static let preferenceKey = "macrodroid.clipboardSync.enabled"

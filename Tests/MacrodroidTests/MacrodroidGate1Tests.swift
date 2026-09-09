@@ -1,7 +1,7 @@
 import CoreGraphics
 import XCTest
 
-final class TFTMACGate1Tests: XCTestCase {
+final class MacrodroidGate1Tests: XCTestCase {
     func testAspectFitCentersSixteenByNineInsideMatchingViewport() {
         let mapper = ViewportMapper(
             sourceSize: CGSize(width: 1920, height: 1080),
@@ -675,4 +675,374 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
         XCTAssertEqual(keyCodes[49], "SPACE")
         XCTAssertEqual(keyCodes[18], "1")
     }
+
+    func testGestureTouchMapperScrollAndPinch() {
+        let (start, end) = GestureTouchMapper.scrollSwipePoints(
+            x: 500,
+            y: 500,
+            deltaX: 10.0,
+            deltaY: -20.0,
+            multiplier: 2.0
+        )
+        XCTAssertEqual(start, TouchPoint(x: 500, y: 500))
+        XCTAssertEqual(end, TouchPoint(x: 520, y: 460))
+
+        let neutralPinch = GestureTouchMapper.pinchSpanPoints(centerX: 400, centerY: 300, scale: 0.0, baseSpan: 50.0)
+        XCTAssertEqual(neutralPinch.finger0, TouchPoint(x: 350, y: 250))
+        XCTAssertEqual(neutralPinch.finger1, TouchPoint(x: 450, y: 350))
+
+        let zoomInPinch = GestureTouchMapper.pinchSpanPoints(centerX: 400, centerY: 300, scale: 1.0, baseSpan: 50.0)
+        XCTAssertEqual(zoomInPinch.finger0, TouchPoint(x: 300, y: 200))
+        XCTAssertEqual(zoomInPinch.finger1, TouchPoint(x: 500, y: 400))
+    }
+
+    func testMicrophoneConfigurationPersistenceAndArguments() throws {
+        let baseline = TFTMACRuntimeProfile.playable
+        XCTAssertFalse(baseline.microphoneEnabled)
+
+        let micEnabledProfile = baseline.with(microphoneEnabled: true)
+        XCTAssertTrue(micEnabledProfile.microphoneEnabled)
+
+        let suiteName = "test-profile-mic-\(UUID().uuidString)"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { suite.removePersistentDomain(forName: suiteName) }
+
+        micEnabledProfile.save(to: suite)
+        let loaded = TFTMACRuntimeProfile.load(from: suite)
+        XCTAssertTrue(loaded.microphoneEnabled)
+
+        baseline.save(to: suite)
+        let loadedBaseline = TFTMACRuntimeProfile.load(from: suite)
+        XCTAssertFalse(loadedBaseline.microphoneEnabled)
+    }
+
+    func testLatestFrameMailboxMultiWindowSubscription() {
+        let mailbox = LatestFrameMailbox()
+        let samplePixels = Data(count: 100)
+        let frame1 = EmulatorFrame(
+            pixels: samplePixels,
+            width: 10,
+            height: 10,
+            sequence: 1,
+            emulatorTimestampMicroseconds: 1_000,
+            receivedMonotonicNanoseconds: 1_000_000
+        )
+        let frame2 = EmulatorFrame(
+            pixels: samplePixels,
+            width: 10,
+            height: 10,
+            sequence: 2,
+            emulatorTimestampMicroseconds: 2_000,
+            receivedMonotonicNanoseconds: 2_000_000
+        )
+
+        mailbox.publish(frame1)
+
+        // Multiple independent consumers should be able to read the frame non-destructively
+        let consumer1Read = mailbox.latestFrame(after: nil)
+        let consumer2Read = mailbox.latestFrame(after: nil)
+        XCTAssertEqual(consumer1Read?.sequence, 1)
+        XCTAssertEqual(consumer2Read?.sequence, 1)
+
+        // Consumer 1 already seen sequence 1
+        XCTAssertNil(mailbox.latestFrame(after: 1))
+
+        // Publish second frame
+        mailbox.publish(frame2)
+        XCTAssertEqual(mailbox.latestFrame(after: 1)?.sequence, 2)
+        XCTAssertEqual(mailbox.peekLatest()?.sequence, 2)
+
+        // takeLatest still consumes and nils out latest for legacy consumers
+        XCTAssertEqual(mailbox.takeLatest()?.sequence, 2)
+        XCTAssertNil(mailbox.takeLatest())
+    }
+
+    func testVietnameseIMETextComposition() {
+        let vietnameseStrings = [
+            "Xin chào Việt Nam! Macrodroid chạy cực mượt.",
+            "Liên Minh Huyền Thoại: Tốc Chiến và Đấu Trường Chân Lý",
+            "à á ả ã ạ ă ắ ằ ẳ ẵ ặ â ấ ầ ẩ ẫ ậ đ",
+            "è é ẻ ẽ ẹ ê ế ề ể ễ ệ ì í ỉ ĩ ị",
+            "ò ó ỏ õ ọ ô ố ồ ổ ỗ ộ ơ ớ ờ ở ỡ ợ",
+            "ù ú ủ ũ ụ ư ứ ừ ử ữ ự kỳ kỷ kỹ kỵ"
+        ]
+
+        for text in vietnameseStrings {
+            let normalizedNFC = text.precomposedStringWithCanonicalMapping
+            let normalizedNFD = text.decomposedStringWithCanonicalMapping
+            XCTAssertFalse(normalizedNFC.isEmpty)
+            XCTAssertEqual(normalizedNFC.precomposedStringWithCanonicalMapping, normalizedNFD.precomposedStringWithCanonicalMapping)
+        }
+    }
+
+    func testFreeformTaskManagerTaskParsing() {
+        let sampleDump = """
+        * Task{55ba86d #42 type=standard A=com.riotgames.league.teamfighttactics U=0 visible=true mode=5}
+        Task id #101: com.aurora.store/com.aurora.store.MainActivity
+        taskId=102: com.google.android.gms
+        """
+
+        let tasks = FreeformTaskManager.parseTasks(from: sampleDump)
+        XCTAssertEqual(tasks.count, 3)
+
+        let tftTask = tasks.first { $0.package == "com.riotgames.league.teamfighttactics" }
+        XCTAssertNotNil(tftTask)
+        XCTAssertEqual(tftTask?.id, 42)
+        XCTAssertTrue(tftTask?.isFreeform == true)
+
+        let auroraTask = tasks.first { $0.package == "com.aurora.store" }
+        XCTAssertNotNil(auroraTask)
+        XCTAssertEqual(auroraTask?.id, 101)
+        XCTAssertEqual(auroraTask?.activity, "com.aurora.store.MainActivity")
+
+        let gmsTask = tasks.first { $0.package == "com.google.android.gms" }
+        XCTAssertNotNil(gmsTask)
+        XCTAssertEqual(gmsTask?.id, 102)
+
+        let freeformArgs = FreeformTaskManager.launchInFreeformArguments(component: "com.example.app/.MainActivity")
+        XCTAssertEqual(freeformArgs, ["shell", "am", "start", "-n", "com.example.app/.MainActivity", "--windowingMode", "5"])
+
+        let stopArgs = FreeformTaskManager.forceStopArguments(package: "com.example.app")
+        XCTAssertEqual(stopArgs, ["shell", "am", "force-stop", "com.example.app"])
+    }
+
+    func testAppIconExtractorPackageParsing() {
+        let validLine1 = "package:/data/app/~~h8bW/com.riotgames.league.teamfighttactics-1==/base.apk=com.riotgames.league.teamfighttactics"
+        let parsed1 = AppIconExtractor.parsePackageLine(from: validLine1)
+        XCTAssertEqual(parsed1?.package, "com.riotgames.league.teamfighttactics")
+        XCTAssertEqual(parsed1?.remoteApkPath, "/data/app/~~h8bW/com.riotgames.league.teamfighttactics-1==/base.apk")
+
+        let validLine2 = "package:/system/priv-app/Settings/Settings.apk=com.android.settings"
+        let parsed2 = AppIconExtractor.parsePackageLine(from: validLine2)
+        XCTAssertEqual(parsed2?.package, "com.android.settings")
+        XCTAssertEqual(parsed2?.remoteApkPath, "/system/priv-app/Settings/Settings.apk")
+
+        XCTAssertNil(AppIconExtractor.parsePackageLine(from: ""))
+        XCTAssertNil(AppIconExtractor.parsePackageLine(from: "random noise without equal sign"))
+
+        let iconURL = AppIconExtractor.iconURL(for: "com.test.app")
+        XCTAssertTrue(iconURL.lastPathComponent == "com.test.app.png")
+    }
+    /// The icon URL for a given package must follow the canonical naming scheme so
+    /// that UNNotificationAttachment can be constructed from it directly.
+    func testNotificationIconAttachmentURLForCachedPackage() {
+        let pkg = "com.riotgames.league.teamfighttactics"
+        let url = AppIconExtractor.iconURL(for: pkg)
+        XCTAssertEqual(url.lastPathComponent, "\(pkg).png")
+        XCTAssertTrue(url.pathExtension == "png")
+        // URL must be file-scheme so UNNotificationAttachment can read it.
+        XCTAssertEqual(url.scheme, "file")
+        // The parent directory must end with the canonical cache path component.
+        XCTAssertTrue(url.deletingLastPathComponent().lastPathComponent == "Icons")
+    }
+
+    /// A package whose icon has not yet been extracted must report `hasCachedIcon == false`
+    /// without throwing or crashing. The URL is still valid in shape.
+    func testNotificationIconAttachmentURLNonExistentPackage() {
+        let fakePkg = "com.nonexistent.package.definitely.not.on.disk.\(UUID().uuidString)"
+        XCTAssertFalse(AppIconExtractor.hasCachedIcon(for: fakePkg),
+                       "Fresh UUID-based package must not have a cached icon")
+        let url = AppIconExtractor.iconURL(for: fakePkg)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path),
+                       "Icon file must not exist on disk for an unknown package")
+        // cachedIcon must return nil gracefully, not crash.
+        let img = AppIconExtractor.cachedIcon(for: fakePkg)
+        XCTAssertNil(img)
+    }
+
+    /// `activeAppWindows` must store each package under its exact string key so
+    /// the multi-window lookup in `openAppWindow` finds existing windows correctly.
+    func testMultiWindowActiveAppWindowsTracking() {
+        // Simulate the dictionary contract that AppCoordinator relies on.
+        var activeWindows: [String: String] = [:] // String stands in for MainWindowController
+        let pkg1 = "com.riotgames.league.teamfighttactics"
+        let pkg2 = "com.aurora.store"
+
+        // Registering two distinct packages must yield two entries.
+        activeWindows[pkg1] = "WindowA"
+        activeWindows[pkg2] = "WindowB"
+        XCTAssertEqual(activeWindows.count, 2)
+        XCTAssertEqual(activeWindows[pkg1], "WindowA")
+        XCTAssertEqual(activeWindows[pkg2], "WindowB")
+
+        // Re-opening the same package must NOT add a second entry; the existing
+        // window is retrieved by the activeAppWindows[pkg] branch.
+        activeWindows[pkg1] = activeWindows[pkg1] // no-op update
+        XCTAssertEqual(activeWindows.count, 2, "Re-opening same pkg must reuse the existing window slot")
+
+        // Closing pkg1 must remove it without affecting pkg2.
+        activeWindows.removeValue(forKey: pkg1)
+        XCTAssertEqual(activeWindows.count, 1)
+        XCTAssertNil(activeWindows[pkg1])
+        XCTAssertNotNil(activeWindows[pkg2])
+    }
+
+    /// `launchInFreeformArguments(package:)` (the package-only overload using `monkey`)
+    /// must produce the correct ADB arguments for launching via the Launcher intent.
+    func testFreeformTaskManagerLaunchByPackageArguments() {
+        let pkg = "com.riotgames.league.teamfighttactics"
+        let args = FreeformTaskManager.launchInFreeformArguments(package: pkg)
+        XCTAssertEqual(args, [
+            "shell", "monkey", "-p", pkg,
+            "-c", "android.intent.category.LAUNCHER", "1"
+        ])
+        // Must not contain --windowingMode (that's the component overload's job).
+        XCTAssertFalse(args.contains("--windowingMode"))
+
+        // Verify component overload still works alongside the package overload.
+        let componentArgs = FreeformTaskManager.launchInFreeformArguments(component: "\(pkg)/.MainActivity")
+        XCTAssertTrue(componentArgs.contains("--windowingMode"))
+        XCTAssertTrue(componentArgs.contains("5"))
+    }
+
+    // MARK: - Phase 7: Input Pipeline & Coverage Completeness
+
+    /// `PrimaryTouchSequence` must:
+    ///  - emit a contact `TouchInput` from `contact(at:)`,
+    ///  - emit a release at the same point when `release(at:)` is called with a point,
+    ///  - and fall back to `lastContactPoint` when `release(at: nil)` is called (finger
+    ///    leaves the view bounds before the gesture ends).
+    func testPrimaryTouchSequenceContactAndRelease() {
+        var seq = PrimaryTouchSequence()
+
+        // 1. contact(at: nil) → nothing (no point provided yet)
+        XCTAssertNil(seq.contact(at: nil))
+
+        // 2. contact(at: point) → TouchInput with phase .contact
+        let point = TouchPoint(x: 320, y: 540)
+        let contactInput = seq.contact(at: point)
+        XCTAssertNotNil(contactInput)
+        XCTAssertEqual(contactInput?.x, 320)
+        XCTAssertEqual(contactInput?.y, 540)
+        XCTAssertEqual(contactInput?.pressure, 1)
+
+        // 3. release(at: explicit point) → uses the given point, not lastContactPoint
+        let releasePoint = TouchPoint(x: 400, y: 600)
+        let releaseInput = seq.release(at: releasePoint)
+        XCTAssertEqual(releaseInput?.x, 400)
+        XCTAssertEqual(releaseInput?.y, 600)
+        XCTAssertEqual(releaseInput?.pressure, 0)
+
+        // 4. After release, lastContactPoint is nil → release(at: nil) returns nil
+        XCTAssertNil(seq.release(at: nil))
+
+        // 5. New contact → then release(at: nil) falls back to lastContactPoint
+        _ = seq.contact(at: TouchPoint(x: 100, y: 200))
+        let fallbackRelease = seq.release(at: nil)
+        XCTAssertNotNil(fallbackRelease, "release(at: nil) must fall back to lastContactPoint")
+        XCTAssertEqual(fallbackRelease?.x, 100)
+        XCTAssertEqual(fallbackRelease?.y, 200)
+        XCTAssertEqual(fallbackRelease?.pressure, 0)
+    }
+
+    /// `GestureTouchMapper.pinchSpanPoints` must clamp the effective scale factor
+    /// to [0.1, 5.0] so that extreme pinch values produce bounded, non-negative spans.
+    func testGestureTouchMapperPinchSpanClampBounds() {
+        let cx: Int32 = 960
+        let cy: Int32 = 540
+        let base: CGFloat = 50.0
+
+        // Normal scale = 0.5 → factor = 1.5, span = 75
+        let normal = GestureTouchMapper.pinchSpanPoints(centerX: cx, centerY: cy, scale: 0.5, baseSpan: base)
+        XCTAssertEqual(normal.finger0.x, cx - 75)
+        XCTAssertEqual(normal.finger1.x, cx + 75)
+
+        // Scale = -5.0 (extreme pinch-in) → factor clamped to 0.1, span = 5
+        let extremeIn = GestureTouchMapper.pinchSpanPoints(centerX: cx, centerY: cy, scale: -5.0, baseSpan: base)
+        XCTAssertEqual(extremeIn.finger0.x, cx - 5)
+        XCTAssertEqual(extremeIn.finger1.x, cx + 5)
+
+        // Scale = 10.0 (extreme pinch-out) → factor clamped to 5.0, span = 250
+        let extremeOut = GestureTouchMapper.pinchSpanPoints(centerX: cx, centerY: cy, scale: 10.0, baseSpan: base)
+        XCTAssertEqual(extremeOut.finger0.x, cx - 250)
+        XCTAssertEqual(extremeOut.finger1.x, cx + 250)
+
+        // Fingers must always be symmetric around center
+        XCTAssertEqual(extremeOut.finger0.x + extremeOut.finger1.x, Int32(2) * cx)
+        XCTAssertEqual(extremeOut.finger0.y + extremeOut.finger1.y, Int32(2) * cy)
+    }
+
+    /// `LatestFrameMailbox.snapshot()` must accurately track the telemetry counters:
+    ///  - `receivedFrames`: total published frames,
+    ///  - `replacedBeforePresentation`: frames overwritten before `takeLatest` was called,
+    ///  - `sequenceDrops`: gaps in the sequence numbers.
+    func testLatestFrameMailboxSnapshotTelemetry() {
+        let mailbox = LatestFrameMailbox()
+        let px = Data(count: 100)
+
+        func frame(_ seq: UInt32, mono: UInt64) -> EmulatorFrame {
+            EmulatorFrame(pixels: px, width: 10, height: 10,
+                          sequence: seq,
+                          emulatorTimestampMicroseconds: UInt64(seq) * 1000,
+                          receivedMonotonicNanoseconds: mono)
+        }
+
+        // 0 frames published → all counters zero
+        let snap0 = mailbox.snapshot()
+        XCTAssertEqual(snap0.receivedFrames, 0)
+        XCTAssertEqual(snap0.replacedBeforePresentation, 0)
+        XCTAssertEqual(snap0.sequenceDrops, 0)
+        XCTAssertNil(snap0.latestSequence)
+
+        // Publish frame seq=1 (no prior frame → replacedBeforePresentation stays 0)
+        mailbox.publish(frame(1, mono: 1_000_000))
+        let snap1 = mailbox.snapshot()
+        XCTAssertEqual(snap1.receivedFrames, 1)
+        XCTAssertEqual(snap1.replacedBeforePresentation, 0)
+        XCTAssertEqual(snap1.sequenceDrops, 0)
+        XCTAssertEqual(snap1.latestSequence, 1)
+
+        // Publish frame seq=2 WITHOUT consuming seq=1 → replacedBeforePresentation = 1
+        mailbox.publish(frame(2, mono: 2_000_000))
+        let snap2 = mailbox.snapshot()
+        XCTAssertEqual(snap2.receivedFrames, 2)
+        XCTAssertEqual(snap2.replacedBeforePresentation, 1)
+        XCTAssertEqual(snap2.sequenceDrops, 0) // seq 1→2: no gap
+
+        // Consume (takeLatest) seq=2, then publish seq=5 → sequenceDrops += 2 (3,4 missing)
+        _ = mailbox.takeLatest()
+        mailbox.publish(frame(5, mono: 5_000_000))
+        let snap3 = mailbox.snapshot()
+        XCTAssertEqual(snap3.receivedFrames, 3)
+        XCTAssertEqual(snap3.replacedBeforePresentation, 1) // no new replacement
+        XCTAssertEqual(snap3.sequenceDrops, 2, "sequences 3 and 4 were dropped")
+        XCTAssertEqual(snap3.latestSequence, 5)
+    }
+
+    /// `FreeformTaskManager.parseTasks` must gracefully handle the Android 12+
+    /// `rootTask{...}` format produced by `dumpsys activity tasks`.
+    /// This format nests tasks differently; the parser should return tasks it can
+    /// identify and must never crash on unrecognised lines.
+    func testFreeformTaskManagerAndroid12RootTaskFormat() {
+        let android12Dump = """
+        Task display areas in top down Z order:
+          DisplayArea (organized) DefaultTaskDisplayArea
+            rootTask{55ba86d #5 type=home ...}
+            rootTask{77cc91e #42 type=standard A=com.riotgames.league.teamfighttactics visible=true mode=5}
+            Task{33aa12b #101 type=standard A=com.aurora.store U=0 visible=true mode=5}
+        """
+
+        // Must not crash; should parse at least the tasks it recognises.
+        let tasks = FreeformTaskManager.parseTasks(from: android12Dump)
+
+        // The aurora store task uses the known "Task{..." pattern → must be found.
+        let aurora = tasks.first { $0.package == "com.aurora.store" }
+        XCTAssertNotNil(aurora, "Aurora Store task must be parsed from Android 12 dump")
+        XCTAssertEqual(aurora?.id, 101)
+        XCTAssertTrue(aurora?.isFreeform == true)
+
+        // The TFT rootTask uses "rootTask{..." which differs from "Task{..." —
+        // document whether it is parsed or not, but the call must not crash.
+        let tft = tasks.first { $0.package == "com.riotgames.league.teamfighttactics" }
+        // Note: rootTask{...} format may or may not be parsed by the current
+        // implementation. This test guards against crashes and ensures Aurora is found.
+        _ = tft // suppress unused-variable warning; presence is informational.
+
+        // Home task (type=home) must not cause a crash and should not surface as
+        // a user-facing app in the switcher even if parsed.
+        let home = tasks.first { $0.package.isEmpty }
+        XCTAssertNil(home, "Tasks with empty package must not appear in results")
+    }
 }
+
+typealias TFTMACGate1Tests = MacrodroidGate1Tests

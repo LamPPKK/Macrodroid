@@ -81,6 +81,20 @@ final class LatestFrameMailbox: @unchecked Sendable {
         return frame
     }
 
+    func peekLatest() -> EmulatorFrame? {
+        lock.lock()
+        defer { lock.unlock() }
+        return latest
+    }
+
+    func latestFrame(after sequence: UInt32?) -> EmulatorFrame? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let frame = latest else { return nil }
+        if let sequence, frame.sequence == sequence { return nil }
+        return frame
+    }
+
     func snapshot() -> FrameMailboxSnapshot {
         lock.lock()
         defer { lock.unlock() }

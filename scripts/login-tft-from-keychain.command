@@ -12,7 +12,7 @@ ADB="$(tft_resolve_adb)"
 readonly ADB
 readonly SERIAL="${TFT_SERIAL:-emulator-5582}"
 readonly PACKAGE="com.riotgames.league.teamfighttactics.pbe"
-readonly KEYCHAIN_SERVICE="${TFTMAC_KEYCHAIN_SERVICE:-com.flashls1.tftmac}"
+readonly KEYCHAIN_SERVICE="${TFTMAC_KEYCHAIN_SERVICE:-com.macrodroid}"
 readonly CDP_HELPER="$SCRIPT_DIR/login-tft-webview.mjs"
 
 if [[ "$ADB_SERVER_PORT" != <-> ]] \

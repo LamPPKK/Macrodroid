@@ -1,7 +1,7 @@
 import AppKit
 
 @main
-enum TFTMACApplication {
+enum MacrodroidApplication {
     @MainActor private static var coordinator: AppCoordinator?
 
     @MainActor
@@ -93,3 +93,5 @@ enum TFTMACApplication {
         item.target = coordinator
     }
 }
+
+typealias TFTMACApplication = MacrodroidApplication

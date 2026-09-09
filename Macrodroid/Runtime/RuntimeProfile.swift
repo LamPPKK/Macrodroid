@@ -329,13 +329,13 @@ public enum AndroidNotificationParser {
     }
 }
 
-struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
+struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
     static let supportedVCPU = [4, 6, 8]
     static let supportedRAMMiB = [4096, 5120, 6144, 8192]
     static let supportedRefreshHz = [30, 60, 120]
     static let supportedASGDrawFlushIntervals = [400, 800, 1600]
 
-    static let playable = TFTMACRuntimeProfile(
+    static let playable = MacrodroidRuntimeProfile(
         identifier: "macrodroid_5gb_native_v1",
         width: 1920,
         height: 1080,
@@ -353,7 +353,8 @@ struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
         controllerPort: 8554,
         angleEnabledFeatures: "exposeNonConformantExtensionsAndVersions:exposeES32ForTesting",
         angleDisabledFeatures: "preferSubmitAtFBOBoundary",
-        experimentPreset: .control
+        experimentPreset: .control,
+        microphoneEnabled: false
     )
 
     private enum PreferenceKey {
@@ -361,6 +362,7 @@ struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
         static let ramMiB = "runtime.ramMiB"
         static let refreshHz = "runtime.refreshHz"
         static let asgDrawFlushInterval = "runtime.asgDrawFlushInterval"
+        static let microphoneEnabled = "runtime.microphoneEnabled"
     }
 
     let identifier: String
@@ -381,6 +383,7 @@ struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
     let angleEnabledFeatures: String
     let angleDisabledFeatures: String
     let experimentPreset: RuntimeExperimentPreset
+    let microphoneEnabled: Bool
 
     var effectiveEmulatorFeatures: [String] {
         experimentPreset.effectiveEmulatorFeatures()
@@ -403,6 +406,7 @@ struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
             "graphics_transport": graphicsTransport,
             "height": height,
             "host_qos_requested": experimentPreset.requestsHostLatencyQoS ? "user_interactive" : "default",
+            "microphone_enabled": microphoneEnabled,
             "moltenvk_fast_math": true,
             "moltenvk_max_active_command_buffers": 64,
             "moltenvk_synchronous_queue_submits": false,
@@ -437,8 +441,15 @@ struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
         let ramMiB = defaults.object(forKey: PreferenceKey.ramMiB) as? Int ?? Self.playable.ramMiB
         let refreshHz = defaults.object(forKey: PreferenceKey.refreshHz) as? Int ?? Self.playable.refreshHz
         let asgDrawFlushInterval = defaults.object(forKey: PreferenceKey.asgDrawFlushInterval) as? Int ?? Self.playable.asgDrawFlushInterval
+        let microphoneEnabled = defaults.object(forKey: PreferenceKey.microphoneEnabled) as? Bool ?? Self.playable.microphoneEnabled
         return Self.playable
-            .with(vCPU: vCPU, ramMiB: ramMiB, refreshHz: refreshHz, asgDrawFlushInterval: asgDrawFlushInterval)
+            .with(
+                vCPU: vCPU,
+                ramMiB: ramMiB,
+                refreshHz: refreshHz,
+                asgDrawFlushInterval: asgDrawFlushInterval,
+                microphoneEnabled: microphoneEnabled
+            )
             .with(experimentPreset: preset)
     }
 
@@ -447,10 +458,17 @@ struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
         defaults.set(ramMiB, forKey: PreferenceKey.ramMiB)
         defaults.set(refreshHz, forKey: PreferenceKey.refreshHz)
         defaults.set(asgDrawFlushInterval, forKey: PreferenceKey.asgDrawFlushInterval)
+        defaults.set(microphoneEnabled, forKey: PreferenceKey.microphoneEnabled)
         experimentPreset.save(to: defaults)
     }
 
-    func with(vCPU: Int, ramMiB: Int, refreshHz: Int, asgDrawFlushInterval: Int) -> Self {
+    func with(
+        vCPU: Int,
+        ramMiB: Int,
+        refreshHz: Int,
+        asgDrawFlushInterval: Int,
+        microphoneEnabled: Bool? = nil
+    ) -> Self {
         let safeVCPU = Self.supportedValue(vCPU, in: Self.supportedVCPU) ?? self.vCPU
         let safeRAM = Self.supportedValue(ramMiB, in: Self.supportedRAMMiB) ?? self.ramMiB
         let safeRefresh = Self.supportedValue(refreshHz, in: Self.supportedRefreshHz) ?? self.refreshHz
@@ -477,7 +495,32 @@ struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
             controllerPort: controllerPort,
             angleEnabledFeatures: angleEnabledFeatures,
             angleDisabledFeatures: angleDisabledFeatures,
-            experimentPreset: experimentPreset
+            experimentPreset: experimentPreset,
+            microphoneEnabled: microphoneEnabled ?? self.microphoneEnabled
+        )
+    }
+
+    func with(microphoneEnabled: Bool) -> Self {
+        Self(
+            identifier: identifier,
+            width: width,
+            height: height,
+            densityDPI: densityDPI,
+            refreshHz: refreshHz,
+            vCPU: vCPU,
+            ramMiB: ramMiB,
+            gpuMode: gpuMode,
+            audioBackend: audioBackend,
+            graphicsTransport: graphicsTransport,
+            asgWriteBufferSize: asgWriteBufferSize,
+            asgWriteStepSize: asgWriteStepSize,
+            asgDataRingSize: asgDataRingSize,
+            asgDrawFlushInterval: asgDrawFlushInterval,
+            controllerPort: controllerPort,
+            angleEnabledFeatures: angleEnabledFeatures,
+            angleDisabledFeatures: angleDisabledFeatures,
+            experimentPreset: experimentPreset,
+            microphoneEnabled: microphoneEnabled
         )
     }
 
@@ -504,7 +547,8 @@ struct TFTMACRuntimeProfile: Codable, Equatable, Sendable {
             controllerPort: controllerPort,
             angleEnabledFeatures: angleEnabledFeatures,
             angleDisabledFeatures: angleDisabledFeatures,
-            experimentPreset: experimentPreset
+            experimentPreset: experimentPreset,
+            microphoneEnabled: microphoneEnabled
         )
     }
 
@@ -583,3 +627,5 @@ struct HostSchedulingReceipt: Equatable, Sendable {
         )
     }
 }
+
+typealias TFTMACRuntimeProfile = MacrodroidRuntimeProfile

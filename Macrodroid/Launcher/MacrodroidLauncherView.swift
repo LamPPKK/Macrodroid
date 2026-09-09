@@ -7,152 +7,6 @@ import AppKit
 import Foundation
 import SwiftUI
 
-// MARK: - APK Metadata & Real Icon Extractor
-
-struct APKMetadataExtractor {
-    struct AppMetadata {
-        let packageName: String
-        let appName: String
-        let versionName: String
-        let iconData: Data?
-    }
-
-    static func extract(from apkURL: URL, sdkRoot: URL?) -> AppMetadata {
-        var packageName = apkURL.deletingPathExtension().lastPathComponent
-        var appName = apkURL.deletingPathExtension().lastPathComponent
-        let versionName = "1.0.0"
-        var iconPathInAPK: String? = nil
-
-        // 1. Try finding aapt in sdkRoot/build-tools/*/aapt
-        if let sdk = sdkRoot {
-            let buildToolsDir = sdk.appendingPathComponent("build-tools")
-            if let versions = try? FileManager.default.contentsOfDirectory(atPath: buildToolsDir.path) {
-                let sortedVersions = versions.sorted().reversed()
-                for v in sortedVersions {
-                    let aaptURL = buildToolsDir.appendingPathComponent(v).appendingPathComponent("aapt")
-                    if FileManager.default.isExecutableFile(atPath: aaptURL.path) {
-                        let process = Process()
-                        process.executableURL = aaptURL
-                        process.arguments = ["dump", "badging", apkURL.path]
-                        let pipe = Pipe()
-                        process.standardOutput = pipe
-                        process.standardError = Pipe()
-                        if (try? process.run()) != nil {
-                            process.waitUntilExit()
-                            let outData = pipe.fileHandleForReading.readDataToEndOfFile()
-                            let dump = String(decoding: outData, as: UTF8.self)
-
-                            // Parse package: name='...'
-                            if let pkgRange = dump.range(of: "package: name='") {
-                                let remainder = dump[pkgRange.upperBound...]
-                                if let endQuote = remainder.range(of: "'") {
-                                    packageName = String(remainder[..<endQuote.lowerBound])
-                                }
-                            }
-
-                            // Parse application-label:'...'
-                            if let labelRange = dump.range(of: "application-label:'") {
-                                let remainder = dump[labelRange.upperBound...]
-                                if let endQuote = remainder.range(of: "'") {
-                                    appName = String(remainder[..<endQuote.lowerBound])
-                                }
-                            }
-
-                            // Parse highest density icon: 640 -> 480 -> 320 -> 240 -> 160 -> icon='
-                            let iconKeys = [
-                                "application-icon-640:'",
-                                "application-icon-480:'",
-                                "application-icon-320:'",
-                                "application-icon-240:'",
-                                "application-icon-160:'",
-                                "icon='"
-                            ]
-                            for key in iconKeys {
-                                if let r = dump.range(of: key) {
-                                    let remainder = dump[r.upperBound...]
-                                    if let quote = remainder.range(of: "'") {
-                                        let candidate = String(remainder[..<quote.lowerBound])
-                                        if candidate.hasSuffix(".png") || candidate.hasSuffix(".webp") {
-                                            iconPathInAPK = candidate
-                                            break
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        break
-                    }
-                }
-            }
-        }
-
-        // 2. If aapt didn't yield a direct PNG, scan zip entries using /usr/bin/unzip -l
-        if iconPathInAPK == nil || iconPathInAPK?.hasSuffix(".xml") == true {
-            let listProcess = Process()
-            listProcess.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-            listProcess.arguments = ["-l", apkURL.path]
-            let listPipe = Pipe()
-            listProcess.standardOutput = listPipe
-            listProcess.standardError = Pipe()
-            if (try? listProcess.run()) != nil {
-                listProcess.waitUntilExit()
-                let listData = listPipe.fileHandleForReading.readDataToEndOfFile()
-                let listOutput = String(decoding: listData, as: UTF8.self)
-                let lines = listOutput.components(separatedBy: .newlines)
-
-                let densityPriority = ["xxxhdpi", "xxhdpi", "xhdpi", "hdpi", "mdpi", ""]
-                var candidates: [(path: String, priority: Int)] = []
-                for line in lines {
-                    let parts = line.split(whereSeparator: \.isWhitespace)
-                    if let path = parts.last.map(String.init), (path.hasSuffix(".png") || path.hasSuffix(".webp")) {
-                        let lower = path.lowercased()
-                        if lower.contains("app_icon") || lower.contains("ic_launcher") || lower.contains("icon") || lower.contains("logo") {
-                            var p = 0
-                            if !lower.contains("background") && !lower.contains("monochrome") {
-                                p += 200
-                            }
-                            for (idx, d) in densityPriority.enumerated() {
-                                if !d.isEmpty && lower.contains(d) {
-                                    p += 100 - idx
-                                    break
-                                }
-                            }
-                            candidates.append((path, p))
-                        }
-                    }
-                }
-                candidates.sort { $0.priority > $1.priority }
-                iconPathInAPK = candidates.first?.path
-            }
-        }
-
-        // 3. Extract icon bytes using /usr/bin/unzip -p <apkPath> <iconPath>
-        var iconData: Data? = nil
-        if let iconPath = iconPathInAPK {
-            let extractProcess = Process()
-            extractProcess.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-            extractProcess.arguments = ["-p", apkURL.path, iconPath]
-            let extractPipe = Pipe()
-            extractProcess.standardOutput = extractPipe
-            extractProcess.standardError = Pipe()
-            if (try? extractProcess.run()) != nil {
-                extractProcess.waitUntilExit()
-                let data = extractPipe.fileHandleForReading.readDataToEndOfFile()
-                if !data.isEmpty {
-                    iconData = data
-                }
-            }
-        }
-
-        return AppMetadata(
-            packageName: packageName,
-            appName: appName,
-            versionName: versionName,
-            iconData: iconData
-        )
-    }
-}
-
 // MARK: - PlayApp Model
 
 struct PersistedAppRecord: Codable {
@@ -464,6 +318,67 @@ final class LauncherViewModel: ObservableObject {
         self.apps = loaded
         self.selectedApp = loaded.first
         checkGoogleServicesStatus()
+        syncGalleryIconsAndInstalledPackages()
+    }
+
+    func syncGalleryIconsAndInstalledPackages() {
+        Task {
+            guard let paths = try? MacrodroidRuntimePaths.discover() else { return }
+
+            for app in self.apps where app.customIcon == nil {
+                if let icon = await AppIconExtractor.extractAndCacheIcon(
+                    for: app.bundleIdentifier,
+                    adbURL: paths.adb,
+                    sdkRootURL: paths.sdkRoot
+                ) {
+                    await MainActor.run {
+                        app.customIcon = icon
+                        _ = AppShortcutManager.createShortcut(for: app)
+                    }
+                }
+            }
+
+            let discovered = await AppIconExtractor.discoverInstalledPackages(adbURL: paths.adb)
+            guard !discovered.isEmpty else { return }
+
+            await MainActor.run {
+                var addedAny = false
+                for item in discovered {
+                    let pkg = item.package
+                    guard !pkg.hasPrefix("com.android.") && !pkg.hasPrefix("android") else { continue }
+                    if !self.apps.contains(where: { $0.bundleIdentifier == pkg }) {
+                        let appName = pkg.components(separatedBy: ".").last?.capitalized ?? pkg
+                        let newApp = PlayApp(
+                            id: pkg,
+                            name: appName,
+                            bundleIdentifier: pkg,
+                            version: "1.0",
+                            url: URL(fileURLWithPath: item.remoteApkPath)
+                        )
+                        self.apps.append(newApp)
+                        addedAny = true
+
+                        Task {
+                            if let icon = await AppIconExtractor.extractAndCacheIcon(
+                                for: pkg,
+                                remoteApkPath: item.remoteApkPath,
+                                adbURL: paths.adb,
+                                sdkRootURL: paths.sdkRoot
+                            ) {
+                                await MainActor.run {
+                                    newApp.customIcon = icon
+                                    _ = AppShortcutManager.createShortcut(for: newApp)
+                                }
+                            }
+                        }
+                    }
+                }
+                if addedAny {
+                    self.persistInstalledApps()
+                    self.checkGoogleServicesStatus()
+                }
+            }
+        }
     }
 
     func persistInstalledApps() {

@@ -226,7 +226,7 @@ final class CombatBenchmarkLabStore: @unchecked Sendable {
             SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX,
             nil
         ) == SQLITE_OK else {
-            throw TFTMACRuntimeError("The persistent TFTMAC lab database could not be opened.")
+            throw MacrodroidRuntimeError("The persistent TFTMAC lab database could not be opened.")
         }
         sqlite3_busy_timeout(database, 5_000)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: databaseURL.path)
@@ -306,7 +306,7 @@ final class CombatBenchmarkLabStore: @unchecked Sendable {
         """
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
-              let statement else { throw TFTMACRuntimeError("SQLite could not prepare the control benchmark query.") }
+              let statement else { throw MacrodroidRuntimeError("SQLite could not prepare the control benchmark query.") }
         defer { sqlite3_finalize(statement) }
         sqlite3_bind_text(statement, 1, candidate.comparisonIdentitySHA256, -1, transientDestructor)
         sqlite3_bind_text(statement, 2, candidate.tftPackageVersion, -1, transientDestructor)
@@ -351,9 +351,9 @@ final class CombatBenchmarkLabStore: @unchecked Sendable {
     }
 
     private func createSchema() throws {
-        guard let database else { throw TFTMACRuntimeError("The persistent lab database is closed.") }
+        guard let database else { throw MacrodroidRuntimeError("The persistent lab database is closed.") }
         guard sqlite3_exec(database, Self.schemaSQL, nil, nil, nil) == SQLITE_OK else {
-            throw TFTMACRuntimeError("The persistent combat benchmark schema could not be created.")
+            throw MacrodroidRuntimeError("The persistent combat benchmark schema could not be created.")
         }
         // Existing lab databases predate the comparison identity. Old rows stay
         // nullable and cannot be paired with a new candidate.
@@ -367,10 +367,10 @@ final class CombatBenchmarkLabStore: @unchecked Sendable {
     }
 
     private func execute(_ sql: String, _ values: [Value]) throws {
-        guard let database else { throw TFTMACRuntimeError("The persistent lab database is closed.") }
+        guard let database else { throw MacrodroidRuntimeError("The persistent lab database is closed.") }
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
-              let statement else { throw TFTMACRuntimeError("SQLite could not prepare a combat benchmark statement.") }
+              let statement else { throw MacrodroidRuntimeError("SQLite could not prepare a combat benchmark statement.") }
         defer { sqlite3_finalize(statement) }
         for (offset, value) in values.enumerated() {
             let index = Int32(offset + 1)
@@ -382,7 +382,7 @@ final class CombatBenchmarkLabStore: @unchecked Sendable {
             }
         }
         guard sqlite3_step(statement) == SQLITE_DONE else {
-            throw TFTMACRuntimeError("SQLite could not write a combat benchmark statement.")
+            throw MacrodroidRuntimeError("SQLite could not write a combat benchmark statement.")
         }
     }
 

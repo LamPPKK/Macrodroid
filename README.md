@@ -9,6 +9,9 @@ Macrodroid is a high-performance native macOS application built in Swift and Met
 ## 🌟 Highlights
 
 - **100% Native Mac Experience**: No third-party emulator windows or Qt toolbars. Macrodroid embeds the Android display directly inside a native AppKit window backed by MetalKit with full macOS Spaces and Fullscreen support.
+- **Independent Multi-Window & Freeform**: Per-app native windows with non-destructive frame dispatch, Task Switcher HUD (`⌘T`), and Android Freeform mode (`⌘M`).
+- **App Gallery & Notification Icons**: Automatic high-res icon extraction via ADB (`AppIconExtractor`), macOS `.app` shortcut generation, and native notification banner icons.
+- **Vietnamese IME & Trackpad Gestures**: Native macOS Telex/VNI IME composition (`⌘I`), 2-finger scrolling, pinch-to-zoom magnification gestures, two-way clipboard sync, and drag-and-drop file sharing.
 - **Ultra-Low Latency Input**: Native macOS mouse clicks, drags, and keyboard strokes map directly to authenticated gRPC `EmulatorController.sendTouch` calls—bypassing `adb shell` execution overhead.
 - **Metal Presentation Pipeline**: 1080p RGBA presentation rendered with a triple-buffered Metal texture pipeline, hardware-accelerated on Apple Silicon GPUs.
 - **Engineering Performance Lab**: Built-in SQLite telemetry engine tracking continuous frame times, GPU render latencies (p95/p99), frame drops, and combat degradation incidents in real time.
@@ -64,18 +67,26 @@ dist/Macrodroid.app
 
 ### 2. Run Tests
 
-Execute the native test suite (covering FrameContract, ViewportMapper, AVD guards, and telemetry stores):
+Execute the native test suite (59 native unit tests covering FrameContract, ViewportMapper, AVD guards, Vietnamese IME, multi-window mailbox, touch inputs, and telemetry stores):
 
 ```sh
 /bin/zsh scripts/test-native-app.command
 ```
 
-### 3. Verify Repository Integrity
+### 3. Comprehensive 6-Phase Test Suite
 
-Run the automated consistency and SSOT checks:
+Run the authoritative end-to-end test suite (Toolchain, SwiftLint, Shell Syntax, Lab Self-Tests, 59 Unit Tests, SSOT Contract):
 
 ```sh
-/bin/zsh scripts/build-native-app.command
+/bin/zsh scripts/test-all.command
+```
+
+### 4. Verify Repository Integrity
+
+Run the release contract and SSOT consistency checks:
+
+```sh
+/bin/zsh scripts/verify-macrodroid.command
 ```
 
 ---

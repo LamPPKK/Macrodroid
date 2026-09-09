@@ -6,9 +6,9 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
     private let mailbox = LatestFrameMailbox()
     private var launcherWindowController: LauncherWindowController?
     private var mainWindowController: MainWindowController?
-    private var runtimeController: TFTMACRuntimeController?
+    private var runtimeController: MacrodroidRuntimeController?
     private var settingsWindowController: RuntimeSettingsWindowController?
-    private var activeProfile: TFTMACRuntimeProfile = .playable
+    private var activeProfile: MacrodroidRuntimeProfile = .playable
     private var terminationInProgress = false
 
     // Menu Bar Extra & Dock Hiding
@@ -17,6 +17,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
     private var currentAppName: String = ""
     private var currentAppPackage: String = ""
     private var latestGameFrameWindow: GameFrameTelemetryWindow?
+    private(set) var activeAppWindows: [String: MainWindowController] = [:]
 
     // Smart Idle Suspend / Power Efficiency
     private var idleSuspendTask: Task<Void, Never>?
@@ -108,13 +109,13 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
         }
     }
 
-    private func startBackgroundEngine(profile: TFTMACRuntimeProfile) {
+    private func startBackgroundEngine(profile: MacrodroidRuntimeProfile) {
         guard runtimeController == nil || runtimeController?.isRunning == false else { return }
         self.activeProfile = profile
         launcherWindowController?.viewModel.isEngineStarting = true
         launcherWindowController?.viewModel.statusMessage = "Starting background engine…"
 
-        let runtime = TFTMACRuntimeController(
+        let runtime = MacrodroidRuntimeController(
             profile: profile,
             mailbox: mailbox,
             status: { [weak self] text, isError in
@@ -141,7 +142,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
         runtime.start()
     }
 
-    private func openAppWindow(mode: LaunchMode, profile: TFTMACRuntimeProfile, app: PlayApp? = nil) {
+    private func openAppWindow(mode: LaunchMode, profile: MacrodroidRuntimeProfile, app: PlayApp? = nil) {
         cancelIdleSuspendAndResume()
         self.activeProfile = profile
         let appName = app?.name ?? (mode == .android ? "Android Home" : "Application")
@@ -153,8 +154,15 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         let isPortrait = (app?.name.lowercased().contains("phone") == true) || (app?.aspectRatioIndex == 0)
 
-        // 1. Create or show MainWindowController
-        if mainWindowController == nil {
+        // 1. Create or bring-to-front the per-package MainWindowController.
+        //    Each unique package gets its own independent window; re-opening
+        //    the same package just focuses the existing window.
+        if let existing = activeAppWindows[pkg] {
+            // Package already has a live window — just focus it.
+            mainWindowController = existing
+            existing.updateTitle(appName: appName)
+        } else {
+            // New package: create a fresh independent window.
             let controller = MainWindowController(
                 mailbox: mailbox,
                 appName: appName,
@@ -186,6 +194,12 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             controller.emulatorView.onFilesDropped = { [weak self] urls in
                 self?.handleDroppedFiles(urls)
             }
+            controller.emulatorView.onScrollGesture = { [weak self] x, y, dx, dy in
+                self?.runtimeController?.sendScrollGesture(x: x, y: y, deltaX: dx, deltaY: dy)
+            }
+            controller.emulatorView.onPinchGesture = { [weak self] x, y, scale in
+                self?.runtimeController?.sendPinchGesture(x: x, y: y, scale: scale)
+            }
             controller.onFreeformToggleRequested = { [weak self] in
                 guard let self else { return }
                 self.runtimeController?.toggleFreeformWindowing(enable: controller.isFreeformActive)
@@ -194,6 +208,9 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
                 self?.runtimeController?.syncSharedFolder { results in
                     NSLog("[SharedFolderSync] Synced \(results.count) files")
                 }
+            }
+            controller.onTaskSwitcherRequested = { [weak self] in
+                self?.presentTaskSwitcher(for: controller)
             }
 
             if let window = controller.window {
@@ -204,27 +221,33 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
                 ) { [weak self] _ in
                     guard let self else { return }
                     Task { @MainActor in
-                        self.restoreDockAndHideMenuBar()
+                        self.activeAppWindows.removeValue(forKey: pkg)
                         let closeBehavior = EngineCloseBehavior.load()
-                        if closeBehavior == .stopEngine {
+                        if closeBehavior == .stopEngine && self.activeAppWindows.isEmpty {
+                            self.restoreDockAndHideMenuBar()
                             self.stopEmulator()
                         } else {
-                            // Keep background engine running! Just return Android guest to home
-                            await self.runtimeController?.returnToHome(stopPackage: self.currentAppPackage)
-                            self.scheduleIdleSuspendIfNeeded()
+                            await self.runtimeController?.returnToHome(stopPackage: pkg)
+                            if self.activeAppWindows.isEmpty {
+                                self.restoreDockAndHideMenuBar()
+                                self.scheduleIdleSuspendIfNeeded()
+                            }
                         }
 
-                        self.mainWindowController = nil
-                        self.launcherWindowController?.viewModel.isLaunching = false
-                        self.launcherWindowController?.viewModel.isGameRunning = false
-                        self.launcherWindowController?.viewModel.selectedApp?.isStarting = false
-                        self.launcherWindowController?.window?.makeKeyAndOrderFront(nil)
-                        NSApp.activate(ignoringOtherApps: true)
+                        if self.mainWindowController === controller {
+                            self.mainWindowController = self.activeAppWindows.values.first
+                        }
+                        if self.activeAppWindows.isEmpty {
+                            self.launcherWindowController?.viewModel.isLaunching = false
+                            self.launcherWindowController?.viewModel.isGameRunning = false
+                            self.launcherWindowController?.viewModel.selectedApp?.isStarting = false
+                            self.launcherWindowController?.window?.makeKeyAndOrderFront(nil)
+                            NSApp.activate(ignoringOtherApps: true)
+                        }
                     }
                 }
             }
-        } else {
-            mainWindowController?.updateTitle(appName: appName)
+            activeAppWindows[pkg] = controller
         }
 
         // 2. If background engine is not running, start it
@@ -491,6 +514,64 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
         stopCurrentGameOrEngine()
     }
 
+    private func presentTaskSwitcher(for controller: MainWindowController) {
+        runtimeController?.fetchRunningTasks { [weak self] tasks in
+            Task { @MainActor in
+                guard let self else { return }
+                if tasks.isEmpty {
+                    controller.showToast(icon: "rectangle.stack.fill", message: "Task Switcher: No other background tasks")
+                    return
+                }
+
+                let menu = NSMenu(title: "Running Tasks")
+                let headerItem = NSMenuItem(title: "Android Tasks (\(tasks.count) active)", action: nil, keyEquivalent: "")
+                headerItem.isEnabled = false
+                menu.addItem(headerItem)
+                menu.addItem(NSMenuItem.separator())
+
+                for task in tasks {
+                    let itemTitle = "\(task.label) (\(task.package))"
+                    let item = NSMenuItem(title: itemTitle, action: #selector(self.switchTaskMenuItem(_:)), keyEquivalent: "")
+                    item.target = self
+                    item.representedObject = task.package
+                    if let icon = AppIconExtractor.cachedIcon(for: task.package) {
+                        icon.size = NSSize(width: 16, height: 16)
+                        item.image = icon
+                    }
+                    menu.addItem(item)
+                }
+
+                menu.addItem(NSMenuItem.separator())
+                let freeformItem = NSMenuItem(
+                    title: controller.isFreeformActive ? "Freeform Windowing: Active" : "Freeform Windowing: Off",
+                    action: #selector(self.toggleFreeformFromMenu),
+                    keyEquivalent: ""
+                )
+                freeformItem.target = self
+                menu.addItem(freeformItem)
+
+                if let window = controller.window {
+                    let location = NSPoint(x: window.frame.width - 200, y: window.frame.height - 40)
+                    menu.popUp(positioning: nil, at: location, in: controller.emulatorView)
+                }
+            }
+        }
+    }
+
+    @objc func switchTaskMenuItem(_ sender: NSMenuItem) {
+        if let pkg = sender.representedObject as? String {
+            runtimeController?.launchPackage(pkg)
+            let matchedApp = launcherWindowController?.viewModel.apps.first(where: { $0.bundleIdentifier == pkg })
+            let name = matchedApp?.name ?? pkg
+            mainWindowController?.updateTitle(appName: name)
+            mainWindowController?.showToast(icon: "rectangle.stack.fill", message: "Switched to \(name)")
+        }
+    }
+
+    @objc func toggleFreeformFromMenu() {
+        mainWindowController?.toggleFreeform()
+    }
+
     private func stopCurrentGameOrEngine() {
         Task { @MainActor in
             if mainWindowController != nil {
@@ -555,7 +636,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     @objc func showSettings(_ sender: Any?) {
-        let settings = settingsWindowController ?? RuntimeSettingsWindowController(profile: TFTMACRuntimeProfile.load())
+        let settings = settingsWindowController ?? RuntimeSettingsWindowController(profile: MacrodroidRuntimeProfile.load())
         settings.onSave = { [weak self] previous, next in
             self?.runtimeController?.recordSettingsChange(previous: previous, next: next)
         }
@@ -636,6 +717,18 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             "packageName": record.packageName,
             "notificationKey": record.key
         ]
+
+        // Attach the real app icon (PNG cached by AppIconExtractor) so macOS
+        // Notification Center shows the Android app's icon in the banner thumbnail.
+        let iconFileURL = AppIconExtractor.iconURL(for: record.packageName)
+        if AppIconExtractor.hasCachedIcon(for: record.packageName),
+           let attachment = try? UNNotificationAttachment(
+               identifier: "app-icon-\(record.packageName)",
+               url: iconFileURL,
+               options: [UNNotificationAttachmentOptionsThumbnailClippingRectKey: CGRect.zero as AnyObject]
+           ) {
+            content.attachments = [attachment]
+        }
 
         let request = UNNotificationRequest(
             identifier: record.key,

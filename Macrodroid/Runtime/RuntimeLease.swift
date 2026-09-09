@@ -15,7 +15,7 @@ enum RuntimeLeaseError: LocalizedError, Sendable {
     }
 }
 
-final class TFTMACRuntimeLease: @unchecked Sendable {
+final class MacrodroidRuntimeLease: @unchecked Sendable {
     let processIdentifier: Int32
     let token: String
     let url: URL
@@ -103,3 +103,5 @@ final class TFTMACRuntimeLease: @unchecked Sendable {
         }
     }
 }
+
+typealias TFTMACRuntimeLease = MacrodroidRuntimeLease

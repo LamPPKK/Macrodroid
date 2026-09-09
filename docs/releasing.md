@@ -1,12 +1,12 @@
-# Releasing TFTMAC
+# Releasing Macrodroid
 
-TFTMAC releases are native macOS application builds. The release process does not publish or redistribute Riot application packages.
+Macrodroid releases are native macOS application builds. The release process does not publish or redistribute Riot application packages.
 
 ## Release identity
 
 ```text
-Application: TFTMAC
-Bundle ID: com.flashls1.tftmac
+Application: Macrodroid
+Bundle ID: com.macrodroid
 Architecture: arm64
 Minimum macOS: 15.0
 ```
@@ -18,7 +18,7 @@ The working Android SDK/AVD is runtime state outside the application bundle and 
 Run the source/CI contract on the exact release commit:
 
 ```sh
-/bin/zsh scripts/verify-tftmac.command
+/bin/zsh scripts/verify-macrodroid.command
 ```
 
 Before any local install or package promotion, separately run:
@@ -50,6 +50,12 @@ historical signed release, but the login keychain has zero valid local signing
 identities and deep/strict verification reports `CSSMERR_TP_NOT_TRUSTED`.
 Historical acceptance remains valid as historical evidence; a new release is
 blocked until the identity is repaired and the installed-runtime verifier passes.
+
+> **Note**: The source tree is currently at v4.1 (59 native tests, Phase 7
+> complete) on top of the frozen Build 8 installed-runtime identity. The SSOT
+> authority files (`ssot/runtime-authority.json`, `ssot/STACK.lock.yaml`)
+> record the frozen Build 8 release evidence and must not be edited without a
+> full re-acceptance cycle.
 
 ## Release evidence
 

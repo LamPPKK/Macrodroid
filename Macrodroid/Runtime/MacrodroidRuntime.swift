@@ -9,7 +9,7 @@ import Metal
 import SQLite3
 import SwiftProtobuf
 
-struct TFTMACRuntimePaths: Sendable {
+struct MacrodroidRuntimePaths: Sendable {
     let sdkRoot: URL
     let emulator: URL
     let adb: URL
@@ -391,7 +391,7 @@ private enum DiagnosticTraceScope: String, Sendable {
     case automaticGraphics = "AUTOMATIC_GRAPHICS"
 }
 
-struct TFTMACRuntimeError: LocalizedError, Sendable {
+struct MacrodroidRuntimeError: LocalizedError, Sendable {
     let message: String
     init(_ message: String) { self.message = message }
     var errorDescription: String? { message }
@@ -404,7 +404,7 @@ private enum SQLiteValue: Sendable {
     case null
 }
 
-final class TFTMACNativeTelemetry: @unchecked Sendable {
+final class MacrodroidNativeTelemetry: @unchecked Sendable {
     let sessionIdentifier: String
     let captureDirectory: URL
 
@@ -2308,6 +2308,24 @@ actor TFTMACRuntimeService {
         inputContinuation?.yield(.touch(input))
     }
 
+    func sendScrollGesture(x: Int32, y: Int32, deltaX: CGFloat, deltaY: CGFloat) {
+        let (start, end) = GestureTouchMapper.scrollSwipePoints(x: x, y: y, deltaX: deltaX, deltaY: deltaY)
+        sendTouch(.primary(x: start.x, y: start.y, isContact: true))
+        sendTouch(.primary(x: end.x, y: end.y, isContact: true))
+        sendTouch(.primary(x: end.x, y: end.y, isContact: false))
+    }
+
+    func sendPinchGesture(x: Int32, y: Int32, scale: CGFloat) {
+        let initial = GestureTouchMapper.pinchSpanPoints(centerX: x, centerY: y, scale: 0)
+        let scaled = GestureTouchMapper.pinchSpanPoints(centerX: x, centerY: y, scale: scale)
+        sendTouch(TouchInput(x: initial.finger0.x, y: initial.finger0.y, identifier: 0, phase: .contact))
+        sendTouch(TouchInput(x: initial.finger1.x, y: initial.finger1.y, identifier: 1, phase: .contact))
+        sendTouch(TouchInput(x: scaled.finger0.x, y: scaled.finger0.y, identifier: 0, phase: .contact))
+        sendTouch(TouchInput(x: scaled.finger1.x, y: scaled.finger1.y, identifier: 1, phase: .contact))
+        sendTouch(TouchInput(x: scaled.finger0.x, y: scaled.finger0.y, identifier: 0, phase: .release))
+        sendTouch(TouchInput(x: scaled.finger1.x, y: scaled.finger1.y, identifier: 1, phase: .release))
+    }
+
     func sendKeyboard(_ input: KeyboardInput) {
         telemetry?.recordInput(.keyboard(input))
         inputContinuation?.yield(.keyboard(input))
@@ -2909,6 +2927,9 @@ actor TFTMACRuntimeService {
             "-grpc", "\(profile.controllerPort)", "-grpc-use-token",
             "-idle-grpc-timeout", "300"
         ]
+        if profile.microphoneEnabled {
+            arguments += ["-allow-host-audio"]
+        }
         if let zone = TimeZone.current.identifier.addingPercentEncoding(withAllowedCharacters: .alphanumerics), !zone.isEmpty {
             arguments += ["-timezone", TimeZone.current.identifier]
         }
@@ -5124,6 +5145,34 @@ actor TFTMACRuntimeService {
         _ = try? Self.adb(paths: paths, ["shell", script], timeout: 5)
     }
 
+    func fetchRunningTasks() async -> [AndroidTaskRecord] {
+        guard let paths = self.paths else { return [] }
+        let result = (try? Self.adb(paths: paths, ["shell", "cmd", "activity", "tasks"], timeout: 10)) ??
+                     (try? Self.adb(paths: paths, ["shell", "dumpsys", "activity", "recents"], timeout: 10))
+        guard let output = result?.output else { return [] }
+        return FreeformTaskManager.parseTasks(from: output)
+    }
+
+    func launchPackageInFreeform(_ package: String) async {
+        guard let paths = self.paths else { return }
+        let resolved = (try? Self.adb(
+            paths: paths,
+            ["shell", "cmd", "package", "resolve-activity", "--brief", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", package],
+            timeout: 10
+        ).output.split(whereSeparator: { $0.isNewline }).last.map(String.init)) ?? nil
+
+        if let component = resolved {
+            _ = try? Self.adb(paths: paths, FreeformTaskManager.launchInFreeformArguments(component: component), timeout: 15)
+        } else {
+            _ = try? Self.adb(paths: paths, FreeformTaskManager.launchInFreeformArguments(package: package), timeout: 15)
+        }
+    }
+
+    func forceStopPackage(_ package: String) async {
+        guard let paths = self.paths else { return }
+        _ = try? Self.adb(paths: paths, FreeformTaskManager.forceStopArguments(package: package), timeout: 10)
+    }
+
     func importFiles(urls: [URL]) async -> [FileTransferResult] {
         guard let paths = self.paths else {
             return urls.map { url in
@@ -5409,7 +5458,7 @@ private final class NotificationReceiverBox: @unchecked Sendable {
 }
 
 @MainActor
-final class TFTMACRuntimeController {
+final class MacrodroidRuntimeController {
     private let service: TFTMACRuntimeService
     private let notificationBox: NotificationReceiverBox
     private var runTask: Task<Void, Never>?
@@ -5471,6 +5520,14 @@ final class TFTMACRuntimeController {
 
     func sendTouch(_ input: TouchInput) {
         Task { await service.sendTouch(input) }
+    }
+
+    func sendScrollGesture(x: Int32, y: Int32, deltaX: CGFloat, deltaY: CGFloat) {
+        Task { await service.sendScrollGesture(x: x, y: y, deltaX: deltaX, deltaY: deltaY) }
+    }
+
+    func sendPinchGesture(x: Int32, y: Int32, scale: CGFloat) {
+        Task { await service.sendPinchGesture(x: x, y: y, scale: scale) }
     }
 
     func sendKeyboard(text: String? = nil, key: String? = nil) {
@@ -5536,6 +5593,21 @@ final class TFTMACRuntimeController {
         Task { await service.toggleFreeform(enable: enable) }
     }
 
+    func fetchRunningTasks(completion: @escaping ([AndroidTaskRecord]) -> Void) {
+        Task { [service] in
+            let tasks = await service.fetchRunningTasks()
+            completion(tasks)
+        }
+    }
+
+    func launchPackageInFreeform(_ package: String) {
+        Task { await service.launchPackageInFreeform(package) }
+    }
+
+    func forceStopPackage(_ package: String) {
+        Task { await service.forceStopPackage(package) }
+    }
+
     func syncSharedFolder(completion: ((@Sendable ([FileTransferResult]) -> Void))? = nil) {
         Task { [service] in
             let coordinator = SharedFolderSyncCoordinator()
@@ -5565,3 +5637,8 @@ final class TFTMACRuntimeController {
         runTask = nil
     }
 }
+
+typealias TFTMACRuntimePaths = MacrodroidRuntimePaths
+typealias TFTMACRuntimeError = MacrodroidRuntimeError
+typealias TFTMACNativeTelemetry = MacrodroidNativeTelemetry
+typealias TFTMACRuntimeController = MacrodroidRuntimeController

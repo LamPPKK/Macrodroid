@@ -363,6 +363,14 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     var onMouseLockToggleRequested: (() -> Void)?
     var onFreeformRequested: (() -> Void)?
     var onSharedFolderRequested: (() -> Void)?
+    var onScrollGesture: ((Int32, Int32, CGFloat, CGFloat) -> Void)?
+    var onPinchGesture: ((Int32, Int32, CGFloat) -> Void)?
+    var onIMEToggleRequested: (() -> Void)?
+    var onTaskSwitcherRequested: (() -> Void)?
+
+    var isVietnameseIMEEnabled = true
+    private var markedTextStorage = NSMutableAttributedString()
+    private var markedTextSelectionRange = NSRange(location: NSNotFound, length: 0)
 
     private(set) var isMouseLocked = false
     private var previousModifierFlags: NSEvent.ModifierFlags = []
@@ -595,12 +603,37 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     override func rightMouseDragged(with event: NSEvent) { sendMouse(event, buttons: 2) }
     override func rightMouseUp(with event: NSEvent) { sendMouse(event, buttons: 0) }
 
+    override func scrollWheel(with event: NSEvent) {
+        guard let point = androidPoint(for: event) else {
+            super.scrollWheel(with: event)
+            return
+        }
+        let dx = event.scrollingDeltaX * (event.hasPreciseScrollingDeltas ? 1.0 : 10.0)
+        let dy = event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 1.0 : 10.0)
+        guard abs(dx) > 0.5 || abs(dy) > 0.5 else { return }
+        onScrollGesture?(point.x, point.y, dx, dy)
+    }
+
+    override func magnify(with event: NSEvent) {
+        guard let point = androidPoint(for: event) else {
+            super.magnify(with: event)
+            return
+        }
+        let scale = event.magnification
+        guard abs(scale) > 0.001 else { return }
+        onPinchGesture?(point.x, point.y, scale)
+    }
+
     override func keyDown(with event: NSEvent) {
         if !keymappingOverlay.isHidden {
             keymappingOverlay.highlight(event: event, isDown: true)
         }
         if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command) {
             super.keyDown(with: event)
+            return
+        }
+        if isVietnameseIMEEnabled && keymappingOverlay.isHidden {
+            interpretKeyEvents([event])
             return
         }
         if let key = Self.specialKey(for: event) {
@@ -646,6 +679,12 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             return true
         case "o":
             onSharedFolderRequested?()
+            return true
+        case "i":
+            onIMEToggleRequested?()
+            return true
+        case "t":
+            onTaskSwitcherRequested?()
             return true
         case "v":
             paste(nil)
@@ -705,7 +744,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
 
     @discardableResult
     private func uploadNewestFrameIfPossible() -> Bool {
-        guard let frame = mailbox.takeLatest() else { return false }
+        guard let frame = mailbox.latestFrame(after: lastPresentedSequence) ?? mailbox.takeLatest() else { return false }
         guard let slot = gpuState.availableUploadSlot(excluding: currentTextureSlot) else { return false }
         if textures[slot] == nil {
             let descriptor = MTLTextureDescriptor.texture2DDescriptor(
@@ -947,6 +986,108 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         case 125: return "ArrowDown"
         case 126: return "ArrowUp"
         default: return nil
+        }
+    }
+}
+
+// MARK: - NSTextInputClient (Vietnamese IME Direct Composing & Forwarding)
+
+@MainActor extension EmbeddedEmulatorView: @preconcurrency NSTextInputClient {
+    func insertText(_ string: Any, replacementRange: NSRange) {
+        let text: String
+        if let attrStr = string as? NSAttributedString {
+            text = attrStr.string
+        } else if let str = string as? String {
+            text = str
+        } else {
+            return
+        }
+        markedTextStorage.mutableString.setString("")
+        markedTextSelectionRange = NSRange(location: NSNotFound, length: 0)
+        guard !text.isEmpty else { return }
+        onKeyboardInput?(text, nil)
+    }
+
+    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        let str: String
+        if let attrStr = string as? NSAttributedString {
+            str = attrStr.string
+        } else if let s = string as? String {
+            str = s
+        } else {
+            str = ""
+        }
+        markedTextStorage.mutableString.setString(str)
+        markedTextSelectionRange = selectedRange
+    }
+
+    func unmarkText() {
+        let str = markedTextStorage.string
+        if !str.isEmpty {
+            onKeyboardInput?(str, nil)
+        }
+        markedTextStorage.mutableString.setString("")
+        markedTextSelectionRange = NSRange(location: NSNotFound, length: 0)
+    }
+
+    func selectedRange() -> NSRange {
+        NSRange(location: NSNotFound, length: 0)
+    }
+
+    func markedRange() -> NSRange {
+        if markedTextStorage.length > 0 {
+            return NSRange(location: 0, length: markedTextStorage.length)
+        }
+        return NSRange(location: NSNotFound, length: 0)
+    }
+
+    func hasMarkedText() -> Bool {
+        markedTextStorage.length > 0
+    }
+
+    func attributedSubstring(forProposedRange range: NSRange, actualRange: NSRangePointer?) -> NSAttributedString? {
+        guard range.location != NSNotFound, range.location + range.length <= markedTextStorage.length else {
+            return nil
+        }
+        actualRange?.pointee = range
+        return markedTextStorage.attributedSubstring(from: range)
+    }
+
+    func validAttributesForMarkedText() -> [NSAttributedString.Key] {
+        [.underlineStyle]
+    }
+
+    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
+        let windowRect = window?.frame ?? .zero
+        return NSRect(x: windowRect.midX, y: windowRect.midY, width: 0, height: 0)
+    }
+
+    func characterIndex(for point: NSPoint) -> Int {
+        0
+    }
+
+    override func doCommand(by selector: Selector) {
+        switch selector {
+        case #selector(NSResponder.insertNewline(_:)):
+            onKeyboardInput?(nil, "Enter")
+        case #selector(NSResponder.deleteBackward(_:)):
+            onKeyboardInput?(nil, "Backspace")
+        case #selector(NSResponder.deleteForward(_:)):
+            onKeyboardInput?(nil, "Delete")
+        case #selector(NSResponder.moveLeft(_:)):
+            onKeyboardInput?(nil, "ArrowLeft")
+        case #selector(NSResponder.moveRight(_:)):
+            onKeyboardInput?(nil, "ArrowRight")
+        case #selector(NSResponder.moveUp(_:)):
+            onKeyboardInput?(nil, "ArrowUp")
+        case #selector(NSResponder.moveDown(_:)):
+            onKeyboardInput?(nil, "ArrowDown")
+        case #selector(NSResponder.cancelOperation(_:)):
+            onKeyboardInput?(nil, "Escape")
+        case #selector(NSResponder.insertTab(_:)):
+            onKeyboardInput?(nil, "Tab")
+        default:
+            super.doCommand(by: selector)
         }
     }
 }
