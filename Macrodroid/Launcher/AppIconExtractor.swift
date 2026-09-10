@@ -178,6 +178,7 @@ public enum AppIconExtractor {
         return FileManager.default.fileExists(atPath: url.path)
     }
 
+    @MainActor
     public static func cachedIcon(for package: String) -> NSImage? {
         let url = iconURL(for: package)
         guard let data = try? Data(contentsOf: url) else { return nil }
@@ -218,6 +219,7 @@ public enum AppIconExtractor {
         }.value
     }
 
+    @MainActor
     public static func extractAndCacheIcon(
         for package: String,
         remoteApkPath: String? = nil,
@@ -229,7 +231,7 @@ public enum AppIconExtractor {
         }
         guard let adb = adbURL else { return nil }
 
-        return await Task.detached { () -> NSImage? in
+        let iconData = await Task.detached { () -> Data? in
             var apkRemote = remoteApkPath
             if apkRemote == nil {
                 let pathProcess = Process()
@@ -265,12 +267,15 @@ public enum AppIconExtractor {
             guard FileManager.default.fileExists(atPath: tempFile.path) else { return nil }
 
             let meta = APKMetadataExtractor.extract(from: tempFile, sdkRoot: sdkRootURL)
-            guard let iconData = meta.iconData, !iconData.isEmpty else { return nil }
+            guard let data = meta.iconData, !data.isEmpty else { return nil }
 
             let saveURL = iconURL(for: package)
-            try? iconData.write(to: saveURL)
+            try? data.write(to: saveURL)
 
-            return NSImage(data: iconData)
+            return data
         }.value
+
+        guard let data = iconData else { return nil }
+        return NSImage(data: data)
     }
 }

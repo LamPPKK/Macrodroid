@@ -322,7 +322,7 @@ final class LauncherViewModel: ObservableObject {
     }
 
     func syncGalleryIconsAndInstalledPackages() {
-        Task {
+        Task { @MainActor in
             guard let paths = try? MacrodroidRuntimePaths.discover() else { return }
 
             for app in self.apps where app.customIcon == nil {
@@ -331,52 +331,46 @@ final class LauncherViewModel: ObservableObject {
                     adbURL: paths.adb,
                     sdkRootURL: paths.sdkRoot
                 ) {
-                    await MainActor.run {
-                        app.customIcon = icon
-                        _ = AppShortcutManager.createShortcut(for: app)
-                    }
+                    app.customIcon = icon
+                    _ = AppShortcutManager.createShortcut(for: app)
                 }
             }
 
             let discovered = await AppIconExtractor.discoverInstalledPackages(adbURL: paths.adb)
             guard !discovered.isEmpty else { return }
 
-            await MainActor.run {
-                var addedAny = false
-                for item in discovered {
-                    let pkg = item.package
-                    guard !pkg.hasPrefix("com.android.") && !pkg.hasPrefix("android") else { continue }
-                    if !self.apps.contains(where: { $0.bundleIdentifier == pkg }) {
-                        let appName = pkg.components(separatedBy: ".").last?.capitalized ?? pkg
-                        let newApp = PlayApp(
-                            id: pkg,
-                            name: appName,
-                            bundleIdentifier: pkg,
-                            version: "1.0",
-                            url: URL(fileURLWithPath: item.remoteApkPath)
-                        )
-                        self.apps.append(newApp)
-                        addedAny = true
+            var addedAny = false
+            for item in discovered {
+                let pkg = item.package
+                guard !pkg.hasPrefix("com.android.") && !pkg.hasPrefix("android") else { continue }
+                if !self.apps.contains(where: { $0.bundleIdentifier == pkg }) {
+                    let appName = pkg.components(separatedBy: ".").last?.capitalized ?? pkg
+                    let newApp = PlayApp(
+                        id: pkg,
+                        name: appName,
+                        bundleIdentifier: pkg,
+                        version: "1.0",
+                        url: URL(fileURLWithPath: item.remoteApkPath)
+                    )
+                    self.apps.append(newApp)
+                    addedAny = true
 
-                        Task {
-                            if let icon = await AppIconExtractor.extractAndCacheIcon(
-                                for: pkg,
-                                remoteApkPath: item.remoteApkPath,
-                                adbURL: paths.adb,
-                                sdkRootURL: paths.sdkRoot
-                            ) {
-                                await MainActor.run {
-                                    newApp.customIcon = icon
-                                    _ = AppShortcutManager.createShortcut(for: newApp)
-                                }
-                            }
+                    Task { @MainActor in
+                        if let icon = await AppIconExtractor.extractAndCacheIcon(
+                            for: pkg,
+                            remoteApkPath: item.remoteApkPath,
+                            adbURL: paths.adb,
+                            sdkRootURL: paths.sdkRoot
+                        ) {
+                            newApp.customIcon = icon
+                            _ = AppShortcutManager.createShortcut(for: newApp)
                         }
                     }
                 }
-                if addedAny {
-                    self.persistInstalledApps()
-                    self.checkGoogleServicesStatus()
-                }
+            }
+            if addedAny {
+                self.persistInstalledApps()
+                self.checkGoogleServicesStatus()
             }
         }
     }
