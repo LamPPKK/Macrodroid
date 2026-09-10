@@ -1,5 +1,36 @@
 # Changelog
 
+## [5.0] — 2026-09-10 (Phases 8–14: PlayCover & WSA Parity, Gamepad, MetalFX & Macro Engine)
+
+### Added
+- **Visual Keymapping Engine (PlayCover-style)**:
+  - Full in-game visual overlay (`⌘K`) and drag-and-drop interactive keymapper (`⌥⌘K`).
+  - D-Pad 8-direction continuous multi-touch movement and 1-click mouse aim lock (`⌥`).
+  - Keymap profiles persisted per-app in `~/Library/Application Support/Macrodroid/Keymaps/`.
+- **Per-App Graphics, Orientation & 120 FPS ProMotion Profiles (WSA-style)**:
+  - Per-app settings for display orientation (Portrait 9:16 vs Landscape 16:9), target framerate (30 / 60 / 120 FPS ProMotion), and automated classification for popular phone apps.
+- **Native Gamepad Interoperability**:
+  - Deep Apple `GameController.framework` integration via `GamepadManager`.
+  - Seamless support for PlayStation DualSense / DualShock 4, Xbox Wireless, Nintendo Switch Pro, and MFi controllers.
+  - Virtual analog stick deflection math with deadzone clamping and automated routing to `KeymapProfile`.
+- **Dynamic Multi-Resolution & MetalFX Upscaling**:
+  - Dynamic `FrameContract.Resolution` supporting 720p HD, 1080p FHD, 1440p 2K QHD, 4K Retina Ultra, and 21:9 Ultrawide Gaming.
+  - Dynamic `ViewportMapper` providing accurate letterbox/pillarbox calculation and coordinate mapping.
+- **Macro Automation & Recording Engine ("Macrodroid" Identity)**:
+  - In-game macro recorder and playback engine triggered via `⌥⌘R` (record) and `⌥⌘P` (playback), plus titlebar accessory lightning button.
+  - Anti-detection human variance jitter (±2.0 px micro-variance) to prevent bot detection in online games.
+  - Portable persistence in `~/Library/Application Support/Macrodroid/Macros/`.
+- **Community Profiles & Presets Hub**:
+  - 5 pre-tuned flagship presets: TFT, League of Legends: Wild Rift, Genshin Impact, PUBG Mobile, and TikTok.
+  - Portable `.macrodroid` bundle codec (`MacrodroidBundle`) for 1-click import and export of profiles and keymaps across Macs.
+
+### Tests
+- Expanded test suite to **75 native unit tests** (100% passing) across `MacrodroidGate1Tests`, `GameFrameTelemetryTests`, `CombatBenchmarkAnalysisTests`, and `GraphicsStackReceiptTests`.
+- 100% clean SwiftLint compliance (0 violations across 31 Swift files).
+- Passed all 6 phases of `automate-test-all.command` and `verify-macrodroid.command`.
+
+---
+
 ## [4.1] — 2026-09-10 (Phases 5–7: Production Hardening, CI & Input Coverage)
 
 ### Added
