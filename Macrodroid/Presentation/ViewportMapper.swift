@@ -4,6 +4,16 @@ struct ViewportMapper: Sendable {
     let sourceSize: CGSize
     let viewportSize: CGSize
 
+    init(sourceSize: CGSize, viewportSize: CGSize) {
+        self.sourceSize = sourceSize
+        self.viewportSize = viewportSize
+    }
+
+    init(resolution: FrameContract.Resolution, viewportSize: CGSize) {
+        self.sourceSize = CGSize(width: resolution.width, height: resolution.height)
+        self.viewportSize = viewportSize
+    }
+
     var displayedRect: CGRect {
         guard sourceSize.width > 0, sourceSize.height > 0,
               viewportSize.width > 0, viewportSize.height > 0 else {

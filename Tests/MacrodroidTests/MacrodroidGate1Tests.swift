@@ -1202,6 +1202,327 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
         XCTAssertEqual(loaded.mouseAim?.sensitivity, 1.5)
         XCTAssertEqual(loaded.overlayOpacity, 0.85, accuracy: 0.001)
     }
+
+    // MARK: - Phases 9-14: Gamepad, Dynamic Resolutions, Macros & Community Hub
+
+    @MainActor
+    func testGamepadManagerVirtualStickDeflectionToTouchPoint() {
+        // 1. Zero deflection (inside deadzone) -> produces nil
+        let deadzonePoint = GamepadManager.virtualStickTouchPoint(
+            stickX: 0.05,
+            stickY: -0.05,
+            centerX: 0.4,
+            centerY: 0.7,
+            radius: 80.0,
+            sourceWidth: 1000,
+            sourceHeight: 1000,
+            deadzone: 0.15
+        )
+        XCTAssertNil(deadzonePoint)
+
+        // 2. Full right deflection (+1.0, 0.0) -> center.x + radius = 400 + 80 = 480
+        let rightPoint = GamepadManager.virtualStickTouchPoint(
+            stickX: 1.0,
+            stickY: 0.0,
+            centerX: 0.4,
+            centerY: 0.7,
+            radius: 80.0,
+            sourceWidth: 1000,
+            sourceHeight: 1000
+        )
+        XCTAssertNotNil(rightPoint)
+        XCTAssertEqual(rightPoint?.x, 480)
+        XCTAssertEqual(rightPoint?.y, 700)
+
+        // 3. Full up deflection (0.0, 1.0) -> center.y - radius = 700 - 80 = 620
+        let upPoint = GamepadManager.virtualStickTouchPoint(
+            stickX: 0.0,
+            stickY: 1.0,
+            centerX: 0.4,
+            centerY: 0.7,
+            radius: 80.0,
+            sourceWidth: 1000,
+            sourceHeight: 1000
+        )
+        XCTAssertNotNil(upPoint)
+        XCTAssertEqual(upPoint?.x, 400)
+        XCTAssertEqual(upPoint?.y, 620)
+
+        // 4. Clamping extreme deflection (> 1.0) to radius
+        let extremePoint = GamepadManager.virtualStickTouchPoint(
+            stickX: 2.0,
+            stickY: 0.0,
+            centerX: 0.4,
+            centerY: 0.7,
+            radius: 80.0,
+            sourceWidth: 1000,
+            sourceHeight: 1000
+        )
+        XCTAssertNotNil(extremePoint)
+        XCTAssertEqual(extremePoint?.x, 480)
+    }
+
+    @MainActor
+    func testGamepadTypeDetectionAndButtonCoverage() {
+        XCTAssertEqual(GamepadType.dualSense.rawValue, "PlayStation DualSense")
+        XCTAssertEqual(GamepadType.dualShock4.rawValue, "PlayStation DualShock 4")
+        XCTAssertEqual(GamepadType.xbox.rawValue, "Xbox Wireless Controller")
+        XCTAssertEqual(GamepadType.switchPro.rawValue, "Nintendo Switch Pro Controller")
+        XCTAssertEqual(GamepadType.mfi.rawValue, "MFi Controller")
+        XCTAssertEqual(GamepadType.generic.rawValue, "Generic Gamepad")
+
+        // GamepadButton allCases
+        XCTAssertTrue(GamepadButton.allCases.count >= 16)
+        XCTAssertTrue(GamepadButton.allCases.contains(.buttonA))
+        XCTAssertTrue(GamepadButton.allCases.contains(.buttonB))
+        XCTAssertTrue(GamepadButton.allCases.contains(.buttonX))
+        XCTAssertTrue(GamepadButton.allCases.contains(.buttonY))
+        XCTAssertTrue(GamepadButton.allCases.contains(.leftTrigger))
+        XCTAssertTrue(GamepadButton.allCases.contains(.rightTrigger))
+        XCTAssertTrue(GamepadButton.allCases.contains(.leftThumbstickButton))
+        XCTAssertTrue(GamepadButton.allCases.contains(.rightThumbstickButton))
+
+        let state = GamepadState(
+            name: "DualSense Wireless Controller",
+            type: .dualSense,
+            batteryLevel: 0.95,
+            isConnected: true
+        )
+        XCTAssertEqual(state.type, .dualSense)
+        XCTAssertEqual(state.batteryLevel, 0.95)
+        XCTAssertTrue(state.isConnected)
+    }
+
+    func testDynamicFrameContractMultiResolutionValidation() throws {
+        // Standard 1080p
+        let res1080 = FrameContract.standard1080p
+        XCTAssertEqual(res1080.width, 1920)
+        XCTAssertEqual(res1080.height, 1080)
+        XCTAssertEqual(res1080.byteCount, 1920 * 1080 * 4)
+        XCTAssertEqual(res1080.aspectRatio, 16.0 / 9.0, accuracy: 0.001)
+        XCTAssertNoThrow(try FrameContract.validateDynamic(width: 1920, height: 1080, byteCount: res1080.byteCount))
+
+        // 720p HD
+        let res720 = FrameContract.standard720p
+        XCTAssertEqual(res720.width, 1280)
+        XCTAssertEqual(res720.height, 720)
+        XCTAssertEqual(res720.byteCount, 1280 * 720 * 4)
+        XCTAssertNoThrow(try FrameContract.validateDynamic(width: 1280, height: 720, byteCount: res720.byteCount))
+
+        // 1440p 2K
+        let res1440 = FrameContract.standard1440p
+        XCTAssertEqual(res1440.width, 2560)
+        XCTAssertEqual(res1440.height, 1440)
+        XCTAssertNoThrow(try FrameContract.validateDynamic(width: 2560, height: 1440, byteCount: res1440.byteCount))
+
+        // 4K Retina
+        let res4K = FrameContract.retina4K
+        XCTAssertEqual(res4K.width, 3840)
+        XCTAssertEqual(res4K.height, 2160)
+        XCTAssertEqual(res4K.byteCount, 3840 * 2160 * 4)
+        XCTAssertNoThrow(try FrameContract.validateDynamic(width: 3840, height: 2160, byteCount: res4K.byteCount))
+
+        // 21:9 Ultrawide
+        let resUltrawide = FrameContract.ultrawide21x9
+        XCTAssertEqual(resUltrawide.width, 2560)
+        XCTAssertEqual(resUltrawide.height, 1080)
+        XCTAssertEqual(resUltrawide.aspectRatio, 2560.0 / 1080.0, accuracy: 0.001)
+        XCTAssertNoThrow(try FrameContract.validateDynamic(width: 2560, height: 1080, byteCount: resUltrawide.byteCount))
+
+        // Inactive display throwing
+        XCTAssertThrowsError(try FrameContract.validateDynamic(width: 0, height: 1080, byteCount: 0)) { error in
+            XCTAssertEqual(error as? FrameContractError, .inactiveDisplay)
+        }
+
+        // Byte count mismatch throwing
+        XCTAssertThrowsError(try FrameContract.validateDynamic(width: 1920, height: 1080, byteCount: 100)) { error in
+            guard case FrameContractError.wrongByteCount = error else {
+                return XCTFail("Expected wrongByteCount error")
+            }
+        }
+    }
+
+    func testMacroAutomationModelSerializationAndStorage() throws {
+        let testPkg = "com.test.macro.\(UUID().uuidString)"
+        let actions: [MacroAction] = [
+            MacroAction(type: .touchDown, normalizedX: 0.25, normalizedY: 0.50),
+            MacroAction(type: .delay, delayAfterMS: 50),
+            MacroAction(type: .touchMove, normalizedX: 0.28, normalizedY: 0.52),
+            MacroAction(type: .touchUp, normalizedX: 0.28, normalizedY: 0.52),
+            MacroAction(type: .keyPress, keyCode: 13, keyString: "W")
+        ]
+
+        let macro = MacroSequence(
+            name: "Auto Combo",
+            packageName: testPkg,
+            actions: actions,
+            repeatCount: 3,
+            intervalMS: 200,
+            speedMultiplier: 1.25,
+            enableHumanJitter: true
+        )
+
+        // JSON encoding/decoding test
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(macro)
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(MacroSequence.self, from: data)
+
+        XCTAssertEqual(decoded.id, macro.id)
+        XCTAssertEqual(decoded.name, "Auto Combo")
+        XCTAssertEqual(decoded.packageName, testPkg)
+        XCTAssertEqual(decoded.actions.count, 5)
+        XCTAssertEqual(decoded.repeatCount, 3)
+        XCTAssertEqual(decoded.speedMultiplier, 1.25, accuracy: 0.001)
+
+        // Store persistence test
+        MacroStore.saveMacro(macro)
+        defer { MacroStore.deleteMacro(name: macro.name, for: testPkg) }
+
+        let loadedList = MacroStore.listMacros(for: testPkg)
+        XCTAssertEqual(loadedList.count, 1)
+        XCTAssertEqual(loadedList.first?.id, macro.id)
+        XCTAssertEqual(loadedList.first?.name, "Auto Combo")
+    }
+
+    func testMacroHumanVarianceJitterClamp() {
+        let sequenceWithJitter = MacroSequence(
+            name: "Jitter Sequence",
+            packageName: "com.test.jitter",
+            actions: [MacroAction(type: .touchDown, normalizedX: 0.5, normalizedY: 0.5)],
+            enableHumanJitter: true
+        )
+
+        let sequenceNoJitter = MacroSequence(
+            name: "Exact Sequence",
+            packageName: "com.test.jitter",
+            actions: [MacroAction(type: .touchDown, normalizedX: 0.5, normalizedY: 0.5)],
+            enableHumanJitter: false
+        )
+
+        let action = sequenceWithJitter.actions[0]
+        let exactCoord = sequenceNoJitter.resolvedCoordinate(action: action, sourceWidth: 1000, sourceHeight: 1000)
+        XCTAssertNotNil(exactCoord)
+        XCTAssertEqual(exactCoord?.x, 500)
+        XCTAssertEqual(exactCoord?.y, 500)
+
+        // Jittered coordinate must stay close within ±2.0 px (rounded to at most ±3 px)
+        let jitteredCoord = sequenceWithJitter.resolvedCoordinate(action: action, sourceWidth: 1000, sourceHeight: 1000)
+        XCTAssertNotNil(jitteredCoord)
+        if let jitteredCoord {
+            XCTAssertTrue(abs(jitteredCoord.x - 500) <= 3)
+            XCTAssertTrue(abs(jitteredCoord.y - 500) <= 3)
+        }
+    }
+
+    func testMacroSequencePlaybackPacingMath() {
+        let sequence = MacroSequence(
+            name: "Paced Sequence",
+            packageName: "com.test.pacing",
+            actions: [
+                MacroAction(type: .touchDown, normalizedX: 0.1, normalizedY: 0.1),
+                MacroAction(type: .touchUp, normalizedX: 0.1, normalizedY: 0.1)
+            ],
+            repeatCount: 2,
+            intervalMS: 500,
+            speedMultiplier: 2.0
+        )
+
+        XCTAssertEqual(sequence.repeatCount, 2)
+        XCTAssertEqual(sequence.intervalMS, 500)
+        XCTAssertEqual(sequence.speedMultiplier, 2.0, accuracy: 0.001)
+
+        let stepInterval = max(10, Int((Double(sequence.intervalMS) / sequence.speedMultiplier) / Double(sequence.actions.count)))
+        // 500 / 2.0 = 250; 250 / 2 actions = 125ms per step
+        XCTAssertEqual(stepInterval, 125)
+    }
+
+    func testCommunityHubCuratedPresetsIntegrity() {
+        let presets = CommunityHub.curatedPresets
+        XCTAssertTrue(presets.count >= 5, "Must contain at least 5 curated game presets")
+
+        let packages = presets.map(\.packageName)
+        XCTAssertTrue(packages.contains("com.riotgames.league.teamfighttactics"))
+        XCTAssertTrue(packages.contains("com.riotgames.league.wildrift"))
+        XCTAssertTrue(packages.contains("com.miHoYo.GenshinImpact"))
+        XCTAssertTrue(packages.contains("com.tencent.ig"))
+        XCTAssertTrue(packages.contains("com.zhiliaoapp.musically"))
+
+        for preset in presets {
+            XCTAssertFalse(preset.title.isEmpty)
+            XCTAssertFalse(preset.genre.isEmpty)
+            XCTAssertFalse(preset.keymapProfile.buttons.isEmpty)
+        }
+    }
+
+    func testMacrodroidBundleEncodingAndDecoding() throws {
+        let sampleKeymap = KeymapProfile.defaultPreset(package: "com.test.bundle", appName: "Bundle Game")
+        let sampleProfile = AppProfile.defaultProfile(for: "com.test.bundle", appName: "Bundle Game")
+
+        let bundle = MacrodroidBundle(
+            packageName: "com.test.bundle",
+            appName: "Bundle Game",
+            keymap: sampleKeymap,
+            appProfile: sampleProfile
+        )
+
+        let tempFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test_bundle_\(UUID().uuidString).macrodroid")
+        defer { try? FileManager.default.removeItem(at: tempFile) }
+
+        try bundle.export(to: tempFile)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempFile.path))
+
+        let imported = try MacrodroidBundle.load(from: tempFile)
+        XCTAssertEqual(imported.packageName, "com.test.bundle")
+        XCTAssertEqual(imported.appName, "Bundle Game")
+        XCTAssertEqual(imported.schemaVersion, MacrodroidBundle.currentSchemaVersion)
+        XCTAssertEqual(imported.keymap.packageName, "com.test.bundle")
+        XCTAssertEqual(imported.appProfile.appName, "Bundle Game")
+    }
+
+    func testViewportMapperDynamicResolutionAspectRatio() {
+        let ultrawideRes = FrameContract.ultrawide21x9
+        let mapper = ViewportMapper(
+            resolution: ultrawideRes,
+            viewportSize: CGSize(width: 2560, height: 1440)
+        )
+
+        // 2560x1080 inside 2560x1440 viewport should be letterboxed vertically
+        XCTAssertEqual(mapper.displayedRect.width, 2560, accuracy: 0.1)
+        XCTAssertEqual(mapper.displayedRect.height, 1080, accuracy: 0.1)
+        XCTAssertEqual(mapper.displayedRect.origin.y, (1440 - 1080) / 2.0, accuracy: 0.1)
+
+        // Test center mapping
+        let centerPoint = CGPoint(x: 1280, y: 1440 / 2.0)
+        guard let sourceCenter = mapper.sourcePoint(for: centerPoint) else {
+            return XCTFail("Expected non-nil source point for viewport center")
+        }
+        XCTAssertEqual(sourceCenter.x, 1280, accuracy: 0.5)
+        XCTAssertEqual(sourceCenter.y, 540, accuracy: 0.5)
+    }
+
+    func testAppProfileCustomResolutionDimensions() {
+        let p720 = AppResolution.p720
+        XCTAssertEqual(p720.dimensions.width, 1280)
+        XCTAssertEqual(p720.dimensions.height, 720)
+
+        let p1080 = AppResolution.p1080
+        XCTAssertEqual(p1080.dimensions.width, 1920)
+        XCTAssertEqual(p1080.dimensions.height, 1080)
+
+        let p1440 = AppResolution.p1440
+        XCTAssertEqual(p1440.dimensions.width, 2560)
+        XCTAssertEqual(p1440.dimensions.height, 1440)
+
+        let retina4K = AppResolution.retina4K
+        XCTAssertEqual(retina4K.dimensions.width, 3840)
+        XCTAssertEqual(retina4K.dimensions.height, 2160)
+
+        let ultrawide = AppResolution.ultrawide21x9
+        XCTAssertEqual(ultrawide.dimensions.width, 2560)
+        XCTAssertEqual(ultrawide.dimensions.height, 1080)
+    }
 }
 
 typealias TFTMACGate1Tests = MacrodroidGate1Tests

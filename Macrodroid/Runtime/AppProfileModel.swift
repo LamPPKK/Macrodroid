@@ -30,6 +30,7 @@ public enum AppResolution: String, Codable, Sendable, CaseIterable {
     case p1080 = "1080p Full HD"
     case p1440 = "1440p 2K QHD"
     case retina4K = "4K / Retina Ultra"
+    case ultrawide21x9 = "21:9 Ultrawide Gaming"
 
     public var dimensions: (width: Int32, height: Int32) {
         switch self {
@@ -37,6 +38,7 @@ public enum AppResolution: String, Codable, Sendable, CaseIterable {
         case .p1080: return (1920, 1080)
         case .p1440: return (2560, 1440)
         case .retina4K: return (3840, 2160)
+        case .ultrawide21x9: return (2560, 1080)
         }
     }
 }

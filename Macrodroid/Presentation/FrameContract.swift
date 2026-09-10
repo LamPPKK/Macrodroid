@@ -32,6 +32,24 @@ enum FrameContract {
     static let bytesPerPixel = 4
     static let expectedByteCount = width * height * bytesPerPixel
 
+    public struct Resolution: Sendable, Equatable {
+        public let width: Int
+        public let height: Int
+        public var byteCount: Int { width * height * FrameContract.bytesPerPixel }
+        public var aspectRatio: Double { Double(width) / Double(height) }
+
+        public init(width: Int, height: Int) {
+            self.width = width
+            self.height = height
+        }
+    }
+
+    public static let standard1080p = Resolution(width: 1920, height: 1080)
+    public static let standard720p = Resolution(width: 1280, height: 720)
+    public static let standard1440p = Resolution(width: 2560, height: 1440)
+    public static let retina4K = Resolution(width: 3840, height: 2160)
+    public static let ultrawide21x9 = Resolution(width: 2560, height: 1080)
+
     static func validate(width: Int, height: Int, byteCount: Int) throws {
         guard width > 0, height > 0 else { throw FrameContractError.inactiveDisplay }
         guard width == Self.width, height == Self.height else {
@@ -39,6 +57,14 @@ enum FrameContract {
         }
         guard byteCount == expectedByteCount else {
             throw FrameContractError.wrongByteCount(expected: expectedByteCount, actual: byteCount)
+        }
+    }
+
+    static func validateDynamic(width: Int, height: Int, byteCount: Int) throws {
+        guard width > 0, height > 0 else { throw FrameContractError.inactiveDisplay }
+        let expected = width * height * bytesPerPixel
+        guard byteCount == expected else {
+            throw FrameContractError.wrongByteCount(expected: expected, actual: byteCount)
         }
     }
 }

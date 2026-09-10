@@ -475,6 +475,10 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     var onIMEToggleRequested: (() -> Void)?
     var onTaskSwitcherRequested: (() -> Void)?
     var onKeymapEditorToggleRequested: (() -> Void)?
+    var onGamepadStatusChanged: ((GamepadState?) -> Void)?
+    var onMacroStatusChanged: ((String) -> Void)?
+    var onMacroRecordToggleRequested: (() -> Void)?
+    var onMacroPlayToggleRequested: (() -> Void)?
 
     var isKeymapEnabled = true
     var isVietnameseIMEEnabled = true
@@ -490,9 +494,15 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     private var dpadSPressed = false
     private var dpadDPressed = false
     private var lastDpadTouch: (x: Int32, y: Int32)?
+    private var lastGamepadStickTouch: (x: Int32, y: Int32)?
     private var activeKeymapTouches: [String: (x: Int32, y: Int32)] = [:]
     private(set) var currentPackageName: String?
     private(set) var currentAppName: String?
+    private(set) var isMacroRecording = false
+    private(set) var isMacroPlaying = false
+    private var activeMacroSequence = MacroSequence(name: "Macro", packageName: "default")
+    private var macroPlaybackTimer: DispatchSourceTimer?
+    private var currentResolution = FrameContract.standard1080p
 
     private let mailbox: LatestFrameMailbox
     private let commandQueue: MTLCommandQueue
@@ -540,6 +550,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         registerForDraggedTypes([.fileURL])
         configureOverlays()
         updatePerformanceOverlay()
+        setupGamepadHandlers()
     }
 
     required init(coder: NSCoder) {
@@ -651,10 +662,199 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         isKeymapEnabled = appProfile.isKeymapEnabled
         isVietnameseIMEEnabled = appProfile.isVietnameseIMEEnabled
         setTargetFPS(appProfile.targetFPS.maxFPS)
+        let dims = appProfile.resolution.dimensions
+        currentResolution = FrameContract.Resolution(width: Int(dims.width), height: Int(dims.height))
     }
 
     func setTargetFPS(_ fps: Int) {
         preferredFramesPerSecond = fps
+    }
+
+    private func setupGamepadHandlers() {
+        let gamepad = GamepadManager.shared
+        gamepad.onControllerConnected = { [weak self] state in
+            self?.onGamepadStatusChanged?(state)
+        }
+        gamepad.onControllerDisconnected = { [weak self] _ in
+            self?.onGamepadStatusChanged?(nil)
+        }
+        gamepad.onLeftThumbstickMoved = { [weak self] x, y in
+            guard let self, self.isKeymapEnabled else { return }
+            let dpad = self.keymappingOverlay.profile.dpad ?? KeymapDPad()
+            if let touch = GamepadManager.virtualStickTouchPoint(
+                stickX: x,
+                stickY: y,
+                centerX: dpad.normalizedCenterX,
+                centerY: dpad.normalizedCenterY,
+                radius: dpad.radius,
+                sourceWidth: Int32(self.currentResolution.width),
+                sourceHeight: Int32(self.currentResolution.height)
+            ) {
+                self.lastGamepadStickTouch = touch
+                self.onTouchInput?(TouchInput(x: touch.x, y: touch.y, identifier: 15, phase: .contact))
+            } else if let last = self.lastGamepadStickTouch {
+                self.lastGamepadStickTouch = nil
+                self.onTouchInput?(TouchInput(x: last.x, y: last.y, identifier: 15, phase: .release))
+            }
+        }
+        gamepad.onButtonChanged = { [weak self] button, isPressed, _ in
+            guard let self, self.isKeymapEnabled else { return }
+            self.handleGamepadButton(button, isPressed: isPressed)
+        }
+    }
+
+    private func handleGamepadButton(_ button: GamepadButton, isPressed: Bool) {
+        let buttons = keymappingOverlay.profile.buttons
+        let targetIndex: Int?
+        switch button {
+        case .buttonA, .rightTrigger: targetIndex = 0
+        case .buttonB: targetIndex = buttons.count > 1 ? 1 : nil
+        case .buttonX: targetIndex = buttons.count > 2 ? 2 : nil
+        case .buttonY: targetIndex = buttons.count > 3 ? 3 : nil
+        case .leftShoulder, .leftTrigger: targetIndex = buttons.count > 4 ? 4 : nil
+        case .rightShoulder: targetIndex = buttons.count > 5 ? 5 : nil
+        default: targetIndex = nil
+        }
+
+        if let idx = targetIndex, idx < buttons.count {
+            let btn = buttons[idx]
+            let coord = btn.screenCoordinate(
+                sourceWidth: Int32(currentResolution.width),
+                sourceHeight: Int32(currentResolution.height)
+            )
+            let id = Int32(200 + idx)
+            onTouchInput?(TouchInput(x: coord.x, y: coord.y, identifier: id, phase: isPressed ? .contact : .release))
+        }
+    }
+
+    @discardableResult
+    func toggleMacroRecording() -> Bool {
+        if isMacroPlaying { stopMacroPlayback() }
+        isMacroRecording.toggle()
+        if isMacroRecording {
+            let pkg = currentPackageName ?? "default"
+            activeMacroSequence = MacroSequence(
+                name: "Macro_\(Int(Date().timeIntervalSince1970))",
+                packageName: pkg,
+                actions: []
+            )
+            onMacroStatusChanged?("Macro Recording Started")
+        } else {
+            if !activeMacroSequence.actions.isEmpty {
+                MacroStore.saveMacro(activeMacroSequence)
+                onMacroStatusChanged?("Macro Saved (\(activeMacroSequence.actions.count) steps)")
+            } else {
+                onMacroStatusChanged?("Macro Recording Cancelled")
+            }
+        }
+        return isMacroRecording
+    }
+
+    @discardableResult
+    func toggleMacroPlayback() -> Bool {
+        if isMacroPlaying {
+            stopMacroPlayback()
+            onMacroStatusChanged?("Macro Playback Stopped")
+            return false
+        } else {
+            let pkg = currentPackageName ?? "default"
+            if let macro = MacroStore.listMacros(for: pkg).first ?? (activeMacroSequence.actions.isEmpty ? nil : activeMacroSequence) {
+                playMacro(macro)
+                return true
+            } else {
+                onMacroStatusChanged?("No Macros Recorded for App")
+                return false
+            }
+        }
+    }
+
+    func playMacro(_ macro: MacroSequence) {
+        stopMacroPlayback()
+        guard !macro.actions.isEmpty else { return }
+        isMacroPlaying = true
+        onMacroStatusChanged?("Macro Playing: \(macro.name)")
+
+        let queue = DispatchQueue(label: "com.macrodroid.macro.playback", qos: .userInteractive)
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        var stepIndex = 0
+        var loopCount = 0
+        let actions = macro.actions
+        let maxLoops = macro.repeatCount
+
+        timer.setEventHandler { [weak self] in
+            guard let self, self.isMacroPlaying else { return }
+            if stepIndex < actions.count {
+                let action = actions[stepIndex]
+                Task { @MainActor in
+                    self.executeMacroAction(action, in: macro)
+                }
+                stepIndex += 1
+            } else {
+                loopCount += 1
+                if maxLoops > 0 && loopCount >= maxLoops {
+                    Task { @MainActor in
+                        self.stopMacroPlayback()
+                        self.onMacroStatusChanged?("Macro Finished")
+                    }
+                } else {
+                    stepIndex = 0
+                }
+            }
+        }
+
+        let interval = max(10, Int((Double(macro.intervalMS) / macro.speedMultiplier) / Double(max(1, actions.count))))
+        timer.schedule(deadline: .now() + .milliseconds(100), repeating: .milliseconds(interval))
+        timer.resume()
+        macroPlaybackTimer = timer
+    }
+
+    func stopMacroPlayback() {
+        isMacroPlaying = false
+        macroPlaybackTimer?.cancel()
+        macroPlaybackTimer = nil
+    }
+
+    private func executeMacroAction(_ action: MacroAction, in macro: MacroSequence) {
+        if let coord = macro.resolvedCoordinate(
+            action: action,
+            sourceWidth: Int32(currentResolution.width),
+            sourceHeight: Int32(currentResolution.height)
+        ) {
+            let phase: TouchPhase = action.type == .touchUp ? .release : .contact
+            onTouchInput?(TouchInput(x: coord.x, y: coord.y, identifier: 0, phase: phase))
+        } else if let key = action.keyString {
+            onKeyboardInput?(key, nil)
+        }
+    }
+
+    private func recordMacroTouch(event: NSEvent, isContact: Bool) {
+        guard isMacroRecording else { return }
+        let location = convert(event.locationInWindow, from: nil)
+        let mapper = ViewportMapper(
+            sourceSize: CGSize(width: currentResolution.width, height: currentResolution.height),
+            viewportSize: bounds.size
+        )
+        guard let source = mapper.sourcePoint(for: location) else { return }
+        let normX = max(0.0, min(1.0, source.x / CGFloat(currentResolution.width)))
+        let normY = max(0.0, min(1.0, 1.0 - (source.y / CGFloat(currentResolution.height))))
+        let action = MacroAction(
+            type: isContact ? .touchDown : .touchUp,
+            normalizedX: normX,
+            normalizedY: normY
+        )
+        activeMacroSequence.actions.append(action)
+    }
+
+    private func recordMacroKey(event: NSEvent) {
+        guard isMacroRecording else { return }
+        if let chars = event.characters, !chars.isEmpty {
+            let action = MacroAction(
+                type: .keyPress,
+                keyCode: event.keyCode,
+                keyString: chars
+            )
+            activeMacroSequence.actions.append(action)
+        }
     }
 
     @discardableResult
@@ -875,6 +1075,9 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             super.keyDown(with: event)
             return
         }
+        if isMacroRecording {
+            recordMacroKey(event: event)
+        }
         if handleKeymapKeyDown(event: event) {
             return
         }
@@ -911,9 +1114,17 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if modifiers == [.command, .option] || modifiers == [.option, .command] {
-            if let char = event.charactersIgnoringModifiers?.lowercased(), char == "k" {
-                onKeymapEditorToggleRequested?()
-                return true
+            if let char = event.charactersIgnoringModifiers?.lowercased() {
+                if char == "k" {
+                    onKeymapEditorToggleRequested?()
+                    return true
+                } else if char == "r" {
+                    onMacroRecordToggleRequested?()
+                    return true
+                } else if char == "p" {
+                    onMacroPlayToggleRequested?()
+                    return true
+                }
             }
         }
         guard modifiers == .command, let char = event.charactersIgnoringModifiers?.lowercased() else {
@@ -1031,17 +1242,20 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     private func androidPoint(for event: NSEvent) -> TouchPoint? {
         let location = convert(event.locationInWindow, from: nil)
         let mapper = ViewportMapper(
-            sourceSize: CGSize(width: FrameContract.width, height: FrameContract.height),
+            sourceSize: CGSize(width: currentResolution.width, height: currentResolution.height),
             viewportSize: bounds.size
         )
         guard let source = mapper.sourcePoint(for: location) else { return nil }
-        let x = Int32(max(0, min(FrameContract.width - 1, Int(source.x.rounded()))))
-        let topOriginY = FrameContract.height - 1 - Int(source.y.rounded())
-        let y = Int32(max(0, min(FrameContract.height - 1, topOriginY)))
+        let x = Int32(max(0, min(currentResolution.width - 1, Int(source.x.rounded()))))
+        let topOriginY = currentResolution.height - 1 - Int(source.y.rounded())
+        let y = Int32(max(0, min(currentResolution.height - 1, topOriginY)))
         return TouchPoint(x: x, y: y)
     }
 
     private func sendTouch(_ event: NSEvent, isContact: Bool) {
+        if isMacroRecording {
+            recordMacroTouch(event: event, isContact: isContact)
+        }
         let point = androidPoint(for: event)
         let input = isContact
             ? primaryTouchSequence.contact(at: point)

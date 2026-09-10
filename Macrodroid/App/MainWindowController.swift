@@ -199,9 +199,9 @@ final class MainWindowController: NSWindowController {
         let accessory = NSTitlebarAccessoryViewController()
         accessory.layoutAttribute = .trailing
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 26))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 344, height: 26))
 
-        let pill = NSVisualEffectView(frame: NSRect(x: 4, y: 2, width: 312, height: 22))
+        let pill = NSVisualEffectView(frame: NSRect(x: 4, y: 2, width: 336, height: 22))
         pill.material = .hudWindow
         pill.blendingMode = .withinWindow
         pill.state = .active
@@ -283,12 +283,21 @@ final class MainWindowController: NSWindowController {
         taskSwitcherBtn.frame = NSRect(x: 173, y: 1, width: 20, height: 20)
         pill.addSubview(taskSwitcherBtn)
 
-        let divider = NSView(frame: NSRect(x: 199, y: 5, width: 1, height: 12))
+        let macroBtn = makeActionButton(
+            symbolName: "bolt.fill",
+            fallbackText: "⚡️",
+            tooltip: "Toggle Macro Recording/Playback (Record: ⌥⌘R, Play: ⌥⌘P)",
+            action: #selector(macroClicked)
+        )
+        macroBtn.frame = NSRect(x: 197, y: 1, width: 20, height: 20)
+        pill.addSubview(macroBtn)
+
+        let divider = NSView(frame: NSRect(x: 223, y: 5, width: 1, height: 12))
         divider.wantsLayer = true
         divider.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
         pill.addSubview(divider)
 
-        statusDot.frame = NSRect(x: 207, y: 8, width: 6, height: 6)
+        statusDot.frame = NSRect(x: 231, y: 8, width: 6, height: 6)
         statusDot.wantsLayer = true
         statusDot.layer?.cornerRadius = 3
         statusDot.layer?.backgroundColor = NSColor(calibratedRed: 0.0, green: 0.88, blue: 0.38, alpha: 0.9).cgColor
@@ -297,11 +306,10 @@ final class MainWindowController: NSWindowController {
         fpsLabel.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .semibold)
         fpsLabel.textColor = NSColor.white.withAlphaComponent(0.92)
         fpsLabel.alignment = .left
-        fpsLabel.frame = NSRect(x: 217, y: 1, width: 88, height: 20)
+        fpsLabel.frame = NSRect(x: 241, y: 1, width: 88, height: 20)
         pill.addSubview(fpsLabel)
 
         container.addSubview(pill)
-        accessory.view = container
         accessory.view = container
 
         window.addTitlebarAccessoryViewController(accessory)
@@ -363,6 +371,36 @@ final class MainWindowController: NSWindowController {
 
         emulatorView.onSharedFolderRequested = { [weak self] in
             self?.openSharedFolder()
+        }
+
+        emulatorView.onGamepadStatusChanged = { [weak self] state in
+            if let state {
+                self?.showToast(icon: "gamecontroller.fill", message: "Gamepad Connected: \(state.name)")
+            } else {
+                self?.showToast(icon: "gamecontroller", message: "Gamepad Disconnected")
+            }
+        }
+
+        emulatorView.onMacroStatusChanged = { [weak self] status in
+            self?.showToast(icon: "bolt.fill", message: status)
+        }
+
+        emulatorView.onMacroRecordToggleRequested = { [weak self] in
+            self?.emulatorView.toggleMacroRecording()
+        }
+
+        emulatorView.onMacroPlayToggleRequested = { [weak self] in
+            self?.emulatorView.toggleMacroPlayback()
+        }
+    }
+
+    @objc func macroClicked() {
+        if emulatorView.isMacroRecording {
+            emulatorView.toggleMacroRecording()
+        } else if emulatorView.isMacroPlaying {
+            emulatorView.stopMacroPlayback()
+        } else {
+            emulatorView.toggleMacroRecording()
         }
     }
 
