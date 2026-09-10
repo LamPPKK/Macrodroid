@@ -5357,7 +5357,13 @@ private final class AVDConfigurationTransaction: @unchecked Sendable {
             "showDeviceFrame": "no",
             "skin.name": "\(profile.width)x\(profile.height)",
             "fastboot.forceColdBoot": "yes",
-            "fastboot.forceFastBoot": "no"
+            "fastboot.forceFastBoot": "no",
+            // Image optimization keys — reduce GC pauses and I/O stalls
+            "hw.heapSize": "\(profile.heapSizeMiB)",
+            "vm.heapSize": "\(profile.heapSizeMiB)",
+            "disk.dataPartition.size": "\(profile.dataDiskGB)g",
+            "disk.cachePartition.size": "512m",
+            "hw.audioInput": profile.microphoneEnabled ? "yes" : "no"
         ]
         for (key, value) in values { config = Self.setting(key: key, value: value, in: config) }
         let applied = Data(config.utf8)

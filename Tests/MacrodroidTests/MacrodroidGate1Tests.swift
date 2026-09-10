@@ -1523,6 +1523,80 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
         XCTAssertEqual(ultrawide.dimensions.width, 2560)
         XCTAssertEqual(ultrawide.dimensions.height, 1080)
     }
+
+    // MARK: - Android Image Optimization Tests (Phases A-C)
+
+    /// AVD config transaction must include hw.heapSize derived from profile RAM.
+    func testAVDConfigTransactionIncludesHeapSize() {
+        let profile = MacrodroidRuntimeProfile.playable
+        // heapSizeMiB = min(ramMiB / 9, 576)
+        // playable.ramMiB = 5120 -> 5120 / 9 = 568
+        XCTAssertEqual(profile.heapSizeMiB, 568)
+        XCTAssertLessThanOrEqual(profile.heapSizeMiB, 576, "Heap must be capped at 576 MiB")
+        XCTAssertGreaterThan(profile.heapSizeMiB, 0, "Heap must be positive")
+    }
+
+    /// Large-RAM profiles must not exceed the 576 MiB cap.
+    func testAVDConfigHeapSizeCapAt576MiB() {
+        let highRAMProfile = MacrodroidRuntimeProfile.playable
+            .with(vCPU: 8, ramMiB: 8192, refreshHz: 60, asgDrawFlushInterval: 800)
+        XCTAssertEqual(highRAMProfile.heapSizeMiB, 576)
+    }
+
+    /// dataDiskGB round-trips through with() correctly.
+    func testAVDConfigTransactionDiskAllocation() {
+        let profile = MacrodroidRuntimeProfile.playable
+        XCTAssertEqual(profile.dataDiskGB, 8)
+        let customProfile = MacrodroidRuntimeProfile.playable
+            .with(vCPU: 6, ramMiB: 5120, refreshHz: 60, asgDrawFlushInterval: 800, dataDiskGB: 12)
+        XCTAssertEqual(customProfile.dataDiskGB, 12)
+    }
+
+    /// HardwareCapabilityProbe classifies memory tiers correctly.
+    func testHardwareCapabilityProbeMemoryTiers() {
+        let gib: UInt64 = 1024 * 1024 * 1024
+        XCTAssertEqual(HardwareCapabilityProbe.tier(for: 128 * gib), .ultraMax)
+        XCTAssertEqual(HardwareCapabilityProbe.tier(for: 64 * gib), .ultraMax)
+        XCTAssertEqual(HardwareCapabilityProbe.tier(for: 48 * gib), .pro)
+        XCTAssertEqual(HardwareCapabilityProbe.tier(for: 24 * gib), .pro)
+        XCTAssertEqual(HardwareCapabilityProbe.tier(for: 16 * gib), .standard)
+        XCTAssertEqual(HardwareCapabilityProbe.tier(for: 8 * gib), .compat)
+        XCTAssertEqual(HardwareCapabilityProbe.tier(for: 0), .compat)
+    }
+
+    /// Compat tier recommended profile must reduce guest RAM and vCPU.
+    func testAdaptiveProfileCompatTierReducesResources() {
+        let gib: UInt64 = 1024 * 1024 * 1024
+        let probe = HardwareCapabilityProbe(physicalRAMBytes: 8 * gib, tier: .compat)
+        let profile = probe.recommendedProfile
+        XCTAssertEqual(profile.vCPU, 4, "Compat tier: 4 vCPU")
+        XCTAssertEqual(profile.ramMiB, 4096, "Compat tier: 4 GB guest RAM")
+        XCTAssertEqual(profile.asgWriteStepSize, 16_384, "Compat tier: 16 KB ASG step")
+    }
+
+    /// Ultra Max tier recommended profile must maximize resources.
+    func testAdaptiveProfileUltraMaxTierMaximizesResources() {
+        let gib: UInt64 = 1024 * 1024 * 1024
+        let probe = HardwareCapabilityProbe(physicalRAMBytes: 128 * gib, tier: .ultraMax)
+        let profile = probe.recommendedProfile
+        XCTAssertEqual(profile.vCPU, 8, "Ultra Max tier: 8 vCPU")
+        XCTAssertEqual(profile.ramMiB, 8192, "Ultra Max tier: 8 GB guest RAM")
+        XCTAssertGreaterThan(profile.asgWriteBufferSize, 1_048_576, "Ultra Max tier: ASG buffer > 1 MB")
+    }
+
+    /// ImageHealthMonitor parses df /data output into correct MiB values.
+    func testImageHealthMonitorDFOutputParsing() async {
+        let monitor = ImageHealthMonitor()
+        let mockOutput = """
+        Filesystem     1K-blocks    Used Available Use% Mounted on
+        /data           8388608  2097152   6291456  25% /data
+        """
+        let sample = await monitor.parseDFOutput(mockOutput)
+        XCTAssertNotNil(sample)
+        XCTAssertEqual(sample?.totalMiB, 8192)
+        XCTAssertEqual(sample?.usedMiB, 2048)
+        XCTAssertFalse(sample?.isNearlyFull ?? true, "25% usage must not trigger nearlyFull")
+    }
 }
 
 typealias TFTMACGate1Tests = MacrodroidGate1Tests

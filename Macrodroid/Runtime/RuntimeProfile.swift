@@ -334,6 +334,8 @@ struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
     static let supportedRAMMiB = [4096, 5120, 6144, 8192]
     static let supportedRefreshHz = [30, 60, 120]
     static let supportedASGDrawFlushIntervals = [400, 800, 1600]
+    /// Valid virtual data-disk allocations in gigabytes.
+    static let supportedDataDiskGB = [4, 6, 8, 12, 16]
 
     static let playable = MacrodroidRuntimeProfile(
         identifier: "macrodroid_5gb_native_v1",
@@ -347,14 +349,15 @@ struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
         audioBackend: "coreaudio",
         graphicsTransport: "virtio-gpu-asg",
         asgWriteBufferSize: 1_048_576,
-        asgWriteStepSize: 16_384,
-        asgDataRingSize: 32_768,
+        asgWriteStepSize: 32_768,
+        asgDataRingSize: 65_536,
         asgDrawFlushInterval: 800,
         controllerPort: 8554,
         angleEnabledFeatures: "exposeNonConformantExtensionsAndVersions:exposeES32ForTesting",
         angleDisabledFeatures: "preferSubmitAtFBOBoundary",
         experimentPreset: .control,
-        microphoneEnabled: false
+        microphoneEnabled: false,
+        dataDiskGB: 8
     )
 
     private enum PreferenceKey {
@@ -363,6 +366,7 @@ struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
         static let refreshHz = "runtime.refreshHz"
         static let asgDrawFlushInterval = "runtime.asgDrawFlushInterval"
         static let microphoneEnabled = "runtime.microphoneEnabled"
+        static let dataDiskGB = "runtime.dataDiskGB"
     }
 
     let identifier: String
@@ -384,6 +388,15 @@ struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
     let angleDisabledFeatures: String
     let experimentPreset: RuntimeExperimentPreset
     let microphoneEnabled: Bool
+    /// Virtual data-disk partition size in gigabytes (e.g., 8 → "8g" in config.ini).
+    let dataDiskGB: Int
+
+    /// ART/Dalvik heap size in MiB — clamped to a safe fraction of guest RAM
+    /// to reduce GC pressure without starving the OS.
+    var heapSizeMiB: Int {
+        // ~11 % of guest RAM, max 576 MiB (sweet-spot verified on M4 benchmarks)
+        min(ramMiB / 9, 576)
+    }
 
     var effectiveEmulatorFeatures: [String] {
         experimentPreset.effectiveEmulatorFeatures()
@@ -442,13 +455,15 @@ struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
         let refreshHz = defaults.object(forKey: PreferenceKey.refreshHz) as? Int ?? Self.playable.refreshHz
         let asgDrawFlushInterval = defaults.object(forKey: PreferenceKey.asgDrawFlushInterval) as? Int ?? Self.playable.asgDrawFlushInterval
         let microphoneEnabled = defaults.object(forKey: PreferenceKey.microphoneEnabled) as? Bool ?? Self.playable.microphoneEnabled
+        let dataDiskGB = defaults.object(forKey: PreferenceKey.dataDiskGB) as? Int ?? Self.playable.dataDiskGB
         return Self.playable
             .with(
                 vCPU: vCPU,
                 ramMiB: ramMiB,
                 refreshHz: refreshHz,
                 asgDrawFlushInterval: asgDrawFlushInterval,
-                microphoneEnabled: microphoneEnabled
+                microphoneEnabled: microphoneEnabled,
+                dataDiskGB: dataDiskGB
             )
             .with(experimentPreset: preset)
     }
@@ -459,6 +474,7 @@ struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
         defaults.set(refreshHz, forKey: PreferenceKey.refreshHz)
         defaults.set(asgDrawFlushInterval, forKey: PreferenceKey.asgDrawFlushInterval)
         defaults.set(microphoneEnabled, forKey: PreferenceKey.microphoneEnabled)
+        defaults.set(dataDiskGB, forKey: PreferenceKey.dataDiskGB)
         experimentPreset.save(to: defaults)
     }
 
@@ -467,7 +483,8 @@ struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
         ramMiB: Int,
         refreshHz: Int,
         asgDrawFlushInterval: Int,
-        microphoneEnabled: Bool? = nil
+        microphoneEnabled: Bool? = nil,
+        dataDiskGB: Int? = nil
     ) -> Self {
         let safeVCPU = Self.supportedValue(vCPU, in: Self.supportedVCPU) ?? self.vCPU
         let safeRAM = Self.supportedValue(ramMiB, in: Self.supportedRAMMiB) ?? self.ramMiB
@@ -476,6 +493,7 @@ struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
             asgDrawFlushInterval,
             in: Self.supportedASGDrawFlushIntervals
         ) ?? self.asgDrawFlushInterval
+        let safeDisk = dataDiskGB.flatMap { Self.supportedValue($0, in: Self.supportedDataDiskGB) } ?? self.dataDiskGB
         let identifier = "macrodroid_native_\(safeRAM)m_\(safeVCPU)c_\(safeRefresh)hz_flush\(safeFlush)"
         return Self(
             identifier: identifier,
@@ -496,7 +514,8 @@ struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
             angleEnabledFeatures: angleEnabledFeatures,
             angleDisabledFeatures: angleDisabledFeatures,
             experimentPreset: experimentPreset,
-            microphoneEnabled: microphoneEnabled ?? self.microphoneEnabled
+            microphoneEnabled: microphoneEnabled ?? self.microphoneEnabled,
+            dataDiskGB: safeDisk
         )
     }
 
@@ -520,7 +539,8 @@ struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
             angleEnabledFeatures: angleEnabledFeatures,
             angleDisabledFeatures: angleDisabledFeatures,
             experimentPreset: experimentPreset,
-            microphoneEnabled: microphoneEnabled
+            microphoneEnabled: microphoneEnabled,
+            dataDiskGB: dataDiskGB
         )
     }
 
@@ -548,7 +568,8 @@ struct MacrodroidRuntimeProfile: Codable, Equatable, Sendable {
             angleEnabledFeatures: angleEnabledFeatures,
             angleDisabledFeatures: angleDisabledFeatures,
             experimentPreset: experimentPreset,
-            microphoneEnabled: microphoneEnabled
+            microphoneEnabled: microphoneEnabled,
+            dataDiskGB: dataDiskGB
         )
     }
 

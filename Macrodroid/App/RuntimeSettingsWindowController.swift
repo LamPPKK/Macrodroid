@@ -11,6 +11,9 @@ final class RuntimeSettingsWindowController: NSWindowController {
     private let closeBehaviorButton = NSPopUpButton()
     private let idleSuspendButton = NSPopUpButton()
     private let microphoneButton = NSButton(checkboxWithTitle: "Enable Host Microphone Input", target: nil, action: nil)
+    private let dataDiskButton = NSPopUpButton()
+    private let hardwareTierField = NSTextField(labelWithString: "")
+    private let healthCheckButton = NSButton(title: "Run Health Check…", target: nil, action: nil)
     private let resultLabel = NSTextField(labelWithString: "")
     private var originalProfile: MacrodroidRuntimeProfile
     var onSave: ((MacrodroidRuntimeProfile, MacrodroidRuntimeProfile) -> Void)?
@@ -18,7 +21,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
     init(profile: MacrodroidRuntimeProfile) {
         originalProfile = profile
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 640),
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 720),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -43,6 +46,8 @@ final class RuntimeSettingsWindowController: NSWindowController {
         select(EngineCloseBehavior.load(), in: closeBehaviorButton)
         select(IdleSuspendPreferences.loadTimeout(), in: idleSuspendButton)
         microphoneButton.state = originalProfile.microphoneEnabled ? .on : .off
+        select(originalProfile.dataDiskGB, in: dataDiskButton)
+        hardwareTierField.stringValue = HardwareCapabilityProbe.current.tier.displayLabel
         resultLabel.stringValue = "Changes are validated, logged, and applied on the next app launch."
     }
 
@@ -85,6 +90,20 @@ final class RuntimeSettingsWindowController: NSWindowController {
 
         microphoneButton.state = profile.microphoneEnabled ? .on : .off
 
+        // Android Image optimisation controls
+        dataDiskButton.addItems(withTitles: MacrodroidRuntimeProfile.supportedDataDiskGB.map { "\($0) GB" })
+        select(profile.dataDiskGB, in: dataDiskButton)
+        let probe = HardwareCapabilityProbe.current
+        hardwareTierField.stringValue = probe.tier.displayLabel
+        hardwareTierField.textColor = .secondaryLabelColor
+        healthCheckButton.target = self
+        healthCheckButton.action = #selector(runHealthCheck(_:))
+        healthCheckButton.bezelStyle = .rounded
+
+        let sectionLabel = NSTextField(labelWithString: "Android Image")
+        sectionLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        sectionLabel.textColor = .secondaryLabelColor
+
         let grid = NSGridView(views: [
             [fieldLabel("Engine startup mode"), policyButton],
             [fieldLabel("When window closes"), closeBehaviorButton],
@@ -96,7 +115,11 @@ final class RuntimeSettingsWindowController: NSWindowController {
             [fieldLabel("Guest refresh target"), refreshButton],
             [fieldLabel("ASG draw flush interval"), flushButton],
             [fieldLabel("Play surface"), fixedValue("1920 × 1080 @ 320 dpi")],
-            [fieldLabel("Graphics / audio"), fixedValue("Host GPU · CoreAudio")]
+            [fieldLabel("Graphics / audio"), fixedValue("Host GPU · CoreAudio")],
+            [sectionLabel, NSTextField(labelWithString: "")],
+            [fieldLabel("Host hardware tier"), hardwareTierField],
+            [fieldLabel("Virtual disk size"), dataDiskButton],
+            [fieldLabel("Image health"), healthCheckButton]
         ])
         grid.rowSpacing = 13
         grid.columnSpacing = 24
@@ -182,6 +205,31 @@ final class RuntimeSettingsWindowController: NSWindowController {
         resultLabel.stringValue = "Proven baseline values selected. Save to keep them."
     }
 
+    @objc private func runHealthCheck(_ sender: Any?) {
+        healthCheckButton.isEnabled = false
+        healthCheckButton.title = "Checking…"
+        Task { @MainActor in
+            let monitor = ImageHealthMonitor()
+            let paths = try? MacrodroidRuntimePaths.discover()
+            let avdDir = paths?.avdDirectory
+                ?? FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(".android/avd/TFT_Ultra_Tablet.avd", isDirectory: true)
+            let report = await monitor.runPreLaunchChecks(avdDirectory: avdDir)
+            self.showHealthReport(report)
+            self.healthCheckButton.isEnabled = true
+            self.healthCheckButton.title = "Run Health Check…"
+        }
+    }
+
+    private func showHealthReport(_ report: ImageHealthReport) {
+        let alert = NSAlert()
+        alert.messageText = report.isHealthy ? "Android Image: Healthy ✓" : "Android Image: Attention Required"
+        alert.informativeText = report.summary
+        alert.alertStyle = report.isHealthy ? .informational : .warning
+        alert.addButton(withTitle: "OK")
+        if let window { alert.beginSheetModal(for: window) }
+    }
+
     @objc private func saveSettings(_ sender: Any?) {
         if let policyTitle = policyButton.titleOfSelectedItem,
            let policy = EngineLaunchPolicy.allCases.first(where: { $0.displayName == policyTitle }) {
@@ -198,9 +246,18 @@ final class RuntimeSettingsWindowController: NSWindowController {
 
         guard let preset = selectedExperimentPreset() else { return }
         let micEnabled = microphoneButton.state == .on
+        let diskGB = selectedInteger(dataDiskButton) ?? originalProfile.dataDiskGB
         let next = MacrodroidRuntimeProfile.playable
             .with(experimentPreset: preset)
             .with(microphoneEnabled: micEnabled)
+            .with(
+                vCPU: originalProfile.vCPU,
+                ramMiB: originalProfile.ramMiB,
+                refreshHz: originalProfile.refreshHz,
+                asgDrawFlushInterval: originalProfile.asgDrawFlushInterval,
+                microphoneEnabled: micEnabled,
+                dataDiskGB: diskGB
+            )
         next.save()
         onSave?(originalProfile, next)
         originalProfile = next

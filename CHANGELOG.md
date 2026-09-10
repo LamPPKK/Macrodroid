@@ -1,5 +1,48 @@
 # Changelog
 
+## [5.1] — 2026-09-10 (Android Image Optimization: Adaptive Profiles, Image Health & AVD Tuning)
+
+### Added
+- **Adaptive Hardware Profile System (`HardwareCapabilityProbe`)**:
+  - Auto-detects Apple Silicon memory tier via `sysctlbyname("hw.memsize")` (no special entitlements required).
+  - Four tiers: `ultraMax` (≥ 64 GB), `pro` (≥ 24 GB), `standard` (≥ 16 GB), `compat` (< 16 GB).
+  - M4 Max/Ultra gets 8 vCPU, 8 GB guest RAM, 4 MB ASG write buffer; Compat drops to 4 vCPU, 4 GB RAM, 512 KB buffer.
+  - `withASGBuffers(writeBufferSize:writeStepSize:dataRingSize:)` extension for clean tier-level ASG tuning.
+- **Image Health & Maintenance Engine (`ImageHealthMonitor`)**:
+  - Pre-launch checks: measures `userdata-qemu.img` size, detects corrupted or unexpected snapshots.
+  - Post-shutdown maintenance: removes stale lock files and suspect snapshot residue.
+  - ADB disk usage sampler with POSIX `df /data` output parser (`parseDFOutput`).
+  - `DiskUsageSample` and `ImageHealthReport` data models with human-readable summaries.
+- **Android Image Optimization section in Runtime Settings**:
+  - Hardware tier badge (auto-detected, read-only display).
+  - Virtual disk size dropdown (4–16 GB) controlling `disk.dataPartition.size`.
+  - "Run Health Check…" button launching an `NSAlert` sheet with full `ImageHealthReport`.
+  - Window height expanded from 640 → 720 px to accommodate new section.
+- **New AVD config.ini optimization keys** (written by `AVDConfigurationTransaction`):
+  - `hw.heapSize` / `vm.heapSize` — ART/Dalvik heap capped at `min(ramMiB/9, 576)` MiB (reduces GC pauses).
+  - `disk.dataPartition.size` — driven by `dataDiskGB` profile field (default 8 GB; prevents I/O stalls).
+  - `disk.cachePartition.size = 512m` — increased APK cache.
+  - `hw.audioInput` — controlled by `microphoneEnabled` profile flag (avoids audio thread overhead when mic is off).
+- **ASG buffer defaults upgraded** in `MacrodroidRuntimeProfile.playable`:
+  - `asgWriteStepSize`: 16 384 → **32 768** bytes (+2× throughput per submit).
+  - `asgDataRingSize`: 32 768 → **65 536** bytes (+2× ring depth).
+- **`MacrodroidRuntimeProfile` new fields**:
+  - `dataDiskGB: Int` (persisted via `UserDefaults` key `runtime.dataDiskGB`).
+  - `heapSizeMiB: Int` (computed, not persisted).
+  - `supportedDataDiskGB = [4, 6, 8, 12, 16]` static allowed list.
+
+### Tests
+- Expanded test suite to **82 native unit tests** (+7) — all passing:
+  1. `testAVDConfigTransactionIncludesHeapSize` — verifies `heapSizeMiB` formula for baseline profile.
+  2. `testAVDConfigHeapSizeCapAt576MiB` — verifies 576 MiB cap for 8 GB+ RAM profiles.
+  3. `testAVDConfigTransactionDiskAllocation` — verifies `dataDiskGB` round-trips through `with()`.
+  4. `testHardwareCapabilityProbeMemoryTiers` — verifies all 4 tier boundaries.
+  5. `testAdaptiveProfileCompatTierReducesResources` — verifies compat profile (4 vCPU / 4 GB).
+  6. `testAdaptiveProfileUltraMaxTierMaximizesResources` — verifies ultra max profile (8 vCPU / 8 GB / 4 MB ASG).
+  7. `testImageHealthMonitorDFOutputParsing` — verifies `df /data` POSIX output parser.
+
+---
+
 ## [5.0] — 2026-09-10 (Phases 8–14: PlayCover & WSA Parity, Gamepad, MetalFX & Macro Engine)
 
 ### Added
