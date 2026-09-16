@@ -172,7 +172,8 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         setenv("MACRODROID_MODE", pkg, 1)
 
-        let isPortrait = (app?.name.lowercased().contains("phone") == true) || (app?.aspectRatioIndex == 0)
+        let appProfile = AppProfileStore.loadProfile(for: pkg, appName: appName)
+        let isPortrait = appProfile.orientation == .portrait || (app?.aspectRatioIndex == 0) || (app?.name.lowercased().contains("phone") == true)
 
         // 1. Create or bring-to-front the per-package MainWindowController.
         //    Each unique package gets its own independent window; re-opening
@@ -230,8 +231,25 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
                     NSLog("[SharedFolderSync] Synced \(results.count) files")
                 }
             }
-            controller.onTaskSwitcherRequested = { [weak self] in
-                self?.presentTaskSwitcher(for: controller)
+            controller.onAndroidBackRequested = { [weak self] in
+                // Use the gRPC keyboard channel only; ADB shell keyevent would double-fire the event.
+                self?.runtimeController?.sendKeyboard(text: nil, key: "GoBack")
+            }
+            controller.onAndroidHomeRequested = { [weak self] in
+                self?.runtimeController?.sendKeyboard(text: nil, key: "GoHome")
+            }
+            controller.onAndroidRecentsRequested = { [weak self] in
+                self?.runtimeController?.sendKeyboard(text: nil, key: "AppSwitch")
+            }
+            controller.onTaskSwitcherRequested = { [weak self, weak controller] in
+                guard let self, let controller else { return }
+                self.presentTaskSwitcher(for: controller)
+            }
+            controller.onOpenSettingsRequested = { [weak self] in
+                self?.showSettings(nil)
+            }
+            controller.onAudioMuteToggleRequested = { [weak self] isMuted in
+                self?.runtimeController?.sendAndroidKeycode(164)
             }
 
             if let window = controller.window {
@@ -242,6 +260,19 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
                 ) { [weak self] _ in
                     guard let self else { return }
                     Task { @MainActor in
+                        let elapsedSeconds = controller.emulatorView.currentSessionDurationSeconds
+                        if elapsedSeconds > 0 {
+                            var appProfile = AppProfileStore.loadProfile(for: pkg, appName: appName)
+                            appProfile.totalPlayTimeSeconds += elapsedSeconds
+                            appProfile.lastPlayedDate = Date()
+                            AppProfileStore.saveProfile(appProfile)
+
+                            if let matchingApp = self.launcherWindowController?.viewModel.apps.first(where: { $0.bundleIdentifier == pkg }) {
+                                matchingApp.totalPlayTimeSeconds = appProfile.totalPlayTimeSeconds
+                                matchingApp.lastPlayedDate = appProfile.lastPlayedDate
+                            }
+                        }
+
                         self.activeAppWindows.removeValue(forKey: pkg)
                         let closeBehavior = EngineCloseBehavior.load()
                         if closeBehavior == .stopEngine && self.activeAppWindows.isEmpty {
@@ -584,7 +615,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             runtimeController?.launchPackage(pkg)
             let matchedApp = launcherWindowController?.viewModel.apps.first(where: { $0.bundleIdentifier == pkg })
             let name = matchedApp?.name ?? pkg
-            mainWindowController?.updateTitle(appName: name)
+            mainWindowController?.updateTitle(appName: name, packageName: pkg)
             mainWindowController?.showToast(icon: "rectangle.stack.fill", message: "Switched to \(name)")
         }
     }
@@ -780,7 +811,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             name: packageName.components(separatedBy: ".").last?.capitalized ?? packageName,
             bundleIdentifier: packageName,
             version: "1.0",
-            url: URL(fileURLWithPath: "/tmp")
+            url: FileManager.default.temporaryDirectory
         )
         openAppWindow(mode: .tft, profile: activeProfile, app: targetApp)
     }
@@ -788,8 +819,26 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
     // MARK: - Drag & Drop File Sharing
 
     private func handleDroppedFiles(_ urls: [URL]) {
-        guard let runtimeController else { return }
-        runtimeController.importDroppedFiles(urls: urls) { results in
+        var remainingURLs: [URL] = []
+        for url in urls {
+            if url.pathExtension.lowercased() == "macrodroid" {
+                if let bundle = try? MacrodroidBundle.load(from: url) {
+                    AppProfileStore.saveProfile(bundle.appProfile)
+                    KeymapProfileStore.saveProfile(bundle.keymap)
+                    if let win = activeAppWindows[bundle.packageName] {
+                        win.emulatorView.configureForPackage(bundle.packageName, appName: bundle.appName)
+                        win.showToast(icon: "square.and.arrow.down.fill", message: "Imported: \(bundle.appName)")
+                    } else if let mainWin = mainWindowController {
+                        mainWin.showToast(icon: "square.and.arrow.down.fill", message: "Imported: \(bundle.appName)")
+                    }
+                }
+            } else {
+                remainingURLs.append(url)
+            }
+        }
+
+        guard !remainingURLs.isEmpty, let runtimeController else { return }
+        runtimeController.importDroppedFiles(urls: remainingURLs) { results in
             Task { @MainActor in
                 let successfulCount = results.filter { $0.success }.count
                 let apks = results.filter { $0.isAPK }

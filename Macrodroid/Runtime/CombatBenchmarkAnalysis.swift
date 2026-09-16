@@ -3,7 +3,14 @@ import Foundation
 enum CombatLayerIdentity {
     static func comparable(_ identity: String) -> String? {
         let stable = "SurfaceView[com.riotgames.league.teamfighttactics/com.epicgames.unreal.GameActivity]"
-        return identity.contains(stable) ? stable : nil
+        if identity.contains(stable) { return stable }
+        if identity.contains("SurfaceView[") {
+            if let start = identity.range(of: "SurfaceView["),
+               let end = identity.range(of: "]", range: start.upperBound..<identity.endIndex) {
+                return String(identity[start.lowerBound...end.lowerBound])
+            }
+        }
+        return nil
     }
 }
 

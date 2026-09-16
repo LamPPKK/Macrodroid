@@ -110,27 +110,27 @@ public enum EngineLaunchPolicy: String, CaseIterable, Codable, Sendable {
     public var displayName: String {
         switch self {
         case .alwaysBackground:
-            return "Chạy ngầm liên tục (Always in Background)"
+            return "Always in Background (Warm)"
         case .onDemand:
-            return "Chạy khi ấn app (On-Demand)"
+            return "Launch on Demand"
         }
     }
 
     public var shortTitle: String {
         switch self {
         case .alwaysBackground:
-            return "Chạy ngầm (Always Warm)"
+            return "Always Warm"
         case .onDemand:
-            return "Chạy khi mở app (On-Demand)"
+            return "On-Demand"
         }
     }
 
     public var detail: String {
         switch self {
         case .alwaysBackground:
-            return "Android engine tự động khởi động ngầm khi mở Macrodroid. Mở game/app tức thì không có độ trễ."
+            return "Android engine starts automatically in the background when Macrodroid opens. Instant app launch with zero latency."
         case .onDemand:
-            return "Chỉ khởi động máy ảo khi bạn bấm mở ứng dụng. Tiết kiệm tài nguyên CPU, RAM và pin khi ở chế độ chờ."
+            return "Starts the virtual machine only when opening an app. Conserves CPU, RAM, and battery while idle."
         }
     }
 
@@ -156,18 +156,18 @@ public enum EngineCloseBehavior: String, CaseIterable, Codable, Sendable {
     public var displayName: String {
         switch self {
         case .keepWarm:
-            return "Giữ Engine chạy ngầm (Keep Warm)"
+            return "Keep Engine Warm"
         case .stopEngine:
-            return "Tắt Engine khi đóng app (Stop Engine)"
+            return "Stop Engine on Close"
         }
     }
 
     public var detail: String {
         switch self {
         case .keepWarm:
-            return "Đóng cửa sổ app nhưng giữ engine chạy ngầm để mở app tiếp theo tức thì."
+            return "Close app window while keeping engine running for instant subsequent launches."
         case .stopEngine:
-            return "Tắt hoàn toàn máy ảo khi đóng cửa sổ app để giải phóng toàn bộ RAM và CPU."
+            return "Completely stop virtual machine when closing app window to free RAM and CPU."
         }
     }
 

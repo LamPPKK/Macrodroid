@@ -115,17 +115,60 @@ public struct KeymapMouseAim: Codable, Sendable, Equatable {
     public var sensitivity: Double
     public var normalizedCenterX: Double
     public var normalizedCenterY: Double
+    public var leftClickFire: Bool
+    public var rightClickADS: Bool
+    public var smartCursorRelease: Bool
+    public var normalizedFireX: Double
+    public var normalizedFireY: Double
+    public var normalizedADSX: Double
+    public var normalizedADSY: Double
 
     public init(
         toggleKeyCode: UInt16 = 58, // Left Option (⌥)
         sensitivity: Double = 1.0,
         normalizedCenterX: Double = 0.5,
-        normalizedCenterY: Double = 0.5
+        normalizedCenterY: Double = 0.5,
+        leftClickFire: Bool = true,
+        rightClickADS: Bool = true,
+        smartCursorRelease: Bool = true,
+        normalizedFireX: Double = 0.85,
+        normalizedFireY: Double = 0.72,
+        normalizedADSX: Double = 0.88,
+        normalizedADSY: Double = 0.50
     ) {
         self.toggleKeyCode = toggleKeyCode
         self.sensitivity = max(0.1, min(5.0, sensitivity))
         self.normalizedCenterX = max(0.0, min(1.0, normalizedCenterX))
         self.normalizedCenterY = max(0.0, min(1.0, normalizedCenterY))
+        self.leftClickFire = leftClickFire
+        self.rightClickADS = rightClickADS
+        self.smartCursorRelease = smartCursorRelease
+        self.normalizedFireX = max(0.0, min(1.0, normalizedFireX))
+        self.normalizedFireY = max(0.0, min(1.0, normalizedFireY))
+        self.normalizedADSX = max(0.0, min(1.0, normalizedADSX))
+        self.normalizedADSY = max(0.0, min(1.0, normalizedADSY))
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        toggleKeyCode = try container.decodeIfPresent(UInt16.self, forKey: .toggleKeyCode) ?? 58
+        let rawSens = try container.decodeIfPresent(Double.self, forKey: .sensitivity) ?? 1.0
+        sensitivity = max(0.1, min(5.0, rawSens))
+        let rawX = try container.decodeIfPresent(Double.self, forKey: .normalizedCenterX) ?? 0.5
+        normalizedCenterX = max(0.0, min(1.0, rawX))
+        let rawY = try container.decodeIfPresent(Double.self, forKey: .normalizedCenterY) ?? 0.5
+        normalizedCenterY = max(0.0, min(1.0, rawY))
+        leftClickFire = try container.decodeIfPresent(Bool.self, forKey: .leftClickFire) ?? true
+        rightClickADS = try container.decodeIfPresent(Bool.self, forKey: .rightClickADS) ?? true
+        smartCursorRelease = try container.decodeIfPresent(Bool.self, forKey: .smartCursorRelease) ?? true
+        let rawFireX = try container.decodeIfPresent(Double.self, forKey: .normalizedFireX) ?? 0.85
+        normalizedFireX = max(0.0, min(1.0, rawFireX))
+        let rawFireY = try container.decodeIfPresent(Double.self, forKey: .normalizedFireY) ?? 0.72
+        normalizedFireY = max(0.0, min(1.0, rawFireY))
+        let rawADSX = try container.decodeIfPresent(Double.self, forKey: .normalizedADSX) ?? 0.88
+        normalizedADSX = max(0.0, min(1.0, rawADSX))
+        let rawADSY = try container.decodeIfPresent(Double.self, forKey: .normalizedADSY) ?? 0.50
+        normalizedADSY = max(0.0, min(1.0, rawADSY))
     }
 }
 
@@ -214,13 +257,28 @@ public enum KeymapProfileStore {
         return keymapsDirectory.appendingPathComponent("\(safePkg).json")
     }
 
+    public static func defaultProfile(for package: String, appName: String = "") -> KeymapProfile {
+        if let preset = CommunityHub.preset(for: package) {
+            return preset.keymapProfile
+        }
+        return KeymapProfile.defaultPreset(package: package, appName: appName)
+    }
+
     public static func loadProfile(for package: String, appName: String = "") -> KeymapProfile {
         let url = profileURL(for: package)
         if let data = try? Data(contentsOf: url),
            let profile = try? JSONDecoder().decode(KeymapProfile.self, from: data) {
             return profile
         }
-        return KeymapProfile.defaultPreset(package: package, appName: appName)
+        return defaultProfile(for: package, appName: appName)
+    }
+
+    @discardableResult
+    public static func resetToDefault(for package: String, appName: String = "") -> KeymapProfile {
+        deleteProfile(for: package)
+        let def = defaultProfile(for: package, appName: appName)
+        saveProfile(def)
+        return def
     }
 
     public static func saveProfile(_ profile: KeymapProfile) {

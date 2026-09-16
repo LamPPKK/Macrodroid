@@ -208,7 +208,15 @@ public final class GamepadManager {
             let y = gamepad.rightThumbstick.yAxis.value
             onRightThumbstickMoved?(x, y)
         default:
-            break
+            if let l3 = gamepad.leftThumbstickButton, element === l3 {
+                onButtonChanged?(.leftThumbstickButton, l3.isPressed, l3.value)
+            } else if let r3 = gamepad.rightThumbstickButton, element === r3 {
+                onButtonChanged?(.rightThumbstickButton, r3.isPressed, r3.value)
+            } else if let opt = gamepad.buttonOptions, element === opt {
+                onButtonChanged?(.options, opt.isPressed, opt.value)
+            } else if element === gamepad.buttonMenu {
+                onButtonChanged?(.menu, gamepad.buttonMenu.isPressed, gamepad.buttonMenu.value)
+            }
         }
     }
 

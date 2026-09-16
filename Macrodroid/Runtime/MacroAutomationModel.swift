@@ -142,7 +142,8 @@ public enum MacroStore {
 
     public static func saveMacro(_ macro: MacroSequence) {
         let dir = packageDirectory(for: macro.packageName)
-        let safeName = macro.name.replacingOccurrences(of: "/", with: "_")
+        let trimmed = macro.name.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "/", with: "_")
+        let safeName = trimmed.isEmpty ? "Macro_\(macro.id.uuidString.prefix(8))" : trimmed
         let fileURL = dir.appendingPathComponent("\(safeName).json")
 
         let encoder = JSONEncoder()
@@ -155,8 +156,9 @@ public enum MacroStore {
 
     public static func deleteMacro(name: String, for package: String) {
         let dir = packageDirectory(for: package)
-        let safeName = name.replacingOccurrences(of: "/", with: "_")
-        let fileURL = dir.appendingPathComponent("\(safeName).json")
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "/", with: "_")
+        guard !trimmed.isEmpty else { return }
+        let fileURL = dir.appendingPathComponent("\(trimmed).json")
         try? FileManager.default.removeItem(at: fileURL)
     }
 }

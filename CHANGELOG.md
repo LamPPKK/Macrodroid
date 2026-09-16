@@ -1,5 +1,98 @@
 # Changelog
 
+## [5.4] — 2026-09-16 (Google Play Games PC Parity: Playtime Tracking, HUD Gamepad & Audio Controls, Preset Reset)
+
+### Added & Enhanced
+- **Playtime & Session Duration Tracking**:
+  - Added `totalPlayTimeSeconds: Int` and `lastPlayedDate: Date?` to `AppProfile` with backward-compatible JSON decoding.
+  - Added formatted accessors `formattedPlayTime` (e.g. `3h 25m played`, `< 1m played`) and `formattedLastPlayed` (`Today at 2:30 PM`, `Yesterday`).
+  - Active real-time session tracking inside `EmbeddedEmulatorView` with a non-blocking asynchronous timer updating every 5s.
+  - Automatic accumulation of session seconds into `AppProfileStore` when the game window closes.
+  - Launcher integration in `PlayApp`: synchronizes playtime and displays emerald green playtime badges in both Grid tiles and List view rows, as well as the App Inspector Sheet.
+- **Enhanced In-Game Dashboard Overlay (`Shift+Tab`)**:
+  - **Session & Total Duration Header Badge**: Real-time display showing `⏱️ Session: 14m · Total: 3h 25m`.
+  - **Controller Connection Badge**: Dynamic header pill displaying `🎮 DualSense / Xbox / Gamepad` when a controller is active or `⌨️ Keyboard & Mouse` otherwise.
+  - **Keymap Preset Restoration**: One-touch "Reset Keymap to Defaults" (`arrow.counterclockwise`) button in the Controls & Aim section that instantly reverts keymaps to Community Hub / official presets and refreshes HUD overlays.
+  - **Audio Mute Toggle**: Dedicated "Mute Game Sound" / "Unmute Game Sound" button in the Display & System section, mapped directly to guest volume mute (`KEYCODE_VOLUME_MUTE` 164) with HUD toast confirmation.
+- **Unit Test Coverage (99 Native Tests)**:
+  - Added `testAppProfilePlaytimePersistenceAndFormatting` validating playtime accumulation, string formatting, date formatting, and backward-compatible decoding.
+  - Added `testKeymapProfileResetToDefaultOrCommunityPreset` verifying reset functionality back to official community presets.
+  - All 99/99 native tests passing with 0 failures.
+
+---
+
+## [5.3] — 2026-09-15 (Google Play Games PC In-Game Dashboard Overlay & High-Refresh eSports Pacing)
+
+### Added & Enhanced
+- **Google Play Games PC In-Game Dashboard Overlay (`Shift+Tab`)**:
+  - Implemented `GooglePlayGamesOverlayView` natively compiled into the macOS application target.
+  - Dedicated in-game overlay card displaying real-time FPS counter, game header badge, and quick configuration.
+  - Controls & Aim section: Remap Controls (`⌥⌘K`), Toggle On-Screen Key Hints (`⌘K`), Mouse Aim Lock (`F10` / `⌥`), and Keymap Opacity slider.
+  - Display & Performance section: Fullscreen toggle (`F11` / `⌘F`), Screen Rotation (`⌘R`), Multi-Window Freeform (`⌘M`), and Target Refresh Rate selector (`60 Hz`, `90 Hz`, `120 Hz ProMotion`, `144 Hz eSports`).
+  - Quick action bar: Lossless Screenshot (`⌘S`), Shared Folder (`⌘O`), Settings (`⌘,`), Exit Game, and Resume Game (`Esc` / `Shift+Tab`).
+  - Integrated smart mouse aim preservation: auto-pauses mouse lock when overlay opens and automatically re-locks upon resumption.
+  - Hierarchical dismiss on `Esc`: Overlay Dashboard -> Keymap Editor -> Mouse Aim Lock -> Android System Back.
+- **High Refresh Rate Pacing (60 / 90 / 120 / 144 Hz)**:
+  - Added `.fps90` (90 FPS) and `.fps144` (144 FPS) to `AppFrameRate` with clean localized labels.
+  - Updated `saveAppProfile()` and the Launcher Inspector settings sheet to support 90 Hz and 144 Hz display refresh targets.
+  - Added resolution static aliases (`fhd1080p`, `qhd1440p`, `hd720p`, `uhd4k`) and standardized `effectiveDimensions` as `CGSize`.
+- **Fullscreen Mode Enhancements**:
+  - Window delegate hooks (`windowDidEnterFullScreen`, `windowDidExitFullScreen`) displaying dynamic toast hints.
+- **Expanded Test Suite (94 Native Unit Tests)**:
+  - All 94 native tests passing with 0 failures across all 6 test phases of `automate-test-all.command`.
+
+---
+
+## [5.2] — 2026-09-10 (Runtime Stability, Orientation, Keymapping & Usability Polish)
+
+### Fixed & Enhanced
+- **Dynamic Resolution & Metal Texture Reallocation**:
+  - Fixed an issue where `EmbeddedEmulatorView` did not reallocate Metal textures upon runtime resolution or orientation change, preventing Metal assertion failures.
+  - Dynamically updates `currentResolution` and synchronizes `KeymappingOverlayView` when frame dimensions change.
+- **Keymapping Coordinate Normalization & Aspect Ratio Safety**:
+  - Fixed `KeyBadgeView.mouseDragged` coordinate normalization to compute relative to `displayedRect` instead of view bounds, eliminating badge position jumps in letterboxed, pillarboxed, or portrait windows.
+  - Dynamically calculates Android touch coordinates in `handleKeymapKeyDown` and `handleKeymapKeyUp` using `currentResolution` rather than hardcoded 1080p.
+  - Added keycode-first resolution in `KeymappingOverlayView.highlight` for consistent badge highlights across layout variants.
+- **Portrait Dimensions & Orientation Handling**:
+  - Added `dimensions(for: AppOrientation)` and `effectiveDimensions` to `AppProfileModel` to correctly return portrait aspect ratios (e.g. 1080×1920) for phone/vertical apps.
+  - Enabled automatic portrait detection in `AppCoordinator.openAppWindow` using profile orientation settings.
+  - Synchronized window rotation with `EmbeddedEmulatorView.updateOrientation` and persisted changes to `AppProfileStore`.
+  - Adjusted minimum portrait window size from 360×640 to 420×746 pt to prevent titlebar pill accessory collision with macOS traffic light controls.
+- **Freeform Windowing Aspect Ratio**:
+  - Freed window aspect constraints (`contentAspectRatio = .zero`) when multi-window freeform mode is active, restoring seamless free resizing.
+- **Launcher Profile Persistence**:
+  - Added persistent profile saving to `PlayApp` in `MacrodroidLauncherView`, ensuring resolution, orientation, FPS, vCPU, and RAM changes made in the inspector sheet are saved to `AppProfileStore`.
+- **Modern Android Task Parsing**:
+  - Updated `FreeformTaskManager.parseTasks` with regex support for newer Android (12–15) `dumpsys activity tasks` formats (`I=pkg/.Activity` and `affinity=pkg`).
+- **Touch Input Clamping**:
+  - Enforced non-negative coordinate clamping in `TouchInput.scrollSwipePoints` and `TouchInput.pinchSpanPoints`.
+- **Gamepad Extended Support & D-Pad Virtual Steering**:
+  - Handled `leftThumbstickButton` (L3), `rightThumbstickButton` (R3), `options`, and `menu` buttons in `GamepadManager`.
+  - Added dedicated virtual D-Pad touch routing (identifier 16) in `EmbeddedEmulatorView` for controller D-Pad Up/Down/Left/Right directions, and mapped L3/R3 to buttons 6/7.
+- **Macro Drag Tracking & Human Pacing**:
+  - Differentiated `.touchDown` (mouse down), `.touchMove` (mouse drag), and `.touchUp` (mouse up) in `EmbeddedEmulatorView.recordMacroTouch`, ensuring drag gestures are faithfully captured instead of being recorded as discrete taps.
+  - Recorded high-precision `delayAfterMS` on every action during macro recording for authentic playback pacing.
+- **Macrodroid Bundle (.macrodroid) Drag & Drop Import**:
+  - Dragging a `.macrodroid` bundle into an active emulator window immediately imports its `AppProfile` and `KeymapProfile`, reconfigures the window, and displays a toast notification.
+  - Dragging bundles onto `MacrodroidLauncherView` imports profiles with status notifications and sideload history logs.
+- **Community Hub Regional Variant Matching**:
+  - Enhanced `CommunityHub.preset(for:)` with fuzzy matching for Vietnamese and Southeast Asian regional game releases (`teamfighttacticsvn`, `wildriftvn`, `vng.pubgmobile`, `cognosphere.genshinimpact`, `trill`).
+  - Automatically loads curated game keymaps and profiles in `KeymapProfileStore` and `AppProfile.defaultProfile` without requiring manual setup.
+- **Runtime Settings Baseline Restore**:
+  - Updated `restoreBaseline` in `RuntimeSettingsWindowController` to reset the `dataDiskButton` to the baseline profile allocation.
+- **Gameloop & Google Play Games PC Shooting Mode**:
+  - Implemented full PC Shooting Mode / Mouse Aim (freelook camera rotation) via AppKit `NSTrackingArea` (`.mouseMoved`) and continuous cyclic swipe algorithm on touch identifier 11.
+  - Added Left-Click weapon fire (touch identifier 210) and Right-Click ADS (touch identifier 211) with automatic coordinate resolution matching mapped buttons or configured normalized positions.
+  - Integrated Gameloop-signature Smart Cursor Release on `Tab` (Inventory) and `M` (Map), unlocking the cursor for inventory looting and map marking before seamlessly re-locking into combat.
+  - Added classic `~` (Tilde, keyCode 50) and `Option` (keyCode 58) shooting mode toggle hotkeys.
+  - Keymap HUD auto-dims to 0.25 opacity during shooting mode and restores on unlock for an unobstructed view.
+  - Auto-unlocks mouse cursor on window focus loss or `resignFirstResponder`.
+- **Guest OS Gaming Performance Boost**:
+  - Added `optimizeGuestGamingPerformance` post-boot script: sets `debug.sf.latch_unsignaled=1` (zero-latency SurfaceFlinger latching), `debug.hwui.render_thread_priority=-20` (real-time rendering thread), and `windowsmgr.max_events_per_sec=240` (high-rate 240Hz input dispatch).
+  - Accelerated guest UI animations to 0.5x scales for instantaneous menu transitions.
+- **Expanded Native Unit Test Suite**:
+  - Expanded unit test suite from 86 to **92 native tests** (+6 new tests covering regional preset resolution, keymap store community fallback, macro action touchMove and delay tracking, exhaustive gamepad buttons, and shooting mode mouse aim configuration & persistence).
+
 ## [5.1] — 2026-09-10 (Android Image Optimization: Adaptive Profiles, Image Health & AVD Tuning)
 
 ### Added

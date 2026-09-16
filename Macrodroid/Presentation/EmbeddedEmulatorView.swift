@@ -193,8 +193,19 @@ final class KeyBadgeView: NSView {
         layer?.borderWidth = 1.0
         layer?.cornerRadius = 8
 
-        label.stringValue = key
-        label.font = .monospacedSystemFont(ofSize: 12, weight: .bold)
+        if key == "FIRE" {
+            label.stringValue = "🔥 FIRE"
+            label.font = .systemFont(ofSize: 10, weight: .bold)
+        } else if key == "ADS" {
+            label.stringValue = "🎯 ADS"
+            label.font = .systemFont(ofSize: 10, weight: .bold)
+        } else if key == "AIM" {
+            label.stringValue = "🕹 AIM"
+            label.font = .systemFont(ofSize: 10, weight: .bold)
+        } else {
+            label.stringValue = key
+            label.font = .monospacedSystemFont(ofSize: 12, weight: .bold)
+        }
         label.textColor = .white
         label.alignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -261,8 +272,9 @@ final class KeyBadgeView: NSView {
 
         let midX = frame.midX
         let midY = frame.midY
-        let normX = max(0.0, min(1.0, midX / parent.bounds.width))
-        let normY = max(0.0, min(1.0, 1.0 - (midY / parent.bounds.height)))
+        let displayedRect = (parent as? KeymappingOverlayView)?.displayedRect ?? parent.bounds
+        let normX = displayedRect.width > 0 ? max(0.0, min(1.0, (midX - displayedRect.minX) / displayedRect.width)) : 0.5
+        let normY = displayedRect.height > 0 ? max(0.0, min(1.0, 1.0 - ((midY - displayedRect.minY) / displayedRect.height))) : 0.5
         self.normalizedX = normX
         self.normalizedY = normY
         onPositionChanged?(normX, normY)
@@ -281,6 +293,25 @@ final class KeymappingOverlayView: NSView {
     private var badges: [String: KeyBadgeView] = [:]
     private let hintView = NSVisualEffectView()
     private let hintLabel = NSTextField(labelWithString: "⌨️ KEYMAP OVERLAY · Press ⌘K to toggle · ⌥⌘K to edit")
+
+    var currentResolution = FrameContract.standard1080p {
+        didSet {
+            layoutBadges()
+        }
+    }
+
+    var displayedRect: CGRect {
+        let mapper = ViewportMapper(
+            sourceSize: CGSize(width: currentResolution.width, height: currentResolution.height),
+            viewportSize: bounds.size
+        )
+        return mapper.displayedRect
+    }
+
+    func updateResolution(_ resolution: FrameContract.Resolution) {
+        guard currentResolution != resolution else { return }
+        self.currentResolution = resolution
+    }
 
     var isEditing: Bool = false {
         didSet {
@@ -388,6 +419,54 @@ final class KeymappingOverlayView: NSView {
             }
         }
 
+        if let aim = profile.mouseAim {
+            let aimBadge = KeyBadgeView(
+                key: "AIM",
+                keyCode: aim.toggleKeyCode,
+                normalizedX: aim.normalizedCenterX,
+                normalizedY: aim.normalizedCenterY
+            )
+            aimBadge.isEditing = isEditing
+            aimBadge.onPositionChanged = { [weak self] normX, normY in
+                self?.profile.mouseAim?.normalizedCenterX = normX
+                self?.profile.mouseAim?.normalizedCenterY = normY
+            }
+            badges["AIM"] = aimBadge
+            addSubview(aimBadge)
+
+            if aim.leftClickFire {
+                let fireBadge = KeyBadgeView(
+                    key: "FIRE",
+                    keyCode: 998,
+                    normalizedX: aim.normalizedFireX,
+                    normalizedY: aim.normalizedFireY
+                )
+                fireBadge.isEditing = isEditing
+                fireBadge.onPositionChanged = { [weak self] normX, normY in
+                    self?.profile.mouseAim?.normalizedFireX = normX
+                    self?.profile.mouseAim?.normalizedFireY = normY
+                }
+                badges["FIRE"] = fireBadge
+                addSubview(fireBadge)
+            }
+
+            if aim.rightClickADS {
+                let adsBadge = KeyBadgeView(
+                    key: "ADS",
+                    keyCode: 999,
+                    normalizedX: aim.normalizedADSX,
+                    normalizedY: aim.normalizedADSY
+                )
+                adsBadge.isEditing = isEditing
+                adsBadge.onPositionChanged = { [weak self] normX, normY in
+                    self?.profile.mouseAim?.normalizedADSX = normX
+                    self?.profile.mouseAim?.normalizedADSY = normY
+                }
+                badges["ADS"] = adsBadge
+                addSubview(adsBadge)
+            }
+        }
+
         layoutBadges()
     }
 
@@ -397,15 +476,17 @@ final class KeymappingOverlayView: NSView {
     }
 
     private func layoutBadges() {
-        let mapper = ViewportMapper(
-            sourceSize: CGSize(width: FrameContract.width, height: FrameContract.height),
-            viewportSize: bounds.size
-        )
-        let displayedRect = mapper.displayedRect
+        let displayedRect = self.displayedRect
         guard displayedRect.width > 0, displayedRect.height > 0 else { return }
 
         for (_, badge) in badges {
-            let badgeSize: CGFloat = badge.keyIdentifier == "SPACE" ? 72 : 36
+            let badgeSize: CGFloat = {
+                if badge.keyIdentifier == "SPACE" { return 72 }
+                if badge.keyIdentifier == "FIRE" || badge.keyIdentifier == "ADS" || badge.keyIdentifier == "AIM" {
+                    return 56
+                }
+                return 36
+            }()
             let badgeHeight: CGFloat = 36
             let centerX = displayedRect.minX + CGFloat(badge.normalizedX) * displayedRect.width
             let centerY = displayedRect.minY + CGFloat(1.0 - badge.normalizedY) * displayedRect.height
@@ -442,6 +523,10 @@ final class KeymappingOverlayView: NSView {
     }
 
     func highlight(event: NSEvent, isDown: Bool) {
+        if let badge = badges.values.first(where: { $0.keyCode == event.keyCode }) {
+            badge.setHighlighted(isDown)
+            return
+        }
         let key: String
         if event.keyCode == 49 {
             key = "SPACE"
@@ -474,14 +559,37 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     var onPinchGesture: ((Int32, Int32, CGFloat) -> Void)?
     var onIMEToggleRequested: (() -> Void)?
     var onTaskSwitcherRequested: (() -> Void)?
+    var onAndroidBackRequested: (() -> Void)?
+    var onAndroidHomeRequested: (() -> Void)?
+    var onAndroidRecentsRequested: (() -> Void)?
     var onKeymapEditorToggleRequested: (() -> Void)?
     var onGamepadStatusChanged: ((GamepadState?) -> Void)?
     var onMacroStatusChanged: ((String) -> Void)?
     var onMacroRecordToggleRequested: (() -> Void)?
     var onMacroPlayToggleRequested: (() -> Void)?
+    var onOpenSettingsRequested: (() -> Void)?
+    var onFullscreenRequested: (() -> Void)?
+    var onGPGOverlayToggleRequested: (() -> Void)?
+    var onExitGameRequested: (() -> Void)?
+    var onKeymapResetRequested: (() -> Void)?
+    var onAudioMuteToggleRequested: ((Bool) -> Void)?
+    private(set) var targetRefreshRate: Int = 60
+    private(set) var isBackgroundThrottled: Bool = false
+    private(set) var isAudioMuted: Bool = false
+    private(set) var sessionStartTime: Date?
+    private var initialTotalPlayTimeSeconds: Int = 0
+    private var sessionDurationTask: Task<Void, Never>?
+
+    var currentSessionDurationSeconds: Int {
+        guard let sessionStartTime else { return 0 }
+        return max(0, Int(Date().timeIntervalSince(sessionStartTime)))
+    }
+
+    let gpgOverlay = GooglePlayGamesOverlayView()
+    private var wasMouseAimLockedBeforeOverlay: Bool = false
 
     var isKeymapEnabled = true
-    var isVietnameseIMEEnabled = true
+    var isVietnameseIMEEnabled = false
     private var markedTextStorage = NSMutableAttributedString()
     private var markedTextSelectionRange = NSRange(location: NSNotFound, length: 0)
 
@@ -494,8 +602,22 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     private var dpadSPressed = false
     private var dpadDPressed = false
     private var lastDpadTouch: (x: Int32, y: Int32)?
+    private var gamepadDpadUpPressed = false
+    private var gamepadDpadDownPressed = false
+    private var gamepadDpadLeftPressed = false
+    private var gamepadDpadRightPressed = false
+    private var lastGamepadDpadTouch: (x: Int32, y: Int32)?
     private var lastGamepadStickTouch: (x: Int32, y: Int32)?
+    private var lastMacroActionTimestamp: UInt64 = 0
     private var activeKeymapTouches: [String: (x: Int32, y: Int32)] = [:]
+    private var trackingArea: NSTrackingArea?
+    private var isSmartCursorReleased = false
+    private var currentAimStrokeOffset: CGPoint = .zero
+    private var isAimTouchActive = false
+    private var activeFireTouch: TouchPoint?
+    private var isLeftClickFiring = false
+    private var activeADSTouch: TouchPoint?
+    private var isRightClickAiming = false
     private(set) var currentPackageName: String?
     private(set) var currentAppName: String?
     private(set) var isMacroRecording = false
@@ -557,6 +679,14 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        sessionDurationTask?.cancel()
+        if isMouseLocked {
+            CGAssociateMouseAndMouseCursorPosition(boolean_t(1))
+            NSCursor.unhide()
+        }
+    }
+
     override var acceptsFirstResponder: Bool { true }
 
     func setStatus(_ text: String, isError: Bool) {
@@ -576,6 +706,34 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         if newWindow == nil, isMouseLocked {
             setMouseLocked(false)
         }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.acceptsMouseMovedEvents = true
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let existing = trackingArea {
+            removeTrackingArea(existing)
+        }
+        let options: NSTrackingArea.Options = [
+            .mouseMoved,
+            .activeInKeyWindow,
+            .inVisibleRect
+        ]
+        let area = NSTrackingArea(rect: bounds, options: options, owner: self, userInfo: nil)
+        addTrackingArea(area)
+        trackingArea = area
+        window?.acceptsMouseMovedEvents = true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        if isMouseLocked {
+            setMouseLocked(false)
+        }
+        return super.resignFirstResponder()
     }
 
     func flashShutter() {
@@ -662,21 +820,111 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         isKeymapEnabled = appProfile.isKeymapEnabled
         isVietnameseIMEEnabled = appProfile.isVietnameseIMEEnabled
         setTargetFPS(appProfile.targetFPS.maxFPS)
-        let dims = appProfile.resolution.dimensions
+        let dims = appProfile.effectiveDimensions
         currentResolution = FrameContract.Resolution(width: Int(dims.width), height: Int(dims.height))
+        keymappingOverlay.updateResolution(currentResolution)
+
+        initialTotalPlayTimeSeconds = appProfile.totalPlayTimeSeconds
+        sessionStartTime = Date()
+        gpgOverlay.updatePlayTime(sessionSeconds: 0, totalSeconds: initialTotalPlayTimeSeconds)
+        gpgOverlay.updateMuteState(isAudioMuted)
+        gpgOverlay.updateGamepadState(connectedName: GamepadManager.shared.currentState?.name)
+
+        sessionDurationTask?.cancel()
+        sessionDurationTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard let self, !Task.isCancelled else { break }
+                let session = self.currentSessionDurationSeconds
+                let total = self.initialTotalPlayTimeSeconds + session
+                self.gpgOverlay.updatePlayTime(sessionSeconds: session, totalSeconds: total)
+            }
+        }
+    }
+
+    func resetKeymapToDefaults() {
+        guard let pkg = currentPackageName else { return }
+        let resolvedName = currentAppName ?? pkg
+        let newProfile = KeymapProfileStore.resetToDefault(for: pkg, appName: resolvedName)
+        keymappingOverlay.loadProfile(newProfile)
+        onKeymapResetRequested?()
+    }
+
+    @discardableResult
+    func toggleGPGOverlay() -> Bool {
+        gpgOverlay.isHidden.toggle()
+        if !gpgOverlay.isHidden {
+            wasMouseAimLockedBeforeOverlay = isMouseLocked
+            if isMouseLocked {
+                setMouseLocked(false)
+            }
+            gpgOverlay.configure(
+                appName: currentAppName ?? "Android Application",
+                packageName: currentPackageName,
+                fps: Double(preferredFramesPerSecond)
+            )
+            let session = currentSessionDurationSeconds
+            let total = initialTotalPlayTimeSeconds + session
+            gpgOverlay.updatePlayTime(sessionSeconds: session, totalSeconds: total)
+            gpgOverlay.updateGamepadState(connectedName: GamepadManager.shared.currentState?.name)
+            gpgOverlay.updateMuteState(isAudioMuted)
+            gpgOverlay.updateMouseLockState(isMouseLocked)
+        } else {
+            if wasMouseAimLockedBeforeOverlay {
+                setMouseLocked(true)
+                wasMouseAimLockedBeforeOverlay = false
+            }
+            // Keep the overlay badge in sync so the next open shows correct state.
+            gpgOverlay.updateMouseLockState(isMouseLocked)
+        }
+        return !gpgOverlay.isHidden
+    }
+
+    var isGPGOverlayVisible: Bool {
+        !gpgOverlay.isHidden
+    }
+
+    func setBackgroundThrottled(_ throttled: Bool) {
+        isBackgroundThrottled = throttled
+        if throttled {
+            preferredFramesPerSecond = 15
+        } else {
+            preferredFramesPerSecond = targetRefreshRate
+        }
     }
 
     func setTargetFPS(_ fps: Int) {
-        preferredFramesPerSecond = fps
+        targetRefreshRate = fps
+        if !isBackgroundThrottled {
+            preferredFramesPerSecond = fps
+        }
+    }
+
+    func updateOrientation(isPortrait: Bool) {
+        let isCurrentPortrait = currentResolution.height > currentResolution.width
+        if isPortrait != isCurrentPortrait {
+            currentResolution = FrameContract.Resolution(
+                width: currentResolution.height,
+                height: currentResolution.width
+            )
+            keymappingOverlay.updateResolution(currentResolution)
+        }
+        if let pkg = currentPackageName {
+            var profile = AppProfileStore.loadProfile(for: pkg, appName: currentAppName ?? "")
+            profile.orientation = isPortrait ? .portrait : .landscape
+            AppProfileStore.saveProfile(profile)
+        }
     }
 
     private func setupGamepadHandlers() {
         let gamepad = GamepadManager.shared
         gamepad.onControllerConnected = { [weak self] state in
             self?.onGamepadStatusChanged?(state)
+            self?.gpgOverlay.updateGamepadState(connectedName: state.name)
         }
         gamepad.onControllerDisconnected = { [weak self] _ in
             self?.onGamepadStatusChanged?(nil)
+            self?.gpgOverlay.updateGamepadState(connectedName: nil)
         }
         gamepad.onLeftThumbstickMoved = { [weak self] x, y in
             guard let self, self.isKeymapEnabled else { return }
@@ -704,6 +952,27 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     }
 
     private func handleGamepadButton(_ button: GamepadButton, isPressed: Bool) {
+        switch button {
+        case .dpadUp:
+            gamepadDpadUpPressed = isPressed
+            updateGamepadDpadTouch()
+            return
+        case .dpadDown:
+            gamepadDpadDownPressed = isPressed
+            updateGamepadDpadTouch()
+            return
+        case .dpadLeft:
+            gamepadDpadLeftPressed = isPressed
+            updateGamepadDpadTouch()
+            return
+        case .dpadRight:
+            gamepadDpadRightPressed = isPressed
+            updateGamepadDpadTouch()
+            return
+        default:
+            break
+        }
+
         let buttons = keymappingOverlay.profile.buttons
         let targetIndex: Int?
         switch button {
@@ -713,6 +982,8 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         case .buttonY: targetIndex = buttons.count > 3 ? 3 : nil
         case .leftShoulder, .leftTrigger: targetIndex = buttons.count > 4 ? 4 : nil
         case .rightShoulder: targetIndex = buttons.count > 5 ? 5 : nil
+        case .leftThumbstickButton: targetIndex = buttons.count > 6 ? 6 : nil
+        case .rightThumbstickButton: targetIndex = buttons.count > 7 ? 7 : nil
         default: targetIndex = nil
         }
 
@@ -727,6 +998,25 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         }
     }
 
+    private func updateGamepadDpadTouch() {
+        guard isKeymapEnabled else { return }
+        let dpad = keymappingOverlay.profile.dpad ?? KeymapDPad()
+        if let pt = dpad.touchPoint(
+            wPressed: gamepadDpadUpPressed,
+            aPressed: gamepadDpadLeftPressed,
+            sPressed: gamepadDpadDownPressed,
+            dPressed: gamepadDpadRightPressed,
+            sourceWidth: Int32(currentResolution.width),
+            sourceHeight: Int32(currentResolution.height)
+        ) {
+            lastGamepadDpadTouch = pt
+            onTouchInput?(TouchInput(x: pt.x, y: pt.y, identifier: 16, phase: .contact))
+        } else if let pt = lastGamepadDpadTouch {
+            lastGamepadDpadTouch = nil
+            onTouchInput?(TouchInput(x: pt.x, y: pt.y, identifier: 16, phase: .release))
+        }
+    }
+
     @discardableResult
     func toggleMacroRecording() -> Bool {
         if isMacroPlaying { stopMacroPlayback() }
@@ -738,6 +1028,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
                 packageName: pkg,
                 actions: []
             )
+            lastMacroActionTimestamp = DispatchTime.now().uptimeNanoseconds
             onMacroStatusChanged?("Macro Recording Started")
         } else {
             if !activeMacroSequence.actions.isEmpty {
@@ -827,7 +1118,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         }
     }
 
-    private func recordMacroTouch(event: NSEvent, isContact: Bool) {
+    private func recordMacroTouch(event: NSEvent, type: MacroActionType) {
         guard isMacroRecording else { return }
         let location = convert(event.locationInWindow, from: nil)
         let mapper = ViewportMapper(
@@ -837,10 +1128,15 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         guard let source = mapper.sourcePoint(for: location) else { return }
         let normX = max(0.0, min(1.0, source.x / CGFloat(currentResolution.width)))
         let normY = max(0.0, min(1.0, 1.0 - (source.y / CGFloat(currentResolution.height))))
+        let now = DispatchTime.now().uptimeNanoseconds
+        let delayMS = lastMacroActionTimestamp > 0 ? Int((now - lastMacroActionTimestamp) / 1_000_000) : 0
+        lastMacroActionTimestamp = now
         let action = MacroAction(
-            type: isContact ? .touchDown : .touchUp,
+            type: type,
+            timestampNanoseconds: now,
             normalizedX: normX,
-            normalizedY: normY
+            normalizedY: normY,
+            delayAfterMS: delayMS
         )
         activeMacroSequence.actions.append(action)
     }
@@ -866,12 +1162,27 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     func setMouseLocked(_ locked: Bool) {
         guard isMouseLocked != locked else { return }
         isMouseLocked = locked
+        isSmartCursorReleased = false
+        gpgOverlay.updateMouseLockState(locked)
         if locked {
             NSCursor.hide()
             CGAssociateMouseAndMouseCursorPosition(boolean_t(0))
+            if isKeymapEnabled && keymappingOverlay.profile.mouseAim != nil {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.2
+                    keymappingOverlay.animator().alphaValue = 0.25
+                }
+            }
         } else {
+            resetMouseAimTouch(aim: keymappingOverlay.profile.mouseAim)
             CGAssociateMouseAndMouseCursorPosition(boolean_t(1))
             NSCursor.unhide()
+            if isKeymapEnabled {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.2
+                    keymappingOverlay.animator().alphaValue = CGFloat(keymappingOverlay.profile.overlayOpacity)
+                }
+            }
         }
     }
 
@@ -938,17 +1249,232 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         updatePresentationSampleIfNeeded()
     }
 
+    override func mouseMoved(with event: NSEvent) {
+        guard isMouseLocked,
+              !isSmartCursorReleased,
+              isKeymapEnabled,
+              let aim = keymappingOverlay.profile.mouseAim else {
+            super.mouseMoved(with: event)
+            return
+        }
+        handleMouseAimMove(event: event, aim: aim)
+    }
+
+    private func handleMouseAimMove(event: NSEvent, aim: KeymapMouseAim) {
+        guard currentResolution.width > 0, currentResolution.height > 0 else { return }
+        let dx = event.deltaX * aim.sensitivity * 1.5
+        let dy = event.deltaY * aim.sensitivity * 1.5
+        guard abs(dx) > 0.001 || abs(dy) > 0.001 else { return }
+
+        let centerX = Int32(aim.normalizedCenterX * Double(currentResolution.width))
+        let centerY = Int32(aim.normalizedCenterY * Double(currentResolution.height))
+        let maxStrokeRadius: CGFloat = 140.0
+
+        let newOffsetX = currentAimStrokeOffset.x + dx
+        let newOffsetY = currentAimStrokeOffset.y + dy
+        let dist = hypot(newOffsetX, newOffsetY)
+
+        if dist > maxStrokeRadius {
+            if isAimTouchActive {
+                let releaseX = Int32(max(0, min(Double(currentResolution.width - 1), Double(centerX) + currentAimStrokeOffset.x)))
+                let releaseY = Int32(max(0, min(Double(currentResolution.height - 1), Double(centerY) + currentAimStrokeOffset.y)))
+                onTouchInput?(TouchInput(x: releaseX, y: releaseY, identifier: 11, phase: .release))
+            }
+            currentAimStrokeOffset = .zero
+            onTouchInput?(TouchInput(x: centerX, y: centerY, identifier: 11, phase: .contact))
+            currentAimStrokeOffset = CGPoint(x: dx, y: dy)
+            let moveX = Int32(max(0, min(Double(currentResolution.width - 1), Double(centerX) + dx)))
+            let moveY = Int32(max(0, min(Double(currentResolution.height - 1), Double(centerY) + dy)))
+            onTouchInput?(TouchInput(x: moveX, y: moveY, identifier: 11, phase: .contact))
+            isAimTouchActive = true
+        } else {
+            currentAimStrokeOffset = CGPoint(x: newOffsetX, y: newOffsetY)
+            let targetX = Int32(max(0, min(Double(currentResolution.width - 1), Double(centerX) + newOffsetX)))
+            let targetY = Int32(max(0, min(Double(currentResolution.height - 1), Double(centerY) + newOffsetY)))
+            onTouchInput?(TouchInput(x: targetX, y: targetY, identifier: 11, phase: .contact))
+            isAimTouchActive = true
+        }
+    }
+
+    private func resetMouseAimTouch(aim: KeymapMouseAim?) {
+        if isAimTouchActive {
+            let cx = Int32(aim.map { Int($0.normalizedCenterX * Double(currentResolution.width)) } ?? (currentResolution.width / 2))
+            let cy = Int32(aim.map { Int($0.normalizedCenterY * Double(currentResolution.height)) } ?? (currentResolution.height / 2))
+            let relX = Int32(max(0, min(Double(currentResolution.width - 1), Double(cx) + currentAimStrokeOffset.x)))
+            let relY = Int32(max(0, min(Double(currentResolution.height - 1), Double(cy) + currentAimStrokeOffset.y)))
+            onTouchInput?(TouchInput(x: relX, y: relY, identifier: 11, phase: .release))
+            isAimTouchActive = false
+            currentAimStrokeOffset = .zero
+        }
+        if isLeftClickFiring {
+            stopLeftClickFire()
+        }
+        if isRightClickAiming {
+            stopRightClickADS()
+        }
+    }
+
+    private func resolveFireCoordinate(aim: KeymapMouseAim) -> TouchPoint {
+        if let btn = keymappingOverlay.profile.buttons.first(where: {
+            let name = ($0.label.isEmpty ? $0.key : $0.label).lowercased()
+            return name.contains("fire") || name.contains("shoot") || name.contains("attack")
+        }) {
+            let coord = btn.screenCoordinate(
+                sourceWidth: Int32(currentResolution.width),
+                sourceHeight: Int32(currentResolution.height)
+            )
+            return TouchPoint(x: coord.x, y: coord.y)
+        }
+        let x = Int32(max(0, min(Double(currentResolution.width - 1), aim.normalizedFireX * Double(currentResolution.width))))
+        let y = Int32(max(0, min(Double(currentResolution.height - 1), aim.normalizedFireY * Double(currentResolution.height))))
+        return TouchPoint(x: x, y: y)
+    }
+
+    private func resolveADSCoordinate(aim: KeymapMouseAim) -> TouchPoint {
+        if let btn = keymappingOverlay.profile.buttons.first(where: {
+            let name = ($0.label.isEmpty ? $0.key : $0.label).lowercased()
+            return name.contains("ads") || name.contains("scope") || name.contains("aim")
+        }) {
+            let coord = btn.screenCoordinate(
+                sourceWidth: Int32(currentResolution.width),
+                sourceHeight: Int32(currentResolution.height)
+            )
+            return TouchPoint(x: coord.x, y: coord.y)
+        }
+        let x = Int32(max(0, min(Double(currentResolution.width - 1), aim.normalizedADSX * Double(currentResolution.width))))
+        let y = Int32(max(0, min(Double(currentResolution.height - 1), aim.normalizedADSY * Double(currentResolution.height))))
+        return TouchPoint(x: x, y: y)
+    }
+
+    private func startLeftClickFire(aim: KeymapMouseAim) {
+        let coord = resolveFireCoordinate(aim: aim)
+        activeFireTouch = coord
+        isLeftClickFiring = true
+        onTouchInput?(TouchInput(x: coord.x, y: coord.y, identifier: 210, phase: .contact))
+    }
+
+    private func stopLeftClickFire() {
+        guard isLeftClickFiring, let coord = activeFireTouch else { return }
+        onTouchInput?(TouchInput(x: coord.x, y: coord.y, identifier: 210, phase: .release))
+        activeFireTouch = nil
+        isLeftClickFiring = false
+    }
+
+    private func startRightClickADS(aim: KeymapMouseAim) {
+        let coord = resolveADSCoordinate(aim: aim)
+        activeADSTouch = coord
+        isRightClickAiming = true
+        onTouchInput?(TouchInput(x: coord.x, y: coord.y, identifier: 211, phase: .contact))
+    }
+
+    private func stopRightClickADS() {
+        guard isRightClickAiming, let coord = activeADSTouch else { return }
+        onTouchInput?(TouchInput(x: coord.x, y: coord.y, identifier: 211, phase: .release))
+        activeADSTouch = nil
+        isRightClickAiming = false
+    }
+
+    private func toggleSmartCursorRelease(aim: KeymapMouseAim?) {
+        isSmartCursorReleased.toggle()
+        if isSmartCursorReleased {
+            resetMouseAimTouch(aim: aim)
+            CGAssociateMouseAndMouseCursorPosition(boolean_t(1))
+            NSCursor.unhide()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                keymappingOverlay.animator().alphaValue = CGFloat(keymappingOverlay.profile.overlayOpacity)
+            }
+        } else {
+            NSCursor.hide()
+            CGAssociateMouseAndMouseCursorPosition(boolean_t(0))
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                keymappingOverlay.animator().alphaValue = 0.25
+            }
+        }
+    }
+
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        if isGPGOverlayVisible {
+            super.mouseDown(with: event)
+            return
+        }
+        if isMouseLocked && !isSmartCursorReleased && isKeymapEnabled,
+           let aim = keymappingOverlay.profile.mouseAim,
+           aim.leftClickFire {
+            startLeftClickFire(aim: aim)
+            return
+        }
+        if isMacroRecording {
+            recordMacroTouch(event: event, type: .touchDown)
+        }
         sendTouch(event, isContact: true)
     }
-    override func mouseDragged(with event: NSEvent) { sendTouch(event, isContact: true) }
-    override func mouseUp(with event: NSEvent) { sendTouch(event, isContact: false) }
-    override func rightMouseDown(with event: NSEvent) { sendMouse(event, buttons: 2) }
-    override func rightMouseDragged(with event: NSEvent) { sendMouse(event, buttons: 2) }
-    override func rightMouseUp(with event: NSEvent) { sendMouse(event, buttons: 0) }
+
+    override func mouseDragged(with event: NSEvent) {
+        if isGPGOverlayVisible {
+            super.mouseDragged(with: event)
+            return
+        }
+        if isMouseLocked && !isSmartCursorReleased && isKeymapEnabled,
+           let aim = keymappingOverlay.profile.mouseAim {
+            handleMouseAimMove(event: event, aim: aim)
+            return
+        }
+        if isMacroRecording {
+            recordMacroTouch(event: event, type: .touchMove)
+        }
+        sendTouch(event, isContact: true)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if isGPGOverlayVisible {
+            super.mouseUp(with: event)
+            return
+        }
+        if isLeftClickFiring {
+            stopLeftClickFire()
+            return
+        }
+        if isMacroRecording {
+            recordMacroTouch(event: event, type: .touchUp)
+        }
+        sendTouch(event, isContact: false)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        guard !isGPGOverlayVisible else { return }
+        if isMouseLocked && !isSmartCursorReleased && isKeymapEnabled,
+           let aim = keymappingOverlay.profile.mouseAim,
+           aim.rightClickADS {
+            startRightClickADS(aim: aim)
+            return
+        }
+        sendMouse(event, buttons: 2)
+    }
+
+    override func rightMouseDragged(with event: NSEvent) {
+        guard !isGPGOverlayVisible else { return }
+        if isMouseLocked && !isSmartCursorReleased && isKeymapEnabled,
+           let aim = keymappingOverlay.profile.mouseAim {
+            handleMouseAimMove(event: event, aim: aim)
+            return
+        }
+        sendMouse(event, buttons: 2)
+    }
+
+    override func rightMouseUp(with event: NSEvent) {
+        guard !isGPGOverlayVisible else { return }
+        if isRightClickAiming {
+            stopRightClickADS()
+            return
+        }
+        sendMouse(event, buttons: 0)
+    }
 
     override func scrollWheel(with event: NSEvent) {
+        guard !isGPGOverlayVisible else { return }
         guard let point = androidPoint(for: event) else {
             super.scrollWheel(with: event)
             return
@@ -960,6 +1486,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     }
 
     override func magnify(with event: NSEvent) {
+        guard !isGPGOverlayVisible else { return }
         guard let point = androidPoint(for: event) else {
             super.magnify(with: event)
             return
@@ -994,8 +1521,8 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
                     aPressed: dpadAPressed,
                     sPressed: dpadSPressed,
                     dPressed: dpadDPressed,
-                    sourceWidth: Int32(FrameContract.width),
-                    sourceHeight: Int32(FrameContract.height)
+                    sourceWidth: Int32(currentResolution.width),
+                    sourceHeight: Int32(currentResolution.height)
                 ) {
                     lastDpadTouch = pt
                     onTouchInput?(TouchInput(x: pt.x, y: pt.y, identifier: 10, phase: .contact))
@@ -1006,8 +1533,8 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
 
         if let btn = keymappingOverlay.profile.buttons.first(where: { $0.keyCode == event.keyCode }) {
             let coord = btn.screenCoordinate(
-                sourceWidth: Int32(FrameContract.width),
-                sourceHeight: Int32(FrameContract.height)
+                sourceWidth: Int32(currentResolution.width),
+                sourceHeight: Int32(currentResolution.height)
             )
             activeKeymapTouches[btn.key] = coord
             let identifier = Int32(btn.keyCode) + 100
@@ -1043,8 +1570,8 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
                     aPressed: dpadAPressed,
                     sPressed: dpadSPressed,
                     dPressed: dpadDPressed,
-                    sourceWidth: Int32(FrameContract.width),
-                    sourceHeight: Int32(FrameContract.height)
+                    sourceWidth: Int32(currentResolution.width),
+                    sourceHeight: Int32(currentResolution.height)
                 ) {
                     lastDpadTouch = pt
                     onTouchInput?(TouchInput(x: pt.x, y: pt.y, identifier: 10, phase: .contact))
@@ -1071,10 +1598,65 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         if !keymappingOverlay.isHidden {
             keymappingOverlay.highlight(event: event, isDown: true)
         }
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command) {
+
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        // Shift + Tab: Toggle In-Game Dashboard Overlay (Google Play Games PC standard)
+        if modifiers.contains(.shift) && event.keyCode == 48 {
+            _ = toggleGPGOverlay()
+            return
+        }
+
+        // F10: Toggle Mouse Aim Lock
+        if event.keyCode == 109 {
+            onMouseLockToggleRequested?()
+            return
+        }
+
+        // F11: Toggle Fullscreen
+        if event.keyCode == 103 {
+            onFullscreenRequested?()
+            return
+        }
+
+        // Esc: Hierarchical dismissal (Overlay -> Keymap Editor -> Mouse Lock -> Android Back)
+        if event.keyCode == 53 {
+            if isGPGOverlayVisible {
+                _ = toggleGPGOverlay()
+                return
+            }
+            if isKeymapEditorActive {
+                _ = toggleKeymapEditor()
+                return
+            }
+            if isMouseLocked {
+                setMouseLocked(false)
+                return
+            }
+            onAndroidBackRequested?()
+            return
+        }
+
+        if isGPGOverlayVisible {
+            return
+        }
+
+        if modifiers.contains(.command) {
             super.keyDown(with: event)
             return
         }
+
+        let aimConfig = keymappingOverlay.profile.mouseAim
+        let isAimToggle = (aimConfig != nil && (event.keyCode == aimConfig?.toggleKeyCode || event.keyCode == 50))
+        if isAimToggle {
+            toggleMouseLock()
+            return
+        }
+
+        if isMouseLocked && (aimConfig?.smartCursorRelease ?? true) && (event.keyCode == 48 || event.keyCode == 46) {
+            toggleSmartCursorRelease(aim: aimConfig)
+        }
+
         if isMacroRecording {
             recordMacroKey(event: event)
         }
@@ -1093,6 +1675,9 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     }
 
     override func keyUp(with event: NSEvent) {
+        if isGPGOverlayVisible {
+            return
+        }
         if !keymappingOverlay.isHidden {
             keymappingOverlay.highlight(event: event, isDown: false)
         }
@@ -1104,7 +1689,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
 
     override func flagsChanged(with event: NSEvent) {
         let current = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if current.contains(.option) && !previousModifierFlags.contains(.option) {
+        if current.contains(.option) && !previousModifierFlags.contains(.option) && !current.contains(.command) && !isGPGOverlayVisible {
             onMouseLockToggleRequested?()
         }
         previousModifierFlags = current
@@ -1131,6 +1716,12 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             return super.performKeyEquivalent(with: event)
         }
         switch char {
+        case "f":
+            onFullscreenRequested?()
+            return true
+        case "[":
+            onAndroidBackRequested?()
+            return true
         case "r":
             onRotateRequested?()
             return true
@@ -1152,6 +1743,9 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         case "t":
             onTaskSwitcherRequested?()
             return true
+        case ",":
+            onOpenSettingsRequested?()
+            return true
         case "v":
             paste(nil)
             return true
@@ -1160,10 +1754,20 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         }
     }
 
+    func sendAndroidKey(_ key: String) {
+        onKeyboardInput?(nil, key)
+    }
+
     @objc func paste(_ sender: Any?) {
         guard let text = NSPasteboard.general.string(forType: .string), !text.isEmpty else { return }
-        onPasteInput?(text)
-        onKeyboardInput?(String(text.prefix(1024)), nil)
+        if let pasteHandler = onPasteInput {
+            // Runtime clipboard sync is available — use the dedicated paste channel only.
+            // Sending through onKeyboardInput as well would double-inject the text.
+            pasteHandler(text)
+        } else {
+            // No runtime clipboard channel; fall back to keyboard simulation (max 1024 chars).
+            onKeyboardInput?(String(text.prefix(1024)), nil)
+        }
     }
 
     // MARK: - Drag & Drop File Sharing
@@ -1212,7 +1816,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     private func uploadNewestFrameIfPossible() -> Bool {
         guard let frame = mailbox.latestFrame(after: lastPresentedSequence) ?? mailbox.takeLatest() else { return false }
         guard let slot = gpuState.availableUploadSlot(excluding: currentTextureSlot) else { return false }
-        if textures[slot] == nil {
+        if textures[slot] == nil || textures[slot]?.width != frame.width || textures[slot]?.height != frame.height {
             let descriptor = MTLTextureDescriptor.texture2DDescriptor(
                 pixelFormat: .rgba8Unorm_srgb,
                 width: frame.width,
@@ -1236,6 +1840,10 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         }
         currentTextureSlot = slot
         lastPresentedSequence = frame.sequence
+        if currentResolution.width != frame.width || currentResolution.height != frame.height {
+            currentResolution = FrameContract.Resolution(width: frame.width, height: frame.height)
+            keymappingOverlay.updateResolution(currentResolution)
+        }
         return true
     }
 
@@ -1253,9 +1861,6 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
     }
 
     private func sendTouch(_ event: NSEvent, isContact: Bool) {
-        if isMacroRecording {
-            recordMacroTouch(event: event, isContact: isContact)
-        }
         let point = androidPoint(for: event)
         let input = isContact
             ? primaryTouchSequence.contact(at: point)
@@ -1314,6 +1919,7 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             displayFPS = 0
         }
         onFPSChanged?(displayFPS)
+        gpgOverlay.updateFPS(displayFPS)
 
         let guestLine: String
         if let gameFrameWindow, case .available = gameFrameWindow.status {
@@ -1374,6 +1980,73 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
         keymappingOverlay.isHidden = true
         addSubview(keymappingOverlay)
 
+        gpgOverlay.isHidden = true
+        gpgOverlay.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(gpgOverlay)
+
+        gpgOverlay.onResumeRequested = { [weak self] in
+            _ = self?.toggleGPGOverlay()
+        }
+        gpgOverlay.onRemapRequested = { [weak self] in
+            _ = self?.toggleGPGOverlay()
+            self?.onKeymapEditorToggleRequested?()
+        }
+        gpgOverlay.onToggleKeymapVisibilityRequested = { [weak self] in
+            self?.onKeymapToggleRequested?()
+        }
+        gpgOverlay.onResetKeymapRequested = { [weak self] in
+            self?.resetKeymapToDefaults()
+        }
+        gpgOverlay.onOpacityChanged = { [weak self] opacity in
+            self?.keymappingOverlay.alphaValue = CGFloat(opacity)
+        }
+        gpgOverlay.onMouseLockRequested = { [weak self] in
+            guard let self else { return }
+            self.onMouseLockToggleRequested?()
+            // Auto-dismiss the overlay when the user activates Aim Lock from the dashboard,
+            // so they can immediately start aiming without manually closing the overlay.
+            if self.isMouseLocked {
+                _ = self.toggleGPGOverlay()
+            }
+        }
+        gpgOverlay.onToggleMuteRequested = { [weak self] in
+            guard let self else { return }
+            self.isAudioMuted.toggle()
+            self.gpgOverlay.updateMuteState(self.isAudioMuted)
+            self.onAudioMuteToggleRequested?(self.isAudioMuted)
+        }
+        gpgOverlay.onFullscreenRequested = { [weak self] in
+            self?.onFullscreenRequested?()
+        }
+        gpgOverlay.onRotateRequested = { [weak self] in
+            self?.onRotateRequested?()
+        }
+        gpgOverlay.onFreeformRequested = { [weak self] in
+            self?.onFreeformRequested?()
+        }
+        gpgOverlay.onScreenshotRequested = { [weak self] in
+            self?.onScreenshotRequested?()
+        }
+        gpgOverlay.onSharedFolderRequested = { [weak self] in
+            self?.onSharedFolderRequested?()
+        }
+        gpgOverlay.onSettingsRequested = { [weak self] in
+            self?.onOpenSettingsRequested?()
+        }
+        gpgOverlay.onExitGameRequested = { [weak self] in
+            self?.onExitGameRequested?()
+        }
+        gpgOverlay.onRefreshRateChanged = { [weak self] fps in
+            self?.setTargetFPS(fps)
+            if let pkg = self?.currentPackageName {
+                var profile = AppProfileStore.loadProfile(for: pkg, appName: self?.currentAppName ?? "")
+                if let newFPS = AppFrameRate(rawValue: fps) {
+                    profile.targetFPS = newFPS
+                    AppProfileStore.saveProfile(profile)
+                }
+            }
+        }
+
         shutterFlashView.wantsLayer = true
         shutterFlashView.layer?.backgroundColor = NSColor.white.cgColor
         shutterFlashView.alphaValue = 0.0
@@ -1399,6 +2072,10 @@ final class EmbeddedEmulatorView: MTKView, MTKViewDelegate {
             keymappingOverlay.bottomAnchor.constraint(equalTo: bottomAnchor),
             keymappingOverlay.leadingAnchor.constraint(equalTo: leadingAnchor),
             keymappingOverlay.trailingAnchor.constraint(equalTo: trailingAnchor),
+            gpgOverlay.topAnchor.constraint(equalTo: topAnchor),
+            gpgOverlay.bottomAnchor.constraint(equalTo: bottomAnchor),
+            gpgOverlay.leadingAnchor.constraint(equalTo: leadingAnchor),
+            gpgOverlay.trailingAnchor.constraint(equalTo: trailingAnchor),
             shutterFlashView.topAnchor.constraint(equalTo: topAnchor),
             shutterFlashView.bottomAnchor.constraint(equalTo: bottomAnchor),
             shutterFlashView.leadingAnchor.constraint(equalTo: leadingAnchor),

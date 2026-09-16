@@ -200,7 +200,22 @@ public enum CommunityHub {
     }
 
     public static func preset(for package: String) -> CommunityGamePreset? {
-        curatedPresets.first { $0.packageName == package }
+        if let direct = curatedPresets.first(where: { $0.packageName == package }) {
+            return direct
+        }
+        let lower = package.lowercased()
+        if lower.contains("teamfighttactics") || lower.contains("tft") {
+            return tftPreset
+        } else if lower.contains("wildrift") {
+            return wildRiftPreset
+        } else if lower.contains("genshin") {
+            return genshinPreset
+        } else if lower.contains("pubg") || lower.contains("tencent.ig") {
+            return pubgPreset
+        } else if lower.contains("tiktok") || lower.contains("musically") || lower.contains("trill") {
+            return tiktokPreset
+        }
+        return nil
     }
 }
 

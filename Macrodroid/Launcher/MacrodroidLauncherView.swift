@@ -33,6 +33,34 @@ class PlayApp: Identifiable, ObservableObject, Hashable {
     @Published var vCPU: Int = 6
     @Published var ramMiB: Int = 5120
     @Published var targetFPS: Int = 60
+    @Published var totalPlayTimeSeconds: Int = 0
+    @Published var lastPlayedDate: Date? = nil
+
+    var formattedPlayTime: String {
+        if totalPlayTimeSeconds < 60 {
+            return totalPlayTimeSeconds > 0 ? "< 1m played" : "Not played yet"
+        }
+        let minutes = (totalPlayTimeSeconds / 60) % 60
+        let hours = totalPlayTimeSeconds / 3600
+        if hours > 0 {
+            return "\(hours)h \(minutes)m played"
+        } else {
+            return "\(minutes)m played"
+        }
+    }
+
+    var formattedLastPlayed: String {
+        guard let lastPlayedDate else { return "Never" }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(lastPlayedDate) {
+            let timeStr = DateFormatter.localizedString(from: lastPlayedDate, dateStyle: .none, timeStyle: .short)
+            return "Today at \(timeStr)"
+        } else if calendar.isDateInYesterday(lastPlayedDate) {
+            return "Yesterday"
+        } else {
+            return DateFormatter.localizedString(from: lastPlayedDate, dateStyle: .medium, timeStyle: .none)
+        }
+    }
 
     init(
         id: String,
@@ -56,6 +84,54 @@ class PlayApp: Identifiable, ObservableObject, Hashable {
                 self.customIcon = img
             }
         }
+
+        let profile = AppProfileStore.loadProfile(for: bundleIdentifier, appName: name)
+        self.aspectRatioIndex = profile.orientation == .portrait ? 0 : 1
+        switch profile.resolution {
+        case .p720: self.resolutionIndex = 0
+        case .p1080: self.resolutionIndex = 1
+        case .p1440: self.resolutionIndex = 2
+        case .retina4K, .ultrawide21x9: self.resolutionIndex = 3
+        }
+        self.targetFPS = profile.targetFPS.maxFPS
+        self.vCPU = profile.vCPU
+        self.ramMiB = profile.ramMiB
+        self.totalPlayTimeSeconds = profile.totalPlayTimeSeconds
+        self.lastPlayedDate = profile.lastPlayedDate
+    }
+
+    func syncPlaytimeFromProfile() {
+        let profile = AppProfileStore.loadProfile(for: bundleIdentifier, appName: name)
+        self.totalPlayTimeSeconds = profile.totalPlayTimeSeconds
+        self.lastPlayedDate = profile.lastPlayedDate
+    }
+
+    func saveAppProfile() {
+        let orientation: AppOrientation = aspectRatioIndex == 0 ? .portrait : .landscape
+        let res: AppResolution
+        switch resolutionIndex {
+        case 0: res = .p720
+        case 2: res = .p1440
+        case 3: res = .retina4K
+        default: res = .p1080
+        }
+        let fps: AppFrameRate
+        switch targetFPS {
+        case 30: fps = .fps30
+        case 90: fps = .fps90
+        case 120: fps = .fps120
+        case 144: fps = .fps144
+        default: fps = .fps60
+        }
+        var profile = AppProfileStore.loadProfile(for: bundleIdentifier, appName: name)
+        profile.orientation = orientation
+        profile.resolution = res
+        profile.targetFPS = fps
+        profile.vCPU = vCPU
+        profile.ramMiB = ramMiB
+        profile.totalPlayTimeSeconds = totalPlayTimeSeconds
+        profile.lastPlayedDate = lastPlayedDate
+        AppProfileStore.saveProfile(profile)
     }
 
     nonisolated func hash(into hasher: inout Hasher) {
@@ -238,7 +314,7 @@ final class LauncherViewModel: ObservableObject {
     func setEngineLaunchPolicy(_ policy: EngineLaunchPolicy) {
         engineLaunchPolicy = policy
         policy.save()
-        saveFeedbackMessage = "Đã lưu chế độ khởi động: \(policy.shortTitle)"
+        saveFeedbackMessage = "Engine startup policy saved: \(policy.shortTitle)"
         if policy == .alwaysBackground && !isEngineRunning && !isEngineStarting {
             onStartEngine?()
         }
@@ -247,47 +323,47 @@ final class LauncherViewModel: ObservableObject {
     func setEngineCloseBehavior(_ behavior: EngineCloseBehavior) {
         engineCloseBehavior = behavior
         behavior.save()
-        saveFeedbackMessage = "Đã lưu hành vi khi đóng app: \(behavior.displayName)"
+        saveFeedbackMessage = "Close behavior saved: \(behavior.displayName)"
     }
 
     func setIdleSuspendTimeout(_ timeout: IdleSuspendTimeout) {
         idleSuspendTimeout = timeout
         IdleSuspendPreferences.saveTimeout(timeout)
-        saveFeedbackMessage = "Đã lưu thời gian tạm dừng vCPU: \(timeout.displayName)"
+        saveFeedbackMessage = "Idle suspend timeout saved: \(timeout.displayName)"
     }
 
     func setNotificationMirroringEnabled(_ enabled: Bool) {
         isNotificationMirroringEnabled = enabled
         NotificationPreferences.setMirroringEnabled(enabled)
-        saveFeedbackMessage = enabled ? "Đã bật thông báo macOS từ máy ảo" : "Đã tắt thông báo macOS từ máy ảo"
+        saveFeedbackMessage = enabled ? "macOS notification forwarding enabled" : "macOS notification forwarding disabled"
     }
 
     func setFilterSystemNotifications(_ enabled: Bool) {
         filterSystemNotifications = enabled
         NotificationPreferences.setSystemFilterEnabled(enabled)
-        saveFeedbackMessage = enabled ? "Đã bật lọc thông báo hệ thống Android" : "Đã tắt lọc thông báo hệ thống Android"
+        saveFeedbackMessage = enabled ? "Android system notification filter enabled" : "Android system notification filter disabled"
     }
 
     func setClipboardSyncEnabled(_ enabled: Bool) {
         isClipboardSyncEnabled = enabled
         ClipboardPreferences.setSyncEnabled(enabled)
-        saveFeedbackMessage = enabled ? "Đã bật đồng bộ Clipboard hai chiều (WSA Sync)" : "Đã tắt đồng bộ Clipboard"
+        saveFeedbackMessage = enabled ? "Bidirectional clipboard sync enabled" : "Bidirectional clipboard sync disabled"
     }
 
     func sendTestNotification() {
-        onPostTestNotification?("Macrodroid Test", "Thông báo từ máy ảo Android đã chuyển tiếp thành công sang macOS!")
-        saveFeedbackMessage = "Đang gửi thông báo thử nghiệm từ Android guest…"
+        onPostTestNotification?("Macrodroid Test", "Test notification from Android guest successfully forwarded to macOS!")
+        saveFeedbackMessage = "Sending test notification from Android guest…"
     }
 
     func createMacShortcut(for app: PlayApp) {
         if let _ = AppShortcutManager.createShortcut(for: app) {
-            saveFeedbackMessage = "Đã tạo lối tắt macOS cho \(app.name) tại ~/Applications/Macrodroid Apps"
+            saveFeedbackMessage = "Created macOS shortcut for \(app.name) at ~/Applications/Macrodroid Apps"
         }
     }
 
     func createAllMacShortcuts() {
         AppShortcutManager.createShortcutsForInstalledApps(apps)
-        saveFeedbackMessage = "Đã tạo lối tắt macOS cho toàn bộ \(apps.count) ứng dụng"
+        saveFeedbackMessage = "Created macOS shortcuts for all \(apps.count) apps"
     }
 
     func revealMacShortcutsFolder() {
@@ -550,12 +626,29 @@ final class LauncherViewModel: ObservableObject {
                 self.selectedApp = newApp
                 self.persistInstalledApps()
 
-                if !installSuccess && self.isGameRunning {
-                    self.statusMessage = "Added \(meta.appName) (Sideload note: \(installLog))"
-                } else {
+                if installSuccess {
                     self.statusMessage = "Installed \(meta.appName)"
+                } else {
+                    let reason = installLog.isEmpty ? "unknown error" : installLog
+                    self.statusMessage = "Install failed: \(meta.appName) — \(reason)"
                 }
             }
+        }
+    }
+
+    func importMacrodroidBundle(at url: URL) {
+        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+        do {
+            let bundle = try MacrodroidBundle.load(from: url)
+            AppProfileStore.saveProfile(bundle.appProfile)
+            KeymapProfileStore.saveProfile(bundle.keymap)
+            let logEntry = "[\(timestamp)] \(url.lastPathComponent): Successfully imported profile & keymap for \(bundle.appName)"
+            sideloadLogs.append(logEntry)
+            statusMessage = "Imported bundle: \(bundle.appName)"
+        } catch {
+            let logEntry = "[\(timestamp)] \(url.lastPathComponent): Import failed - \(error.localizedDescription)"
+            sideloadLogs.append(logEntry)
+            statusMessage = "Failed to import bundle: \(error.localizedDescription)"
         }
     }
 
@@ -826,11 +919,18 @@ struct MacrodroidLauncherView: View {
             PlayCoverAppInspectorSheet(viewModel: viewModel, app: app)
         }
         .onDrop(of: ["public.file-url"], isTargeted: $viewModel.isTargetedForDrop) { providers in
-            guard let provider = providers.first else { return false }
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                if let url = url, url.pathExtension.lowercased() == "apk" {
-                    Task { @MainActor in
-                        viewModel.installAPK(at: url)
+            for provider in providers {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url = url else { return }
+                    let ext = url.pathExtension.lowercased()
+                    if ext == "apk" {
+                        Task { @MainActor in
+                            viewModel.installAPK(at: url)
+                        }
+                    } else if ext == "macrodroid" {
+                        Task { @MainActor in
+                            viewModel.importMacrodroidBundle(at: url)
+                        }
                     }
                 }
             }
@@ -1071,10 +1171,10 @@ struct PlayCoverSidebarView: View {
                     .lineLimit(1)
 
                 HStack(spacing: 4) {
-                    Text("Chế độ:")
+                    Text("Engine Mode:")
                         .font(.system(size: 9))
                         .foregroundColor(PlayCoverTheme.textMuted.opacity(0.7))
-                    Text(viewModel.engineLaunchPolicy == .alwaysBackground ? "Chạy ngầm (Warm)" : "Chạy khi ấn app")
+                    Text(viewModel.engineLaunchPolicy == .alwaysBackground ? "Always Warm" : "On-Demand")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(viewModel.engineLaunchPolicy == .alwaysBackground ? PlayCoverTheme.accentGreen : Color.orange)
                 }
@@ -1460,7 +1560,7 @@ struct PlayCoverAppGridTile: View {
             )
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
 
-            // Two-Line App Name & Package Info
+            // Two-Line App Name & Package Info / Playtime
             VStack(spacing: 2) {
                 Text(app.name)
                     .font(.system(size: 13, weight: .semibold))
@@ -1468,10 +1568,17 @@ struct PlayCoverAppGridTile: View {
                     .lineLimit(1)
                     .multilineTextAlignment(.center)
 
-                Text(app.bundleIdentifier)
-                    .font(.system(size: 9))
-                    .foregroundColor(PlayCoverTheme.textMuted)
-                    .lineLimit(1)
+                if app.totalPlayTimeSeconds > 0 {
+                    Text(app.formattedPlayTime)
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundColor(PlayCoverTheme.accentGreen)
+                        .lineLimit(1)
+                } else {
+                    Text(app.bundleIdentifier)
+                        .font(.system(size: 9))
+                        .foregroundColor(PlayCoverTheme.textMuted)
+                        .lineLimit(1)
+                }
             }
             .padding(.horizontal, 4)
             .frame(width: 130)
@@ -1564,6 +1671,13 @@ struct PlayCoverAppListRow: View {
                         .foregroundColor(PlayCoverTheme.accentGreen)
                 }
                 .padding(.trailing, 10)
+            }
+
+            if app.totalPlayTimeSeconds > 0 {
+                Text(app.formattedPlayTime)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(PlayCoverTheme.accentGreen)
+                    .frame(minWidth: 90, alignment: .trailing)
             }
 
             Text("v\(app.version)")
@@ -2031,7 +2145,7 @@ struct PlayCoverHardwareView: View {
                         // Engine Startup Policy: Always background vs On-demand
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
-                                Text("Chế độ khởi động Engine (Engine Startup Policy)")
+                                Text("Engine Startup Policy")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.white)
                                 Spacer()
@@ -2059,7 +2173,7 @@ struct PlayCoverHardwareView: View {
                         // When App Window Closes: Keep warm vs Stop engine
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
-                                Text("Khi đóng cửa sổ ứng dụng (When App Window Closes)")
+                                Text("When App Window Closes")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.white)
                                 Spacer()
@@ -2087,11 +2201,11 @@ struct PlayCoverHardwareView: View {
 
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack {
-                                    Text("Tạm dừng vCPU khi không dùng (Idle Suspend)")
+                                    Text("Idle Suspend (vCPU Auto-Pause)")
                                         .font(.system(size: 12, weight: .semibold))
                                         .foregroundColor(.white)
                                     Spacer()
-                                    Text("Tiết kiệm pin & CPU")
+                                    Text("Battery & CPU Saver")
                                         .font(.system(size: 9, weight: .semibold))
                                         .foregroundColor(PlayCoverTheme.accentGreen)
                                         .padding(.horizontal, 6)
@@ -2110,7 +2224,7 @@ struct PlayCoverHardwareView: View {
                                 }
                                 .labelsHidden()
 
-                                Text("Tự động pause vCPU máy ảo qua gRPC khi không có cửa sổ hoạt động để CPU Mac về 0%, và tức thì đánh thức khi mở lại ứng dụng.")
+                                Text("Automatically pauses guest vCPU via gRPC when no windows are active to reduce Mac CPU usage to 0%, instantly resuming when opening apps.")
                                     .font(.system(size: 11))
                                     .foregroundColor(PlayCoverTheme.textMuted)
                                     .padding(.top, 2)
@@ -2147,7 +2261,7 @@ struct PlayCoverHardwareView: View {
                 // 0.5. Notification Mirroring Section
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        Text("NOTIFICATION FORWARDING (THÔNG BÁO MÁY ẢO -> MACOS)")
+                        Text("NOTIFICATION FORWARDING (ANDROID GUEST -> MACOS)")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(PlayCoverTheme.textMuted)
 
@@ -2168,10 +2282,10 @@ struct PlayCoverHardwareView: View {
                             set: { viewModel.setNotificationMirroringEnabled($0) }
                         )) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Chuyển tiếp thông báo ứng dụng sang macOS")
+                                Text("Forward App Notifications to macOS")
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.white)
-                                Text("Khi game hoặc ứng dụng trong máy ảo gửi thông báo, Macrodroid sẽ đẩy banner thông báo gốc của macOS.")
+                                Text("When games or apps in the VM send notifications, Macrodroid forwards them as native macOS Notification Center banners.")
                                     .font(.system(size: 10))
                                     .foregroundColor(PlayCoverTheme.textMuted)
                             }
@@ -2185,10 +2299,10 @@ struct PlayCoverHardwareView: View {
                             set: { viewModel.setFilterSystemNotifications($0) }
                         )) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Lọc bỏ thông báo hệ thống Android (System Filter)")
+                                Text("Filter Android System Notifications")
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.white)
-                                Text("Chỉ nhận thông báo từ game/ứng dụng người dùng; ẩn thông báo gỡ lỗi ADB, Play Services và System UI.")
+                                Text("Receive notifications only from user apps and games; suppress ADB debug, Google Play Services, and System UI banners.")
                                     .font(.system(size: 10))
                                     .foregroundColor(PlayCoverTheme.textMuted)
                             }
@@ -2199,10 +2313,10 @@ struct PlayCoverHardwareView: View {
 
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Kiểm tra thông báo (Test Banner)")
+                                Text("Test Notification Banner")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundColor(.white)
-                                Text("Kích hoạt thông báo mẫu từ Android guest để xác thực cấp quyền Notification Center của macOS.")
+                                Text("Trigger a sample banner from the guest to verify macOS Notification Center permissions.")
                                     .font(.system(size: 10))
                                     .foregroundColor(PlayCoverTheme.textMuted)
                             }
@@ -2215,7 +2329,7 @@ struct PlayCoverHardwareView: View {
                                 HStack(spacing: 5) {
                                     Image(systemName: "bell.badge.fill")
                                         .font(.system(size: 11))
-                                    Text("Gửi thông báo thử")
+                                    Text("Send Test Banner")
                                         .font(.system(size: 11, weight: .medium))
                                 }
                             }
@@ -2249,10 +2363,10 @@ struct PlayCoverHardwareView: View {
                     VStack(spacing: 14) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Lối tắt ứng dụng độc lập trên macOS")
+                                Text("Standalone macOS App Shortcuts")
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.white)
-                                Text("Tự động sinh các bundle .app trong ~/Applications/Macrodroid Apps để tìm kiếm bằng Spotlight (Cmd+Space) hoặc kéo thả ghim vào Dock.")
+                                Text("Generate .app bundles in ~/Applications/Macrodroid Apps for Spotlight search (⌘Space) or Dock pinning.")
                                     .font(.system(size: 10))
                                     .foregroundColor(PlayCoverTheme.textMuted)
                             }
@@ -2267,7 +2381,7 @@ struct PlayCoverHardwareView: View {
                             }) {
                                 HStack(spacing: 5) {
                                     Image(systemName: "plus.square.dashed")
-                                    Text("Tạo lối tắt cho toàn bộ game")
+                                    Text("Generate Shortcuts for All Apps")
                                 }
                                 .font(.system(size: 11, weight: .medium))
                             }
@@ -2280,7 +2394,7 @@ struct PlayCoverHardwareView: View {
                             }) {
                                 HStack(spacing: 5) {
                                     Image(systemName: "folder.fill")
-                                    Text("Mở thư mục trong Finder")
+                                    Text("Show in Finder")
                                 }
                                 .font(.system(size: 11, weight: .medium))
                             }
@@ -2317,10 +2431,10 @@ struct PlayCoverHardwareView: View {
                             set: { viewModel.setClipboardSyncEnabled($0) }
                         )) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Đồng bộ Clipboard hai chiều (macOS ↔ Android)")
+                                Text("Bidirectional Clipboard Sync (macOS ↔ Android)")
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.white)
-                                Text("Tự động đồng bộ nội dung sao chép (văn bản, link, mã OTP) giữa macOS và các ứng dụng Android theo thời gian thực.")
+                                Text("Automatically synchronize copied text, URLs, and OTP codes between macOS and Android apps in real time.")
                                     .font(.system(size: 10))
                                     .foregroundColor(PlayCoverTheme.textMuted)
                             }
@@ -3048,6 +3162,12 @@ struct PlayCoverAppInspectorSheet: View {
                     Text("Version \(app.version)")
                         .font(.system(size: 10))
                         .foregroundColor(PlayCoverTheme.textMuted.opacity(0.8))
+
+                    if app.totalPlayTimeSeconds > 0 {
+                        Text("⏱️ \(app.formattedPlayTime) • Last: \(app.formattedLastPlayed)")
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundColor(PlayCoverTheme.accentGreen)
+                    }
                 }
 
                 Spacer()
@@ -3105,9 +3225,11 @@ struct PlayCoverAppInspectorSheet: View {
                         .foregroundColor(.white)
                     Spacer()
                     Picker("", selection: $app.targetFPS) {
-                        Text("30 FPS").tag(30)
+                        Text("30 FPS (Battery Saver)").tag(30)
                         Text("60 FPS (Default)").tag(60)
+                        Text("90 FPS (High Refresh)").tag(90)
                         Text("120 FPS (ProMotion)").tag(120)
+                        Text("144 FPS (Competitive eSports)").tag(144)
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
@@ -3164,6 +3286,7 @@ struct PlayCoverAppInspectorSheet: View {
                 .buttonStyle(.bordered)
 
                 Button("Launch App", systemImage: "play.fill") {
+                    app.saveAppProfile()
                     dismiss()
                     viewModel.launchApp(app)
                 }
@@ -3174,6 +3297,9 @@ struct PlayCoverAppInspectorSheet: View {
         .padding(24)
         .frame(width: 480)
         .background(PlayCoverTheme.darkBackground)
+        .onDisappear {
+            app.saveAppProfile()
+        }
     }
 }
 

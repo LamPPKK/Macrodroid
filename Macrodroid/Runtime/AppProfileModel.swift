@@ -32,6 +32,11 @@ public enum AppResolution: String, Codable, Sendable, CaseIterable {
     case retina4K = "4K / Retina Ultra"
     case ultrawide21x9 = "21:9 Ultrawide Gaming"
 
+    public static let fhd1080p: AppResolution = .p1080
+    public static let qhd1440p: AppResolution = .p1440
+    public static let hd720p: AppResolution = .p720
+    public static let uhd4k: AppResolution = .retina4K
+
     public var dimensions: (width: Int32, height: Int32) {
         switch self {
         case .p720: return (1280, 720)
@@ -41,6 +46,15 @@ public enum AppResolution: String, Codable, Sendable, CaseIterable {
         case .ultrawide21x9: return (2560, 1080)
         }
     }
+
+    public func dimensions(for orientation: AppOrientation) -> (width: Int32, height: Int32) {
+        let base = dimensions
+        if orientation == .portrait {
+            return (min(base.width, base.height), max(base.width, base.height))
+        } else {
+            return (max(base.width, base.height), min(base.width, base.height))
+        }
+    }
 }
 
 // MARK: - App Target Frame Rate
@@ -48,7 +62,9 @@ public enum AppResolution: String, Codable, Sendable, CaseIterable {
 public enum AppFrameRate: Int, Codable, Sendable, CaseIterable {
     case fps30 = 30
     case fps60 = 60
+    case fps90 = 90
     case fps120 = 120
+    case fps144 = 144
 
     public var maxFPS: Int { rawValue }
 
@@ -56,7 +72,9 @@ public enum AppFrameRate: Int, Codable, Sendable, CaseIterable {
         switch self {
         case .fps30: return "30 FPS (Battery Saver)"
         case .fps60: return "60 FPS (Standard Smooth)"
+        case .fps90: return "90 FPS (High Refresh Gaming)"
         case .fps120: return "120 FPS (ProMotion Ultra)"
+        case .fps144: return "144 FPS (Competitive eSports)"
         }
     }
 }
@@ -73,6 +91,44 @@ public struct AppProfile: Codable, Sendable, Equatable {
     public var ramMiB: Int
     public var isVietnameseIMEEnabled: Bool
     public var isKeymapEnabled: Bool
+    public var totalPlayTimeSeconds: Int
+    public var lastPlayedDate: Date?
+
+    public var effectiveResolution: AppResolution {
+        get { resolution }
+        set { resolution = newValue }
+    }
+
+    public var effectiveDimensions: CGSize {
+        let base = resolution.dimensions(for: orientation)
+        return CGSize(width: Double(base.width), height: Double(base.height))
+    }
+
+    public var formattedPlayTime: String {
+        if totalPlayTimeSeconds < 60 {
+            return totalPlayTimeSeconds > 0 ? "< 1m played" : "Not played yet"
+        }
+        let minutes = (totalPlayTimeSeconds / 60) % 60
+        let hours = totalPlayTimeSeconds / 3600
+        if hours > 0 {
+            return "\(hours)h \(minutes)m played"
+        } else {
+            return "\(minutes)m played"
+        }
+    }
+
+    public var formattedLastPlayed: String {
+        guard let lastPlayedDate else { return "Never" }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(lastPlayedDate) {
+            let timeStr = DateFormatter.localizedString(from: lastPlayedDate, dateStyle: .none, timeStyle: .short)
+            return "Today at \(timeStr)"
+        } else if calendar.isDateInYesterday(lastPlayedDate) {
+            return "Yesterday"
+        } else {
+            return DateFormatter.localizedString(from: lastPlayedDate, dateStyle: .medium, timeStyle: .none)
+        }
+    }
 
     public init(
         packageName: String,
@@ -83,7 +139,9 @@ public struct AppProfile: Codable, Sendable, Equatable {
         vCPU: Int = 6,
         ramMiB: Int = 5120,
         isVietnameseIMEEnabled: Bool = false,
-        isKeymapEnabled: Bool = true
+        isKeymapEnabled: Bool = true,
+        totalPlayTimeSeconds: Int = 0,
+        lastPlayedDate: Date? = nil
     ) {
         self.packageName = packageName
         self.appName = appName
@@ -94,14 +152,49 @@ public struct AppProfile: Codable, Sendable, Equatable {
         self.ramMiB = max(2048, min(8192, ramMiB))
         self.isVietnameseIMEEnabled = isVietnameseIMEEnabled
         self.isKeymapEnabled = isKeymapEnabled
+        self.totalPlayTimeSeconds = max(0, totalPlayTimeSeconds)
+        self.lastPlayedDate = lastPlayedDate
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        packageName = try container.decode(String.self, forKey: .packageName)
+        appName = try container.decode(String.self, forKey: .appName)
+        orientation = try container.decodeIfPresent(AppOrientation.self, forKey: .orientation) ?? .auto
+        resolution = try container.decodeIfPresent(AppResolution.self, forKey: .resolution) ?? .p1080
+        targetFPS = try container.decodeIfPresent(AppFrameRate.self, forKey: .targetFPS) ?? .fps60
+        let rawVCPU = try container.decodeIfPresent(Int.self, forKey: .vCPU) ?? 6
+        vCPU = max(2, min(8, rawVCPU))
+        let rawRAM = try container.decodeIfPresent(Int.self, forKey: .ramMiB) ?? 5120
+        ramMiB = max(2048, min(8192, rawRAM))
+        isVietnameseIMEEnabled = try container.decodeIfPresent(Bool.self, forKey: .isVietnameseIMEEnabled) ?? false
+        isKeymapEnabled = try container.decodeIfPresent(Bool.self, forKey: .isKeymapEnabled) ?? true
+        totalPlayTimeSeconds = try container.decodeIfPresent(Int.self, forKey: .totalPlayTimeSeconds) ?? 0
+        lastPlayedDate = try container.decodeIfPresent(Date.self, forKey: .lastPlayedDate)
     }
 
     public static func defaultProfile(for package: String, appName: String = "") -> AppProfile {
-        // Automatically default phone-centric apps (TikTok, Instagram, etc.) to Portrait
         let lower = (package + " " + appName).lowercased()
         let isPhoneApp = lower.contains("tiktok") || lower.contains("musically") ||
-                         lower.contains("instagram") || lower.contains("threads") ||
-                         lower.contains("snapchat") || lower.contains("zalo")
+                         lower.contains("trill") || lower.contains("instagram") ||
+                         lower.contains("threads") || lower.contains("snapchat") ||
+                         lower.contains("zalo")
+
+        if let preset = CommunityHub.preset(for: package) {
+            return AppProfile(
+                packageName: package,
+                appName: appName.isEmpty ? preset.title : appName,
+                orientation: preset.recommendedOrientation,
+                resolution: preset.recommendedResolution,
+                targetFPS: preset.recommendedFPS,
+                vCPU: 6,
+                ramMiB: 5120,
+                isVietnameseIMEEnabled: false,
+                isKeymapEnabled: !isPhoneApp && !preset.keymapProfile.buttons.isEmpty,
+                totalPlayTimeSeconds: 0,
+                lastPlayedDate: nil
+            )
+        }
 
         let orientation: AppOrientation = isPhoneApp ? .portrait : .landscape
         return AppProfile(
@@ -112,8 +205,10 @@ public struct AppProfile: Codable, Sendable, Equatable {
             targetFPS: .fps60,
             vCPU: 6,
             ramMiB: 5120,
-            isVietnameseIMEEnabled: isPhoneApp,
-            isKeymapEnabled: !isPhoneApp
+            isVietnameseIMEEnabled: false,
+            isKeymapEnabled: !isPhoneApp,
+            totalPlayTimeSeconds: 0,
+            lastPlayedDate: nil
         )
     }
 }

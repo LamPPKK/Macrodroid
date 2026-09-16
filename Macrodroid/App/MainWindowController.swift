@@ -112,10 +112,16 @@ final class MainWindowController: NSWindowController {
     var onOpenSharedFolderRequested: (() -> Void)?
     var onIMEToggled: ((Bool) -> Void)?
     var onTaskSwitcherRequested: (() -> Void)?
+    var onAndroidBackRequested: (() -> Void)?
+    var onAndroidHomeRequested: (() -> Void)?
+    var onAndroidRecentsRequested: (() -> Void)?
+    var onOpenSettingsRequested: (() -> Void)?
+    var onAudioMuteToggleRequested: ((Bool) -> Void)?
     private let fpsLabel = NSTextField(labelWithString: "— fps")
     private let statusDot = NSView()
     private let toastView = HUDToastView()
     private var toolbarAccessory: NSTitlebarAccessoryViewController?
+    private var leadingNavAccessory: NSTitlebarAccessoryViewController?
 
     init(
         mailbox: LatestFrameMailbox,
@@ -146,7 +152,7 @@ final class MainWindowController: NSWindowController {
 
         if isPortrait {
             window.contentAspectRatio = NSSize(width: 9, height: 16)
-            window.minSize = NSSize(width: 360, height: 640)
+            window.minSize = NSSize(width: 420, height: 746)
         } else {
             window.contentAspectRatio = NSSize(width: 16, height: 9)
             window.minSize = NSSize(width: 800, height: 450)
@@ -157,8 +163,10 @@ final class MainWindowController: NSWindowController {
         window.contentView = emulatorView
 
         super.init(window: window)
+        window.delegate = self
         shouldCascadeWindows = false
 
+        setupLeadingTitlebarAccessory(window: window)
         setupTitlebarAccessory(window: window)
         setupEmulatorCallbacks()
 
@@ -195,13 +203,63 @@ final class MainWindowController: NSWindowController {
         return button
     }
 
+    private func setupLeadingTitlebarAccessory(window: NSWindow) {
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.layoutAttribute = .leading
+
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 86, height: 26))
+
+        let pill = NSVisualEffectView(frame: NSRect(x: 6, y: 2, width: 76, height: 22))
+        pill.material = .hudWindow
+        pill.blendingMode = .withinWindow
+        pill.state = .active
+        pill.wantsLayer = true
+        pill.layer?.cornerRadius = 11
+        pill.layer?.masksToBounds = true
+        pill.layer?.borderWidth = 0.5
+        pill.layer?.borderColor = NSColor.white.withAlphaComponent(0.15).cgColor
+
+        let backBtn = makeActionButton(
+            symbolName: "arrowtriangle.backward.fill",
+            fallbackText: "◀",
+            tooltip: "Back (Android Back: ⌘[ or Esc)",
+            action: #selector(androidBackClicked)
+        )
+        backBtn.frame = NSRect(x: 3, y: 1, width: 22, height: 20)
+        pill.addSubview(backBtn)
+
+        let homeBtn = makeActionButton(
+            symbolName: "circle.fill",
+            fallbackText: "●",
+            tooltip: "Home (Android Home)",
+            action: #selector(androidHomeClicked)
+        )
+        homeBtn.frame = NSRect(x: 27, y: 1, width: 22, height: 20)
+        pill.addSubview(homeBtn)
+
+        let recentsBtn = makeActionButton(
+            symbolName: "square.fill",
+            fallbackText: "■",
+            tooltip: "Recent Apps / Overview (⌘T)",
+            action: #selector(androidRecentsClicked)
+        )
+        recentsBtn.frame = NSRect(x: 51, y: 1, width: 22, height: 20)
+        pill.addSubview(recentsBtn)
+
+        container.addSubview(pill)
+        accessory.view = container
+
+        window.addTitlebarAccessoryViewController(accessory)
+        self.leadingNavAccessory = accessory
+    }
+
     private func setupTitlebarAccessory(window: NSWindow) {
         let accessory = NSTitlebarAccessoryViewController()
         accessory.layoutAttribute = .trailing
 
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 344, height: 26))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 392, height: 26))
 
-        let pill = NSVisualEffectView(frame: NSRect(x: 4, y: 2, width: 336, height: 22))
+        let pill = NSVisualEffectView(frame: NSRect(x: 4, y: 2, width: 384, height: 22))
         pill.material = .hudWindow
         pill.blendingMode = .withinWindow
         pill.state = .active
@@ -241,7 +299,7 @@ final class MainWindowController: NSWindowController {
         let mouseLockBtn = makeActionButton(
             symbolName: "scope",
             fallbackText: "🎯",
-            tooltip: "Toggle Mouse Aim Lock (⌥)",
+            tooltip: "Toggle Mouse Aim Lock (F10 / ⌥)",
             action: #selector(mouseLockClicked)
         )
         mouseLockBtn.frame = NSRect(x: 77, y: 1, width: 20, height: 20)
@@ -266,9 +324,9 @@ final class MainWindowController: NSWindowController {
         pill.addSubview(sharedFolderBtn)
 
         let imeBtn = makeActionButton(
-            symbolName: "character.bubble.fill",
-            fallbackText: "VN",
-            tooltip: "Toggle Vietnamese IME (⌘I)",
+            symbolName: "character.textbox",
+            fallbackText: "Aa",
+            tooltip: "Toggle IME Composition (⌘I)",
             action: #selector(imeClicked)
         )
         imeBtn.frame = NSRect(x: 149, y: 1, width: 20, height: 20)
@@ -292,12 +350,30 @@ final class MainWindowController: NSWindowController {
         macroBtn.frame = NSRect(x: 197, y: 1, width: 20, height: 20)
         pill.addSubview(macroBtn)
 
-        let divider = NSView(frame: NSRect(x: 223, y: 5, width: 1, height: 12))
+        let dashboardBtn = makeActionButton(
+            symbolName: "gamecontroller.fill",
+            fallbackText: "🎮",
+            tooltip: "In-Game Overlay (Shift+Tab)",
+            action: #selector(gpgOverlayClicked)
+        )
+        dashboardBtn.frame = NSRect(x: 221, y: 1, width: 20, height: 20)
+        pill.addSubview(dashboardBtn)
+
+        let settingsBtn = makeActionButton(
+            symbolName: "gearshape.fill",
+            fallbackText: "⚙️",
+            tooltip: "Macrodroid Settings (⌘,)",
+            action: #selector(settingsClicked)
+        )
+        settingsBtn.frame = NSRect(x: 245, y: 1, width: 20, height: 20)
+        pill.addSubview(settingsBtn)
+
+        let divider = NSView(frame: NSRect(x: 271, y: 5, width: 1, height: 12))
         divider.wantsLayer = true
         divider.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
         pill.addSubview(divider)
 
-        statusDot.frame = NSRect(x: 231, y: 8, width: 6, height: 6)
+        statusDot.frame = NSRect(x: 279, y: 8, width: 6, height: 6)
         statusDot.wantsLayer = true
         statusDot.layer?.cornerRadius = 3
         statusDot.layer?.backgroundColor = NSColor(calibratedRed: 0.0, green: 0.88, blue: 0.38, alpha: 0.9).cgColor
@@ -306,7 +382,7 @@ final class MainWindowController: NSWindowController {
         fpsLabel.font = .monospacedDigitSystemFont(ofSize: 10.5, weight: .semibold)
         fpsLabel.textColor = NSColor.white.withAlphaComponent(0.92)
         fpsLabel.alignment = .left
-        fpsLabel.frame = NSRect(x: 241, y: 1, width: 88, height: 20)
+        fpsLabel.frame = NSRect(x: 289, y: 1, width: 88, height: 20)
         pill.addSubview(fpsLabel)
 
         container.addSubview(pill)
@@ -362,11 +438,23 @@ final class MainWindowController: NSWindowController {
         }
 
         emulatorView.onIMEToggleRequested = { [weak self] in
-            self?.toggleVietnameseIME()
+            self?.toggleIME()
         }
 
         emulatorView.onTaskSwitcherRequested = { [weak self] in
             self?.taskSwitcherClicked()
+        }
+
+        emulatorView.onAndroidBackRequested = { [weak self] in
+            self?.androidBackClicked()
+        }
+
+        emulatorView.onAndroidHomeRequested = { [weak self] in
+            self?.androidHomeClicked()
+        }
+
+        emulatorView.onAndroidRecentsRequested = { [weak self] in
+            self?.androidRecentsClicked()
         }
 
         emulatorView.onSharedFolderRequested = { [weak self] in
@@ -392,6 +480,54 @@ final class MainWindowController: NSWindowController {
         emulatorView.onMacroPlayToggleRequested = { [weak self] in
             self?.emulatorView.toggleMacroPlayback()
         }
+
+        emulatorView.onOpenSettingsRequested = { [weak self] in
+            self?.settingsClicked()
+        }
+
+        emulatorView.onFullscreenRequested = { [weak self] in
+            self?.toggleFullscreen()
+        }
+
+        emulatorView.onGPGOverlayToggleRequested = { [weak self] in
+            self?.toggleGPGOverlay()
+        }
+
+        emulatorView.onKeymapResetRequested = { [weak self] in
+            self?.showToast(icon: "arrow.counterclockwise", message: "Keymap Reset to Defaults")
+        }
+
+        emulatorView.onAudioMuteToggleRequested = { [weak self] isMuted in
+            self?.showToast(
+                icon: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                message: isMuted ? "Game Audio Muted" : "Game Audio Unmuted"
+            )
+            self?.onAudioMuteToggleRequested?(isMuted)
+        }
+
+        emulatorView.onExitGameRequested = { [weak self] in
+            self?.window?.close()
+        }
+    }
+
+    @objc func gpgOverlayClicked() {
+        toggleGPGOverlay()
+    }
+
+    func toggleGPGOverlay() {
+        let visible = emulatorView.toggleGPGOverlay()
+        if !visible {
+            showToast(icon: "gamecontroller.fill", message: "Game Resumed")
+        }
+    }
+
+    func toggleFullscreen() {
+        window?.toggleFullScreen(nil)
+    }
+
+    @objc func settingsClicked() {
+        onOpenSettingsRequested?()
+        showToast(icon: "gearshape.fill", message: "Macrodroid Settings (⌘,)")
     }
 
     @objc func macroClicked() {
@@ -417,7 +553,7 @@ final class MainWindowController: NSWindowController {
         let newSize: NSSize
         if isPortrait {
             window.contentAspectRatio = NSSize(width: 9, height: 16)
-            window.minSize = NSSize(width: 360, height: 640)
+            window.minSize = NSSize(width: 420, height: 746)
             newSize = NSSize(width: 450, height: 800)
         } else {
             window.contentAspectRatio = NSSize(width: 16, height: 9)
@@ -436,6 +572,8 @@ final class MainWindowController: NSWindowController {
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             window.animator().setFrame(newFrame, display: true)
         }
+
+        emulatorView.updateOrientation(isPortrait: isPortrait)
 
         showToast(
             icon: "arrow.triangle.2.circlepath",
@@ -521,6 +659,13 @@ final class MainWindowController: NSWindowController {
 
     func toggleFreeform() {
         isFreeformActive.toggle()
+        if isFreeformActive {
+            window?.contentAspectRatio = .zero
+        } else if isPortrait {
+            window?.contentAspectRatio = NSSize(width: 9, height: 16)
+        } else {
+            window?.contentAspectRatio = NSSize(width: 16, height: 9)
+        }
         onFreeformToggleRequested?()
         showToast(
             icon: "square.on.square",
@@ -539,22 +684,53 @@ final class MainWindowController: NSWindowController {
         showToast(icon: "folder.fill", message: "Opened ~/Macrodroid/Shared")
     }
 
-    @objc func imeClicked() {
-        toggleVietnameseIME()
+    @objc func androidBackClicked() {
+        if let onAndroidBackRequested {
+            onAndroidBackRequested()
+        } else {
+            emulatorView.sendAndroidKey("GoBack")
+        }
+        showToast(icon: "arrowtriangle.backward.fill", message: "Android: Back")
     }
 
-    func toggleVietnameseIME() {
+    @objc func androidHomeClicked() {
+        if let onAndroidHomeRequested {
+            onAndroidHomeRequested()
+        } else {
+            emulatorView.sendAndroidKey("GoHome")
+        }
+        showToast(icon: "circle.fill", message: "Android: Home")
+    }
+
+    @objc func androidRecentsClicked() {
+        if let onAndroidRecentsRequested {
+            onAndroidRecentsRequested()
+        } else {
+            emulatorView.sendAndroidKey("AppSwitch")
+        }
+        showToast(icon: "square.fill", message: "Android: Recent Apps")
+    }
+
+    @objc func imeClicked() {
+        toggleIME()
+    }
+
+    func toggleIME() {
         emulatorView.isVietnameseIMEEnabled.toggle()
         let isEnabled = emulatorView.isVietnameseIMEEnabled
         onIMEToggled?(isEnabled)
         showToast(
-            icon: isEnabled ? "character.bubble.fill" : "keyboard.fill",
-            message: isEnabled ? "Vietnamese IME: Telex/VNI Enabled" : "Vietnamese IME: Disabled (Direct Keys)"
+            icon: isEnabled ? "character.textbox" : "keyboard.fill",
+            message: isEnabled ? "IME Composition: Enabled" : "IME Direct Key Input: Active"
         )
     }
 
     @objc func taskSwitcherClicked() {
-        onTaskSwitcherRequested?()
+        if let onTaskSwitcherRequested {
+            onTaskSwitcherRequested()
+        } else {
+            androidRecentsClicked()
+        }
     }
 
     func showToast(icon: String?, message: String) {
@@ -571,5 +747,43 @@ final class MainWindowController: NSWindowController {
     func enterNativeFullscreen() {
         guard let window, !window.styleMask.contains(.fullScreen) else { return }
         window.toggleFullScreen(nil)
+    }
+}
+
+extension MainWindowController: NSWindowDelegate {
+    func windowDidEnterFullScreen(_ notification: Notification) {
+        showToast(icon: "arrow.up.left.and.arrow.down.right", message: "Fullscreen Mode (F11 / ⌘F to exit)")
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        showToast(icon: "arrow.down.right.and.arrow.up.left", message: "Windowed Mode")
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        emulatorView.setBackgroundThrottled(true)
+        if emulatorView.isMouseLocked {
+            emulatorView.setMouseLocked(false)
+        }
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        emulatorView.setBackgroundThrottled(false)
+    }
+
+    func windowDidMiniaturize(_ notification: Notification) {
+        emulatorView.setBackgroundThrottled(true)
+        if emulatorView.isMouseLocked {
+            emulatorView.setMouseLocked(false)
+        }
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        emulatorView.setBackgroundThrottled(false)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        if emulatorView.isMouseLocked {
+            emulatorView.setMouseLocked(false)
+        }
     }
 }

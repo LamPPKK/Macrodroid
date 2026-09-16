@@ -194,11 +194,11 @@ public enum IdleSuspendTimeout: String, CaseIterable, Codable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .immediately: return "Ngay lập tức (Immediately)"
-        case .oneMinute: return "Sau 1 phút (1 minute)"
-        case .fiveMinutes: return "Sau 5 phút (5 minutes - Khuyên dùng)"
-        case .fifteenMinutes: return "Sau 15 phút (15 minutes)"
-        case .never: return "Không bao giờ (Never)"
+        case .immediately: return "Immediately"
+        case .oneMinute: return "After 1 minute"
+        case .fiveMinutes: return "After 5 minutes (Recommended)"
+        case .fifteenMinutes: return "After 15 minutes"
+        case .never: return "Never"
         }
     }
 }

@@ -280,11 +280,11 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|1001|null|10200: pkg=
         XCTAssertEqual(IdleSuspendTimeout.fifteenMinutes.seconds, 900)
         XCTAssertNil(IdleSuspendTimeout.never.seconds)
 
-        XCTAssertTrue(IdleSuspendTimeout.immediately.displayName.contains("Ngay lập tức"))
-        XCTAssertTrue(IdleSuspendTimeout.oneMinute.displayName.contains("1 phút"))
-        XCTAssertTrue(IdleSuspendTimeout.fiveMinutes.displayName.contains("5 phút"))
-        XCTAssertTrue(IdleSuspendTimeout.fifteenMinutes.displayName.contains("15 phút"))
-        XCTAssertTrue(IdleSuspendTimeout.never.displayName.contains("Không bao giờ"))
+        XCTAssertEqual(IdleSuspendTimeout.immediately.displayName, "Immediately")
+        XCTAssertEqual(IdleSuspendTimeout.oneMinute.displayName, "After 1 minute")
+        XCTAssertEqual(IdleSuspendTimeout.fiveMinutes.displayName, "After 5 minutes (Recommended)")
+        XCTAssertEqual(IdleSuspendTimeout.fifteenMinutes.displayName, "After 15 minutes")
+        XCTAssertEqual(IdleSuspendTimeout.never.displayName, "Never")
 
         let idleDefaults = UserDefaults(suiteName: "test.idle.suspend")!
         idleDefaults.removeObject(forKey: IdleSuspendPreferences.preferenceKey)
@@ -838,6 +838,7 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
 
     /// A package whose icon has not yet been extracted must report `hasCachedIcon == false`
     /// without throwing or crashing. The URL is still valid in shape.
+    @MainActor
     func testNotificationIconAttachmentURLNonExistentPackage() {
         let fakePkg = "com.nonexistent.package.definitely.not.on.disk.\(UUID().uuidString)"
         XCTAssertFalse(AppIconExtractor.hasCachedIcon(for: fakePkg),
@@ -1135,7 +1136,7 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
     func testAppProfilePersistenceAndDefaults() {
         let tiktokProfile = AppProfile.defaultProfile(for: "com.zhiliaoapp.musically", appName: "TikTok")
         XCTAssertEqual(tiktokProfile.orientation, .portrait)
-        XCTAssertTrue(tiktokProfile.isVietnameseIMEEnabled)
+        XCTAssertFalse(tiktokProfile.isVietnameseIMEEnabled)
         XCTAssertFalse(tiktokProfile.isKeymapEnabled)
 
         let gameProfile = AppProfile.defaultProfile(for: "com.tencent.ig", appName: "PUBG Mobile")
@@ -1596,6 +1597,418 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
         XCTAssertEqual(sample?.totalMiB, 8192)
         XCTAssertEqual(sample?.usedMiB, 2048)
         XCTAssertFalse(sample?.isNearlyFull ?? true, "25% usage must not trigger nearlyFull")
+    }
+
+    /// AppProfile.effectiveDimensions must return inverted portrait dimensions (e.g. 1080x1920)
+    /// when orientation is .portrait, and standard dimensions (1920x1080) for .landscape.
+    func testAppProfileEffectiveDimensionsForPortraitAndLandscape() {
+        var profile = AppProfile(
+            packageName: "com.zhiliaoapp.musically",
+            appName: "TikTok",
+            orientation: .portrait,
+            resolution: .p1080
+        )
+        let portraitDims = profile.effectiveDimensions
+        XCTAssertEqual(portraitDims.width, 1080)
+        XCTAssertEqual(portraitDims.height, 1920)
+
+        profile.orientation = .landscape
+        let landscapeDims = profile.effectiveDimensions
+        XCTAssertEqual(landscapeDims.width, 1920)
+        XCTAssertEqual(landscapeDims.height, 1080)
+
+        profile.resolution = .p720
+        profile.orientation = .portrait
+        XCTAssertEqual(profile.effectiveDimensions.width, 720)
+        XCTAssertEqual(profile.effectiveDimensions.height, 1280)
+    }
+
+    /// FreeformTaskManager must parse tasks with intent format "I=com.example.app/.MainActivity"
+    /// when standard "A=" affinity format is absent in dumpsys output.
+    func testFreeformTaskManagerIntentFormatParsing() {
+        let dumpsysSample = """
+        * Task{a1b2c3d #42 type=standard I=com.zhiliaoapp.musically/.MainActivity U=0 visible=true windowingMode=freeform}
+        * Task{e4f5g6h #43 type=standard A=com.tencent.ig U=0 visible=false mode=standard}
+        """
+        let tasks = FreeformTaskManager.parseTasks(from: dumpsysSample)
+        XCTAssertEqual(tasks.count, 2)
+        let tiktok = tasks.first { $0.id == 42 }
+        XCTAssertNotNil(tiktok)
+        XCTAssertEqual(tiktok?.package, "com.zhiliaoapp.musically")
+        XCTAssertEqual(tiktok?.activity, ".MainActivity")
+        XCTAssertTrue(tiktok?.isFreeform ?? false)
+
+        let pubg = tasks.first { $0.id == 43 }
+        XCTAssertNotNil(pubg)
+        XCTAssertEqual(pubg?.package, "com.tencent.ig")
+        XCTAssertFalse(pubg?.isFreeform ?? true)
+    }
+
+    /// GestureTouchMapper must clamp scroll and pinch coordinates to non-negative values
+    /// preventing negative touch coordinates being dispatched to Android.
+    func testGestureTouchMapperNonNegativeCoordinateClamping() {
+        let (start, end) = GestureTouchMapper.scrollSwipePoints(
+            x: 10,
+            y: 10,
+            deltaX: -50.0,
+            deltaY: -50.0,
+            multiplier: 2.0
+        )
+        XCTAssertGreaterThanOrEqual(start.x, 0)
+        XCTAssertGreaterThanOrEqual(start.y, 0)
+        XCTAssertGreaterThanOrEqual(end.x, 0)
+        XCTAssertGreaterThanOrEqual(end.y, 0)
+
+        let pinch = GestureTouchMapper.pinchSpanPoints(
+            centerX: 20,
+            centerY: 20,
+            scale: 2.0,
+            baseSpan: 50.0
+        )
+        XCTAssertGreaterThanOrEqual(pinch.finger0.x, 0)
+        XCTAssertGreaterThanOrEqual(pinch.finger0.y, 0)
+    }
+
+    /// KeymapButton.screenCoordinate must scale accurately with dynamic resolutions
+    /// including portrait mode (1080x1920) and 2K QHD (2560x1440).
+    func testKeymapButtonScalingWithDynamicResolution() {
+        let btn = KeymapButton(key: "SPACE", keyCode: 49, normalizedX: 0.5, normalizedY: 0.5)
+        let portraitCoord = btn.screenCoordinate(sourceWidth: 1080, sourceHeight: 1920)
+        XCTAssertEqual(portraitCoord.x, 540)
+        XCTAssertEqual(portraitCoord.y, 960)
+
+        let qhdCoord = btn.screenCoordinate(sourceWidth: 2560, sourceHeight: 1440)
+        XCTAssertEqual(qhdCoord.x, 1280)
+        XCTAssertEqual(qhdCoord.y, 720)
+    }
+
+    /// CommunityHub.preset(for:) must correctly resolve regional variant package names
+    /// to their corresponding curated presets for TFT, Wild Rift, Genshin, PUBG, and TikTok.
+    func testCommunityHubRegionalVariantResolution() {
+        let tftVN = CommunityHub.preset(for: "com.riotgames.league.teamfighttacticsvn")
+        XCTAssertNotNil(tftVN)
+        XCTAssertEqual(tftVN?.id, "tft_pro")
+
+        let genshinGlobal = CommunityHub.preset(for: "com.cognosphere.genshinimpact")
+        XCTAssertNotNil(genshinGlobal)
+        XCTAssertEqual(genshinGlobal?.id, "genshin_rpg")
+
+        let pubgVN = CommunityHub.preset(for: "com.vng.pubgmobile")
+        XCTAssertNotNil(pubgVN)
+        XCTAssertEqual(pubgVN?.id, "pubg_fps")
+
+        let tiktokTrill = CommunityHub.preset(for: "com.ss.android.ugc.trill")
+        XCTAssertNotNil(tiktokTrill)
+        XCTAssertEqual(tiktokTrill?.id, "tiktok_social")
+
+        let wildRiftVN = CommunityHub.preset(for: "com.riotgames.league.wildriftvn")
+        XCTAssertNotNil(wildRiftVN)
+        XCTAssertEqual(wildRiftVN?.id, "wildrift_moba")
+    }
+
+    /// KeymapProfileStore must automatically fall back to CommunityHub preset
+    /// when no user-saved profile exists on disk.
+    func testKeymapProfileStoreCommunityPresetFallback() {
+        let profile = KeymapProfileStore.loadProfile(for: "com.riotgames.league.teamfighttactics")
+        XCTAssertEqual(profile.appName, "Teamfight Tactics")
+        XCTAssertFalse(profile.buttons.isEmpty)
+        XCTAssertTrue(profile.buttons.contains(where: { $0.key == "D" && $0.label == "Reroll" }))
+
+        let defaultProfile = AppProfile.defaultProfile(for: "com.riotgames.league.teamfighttactics")
+        XCTAssertEqual(defaultProfile.targetFPS, .fps60)
+        XCTAssertEqual(defaultProfile.orientation, .landscape)
+    }
+
+    /// MacroAction must support touchMove type and delayAfterMS metadata
+    /// preserving drag actions and human pacing.
+    func testMacroActionTouchMoveAndDelayAfterMS() {
+        let moveAction = MacroAction(
+            type: .touchMove,
+            normalizedX: 0.5,
+            normalizedY: 0.6,
+            delayAfterMS: 16
+        )
+        XCTAssertEqual(moveAction.type, .touchMove)
+        XCTAssertEqual(moveAction.normalizedX, 0.5)
+        XCTAssertEqual(moveAction.normalizedY, 0.6)
+        XCTAssertEqual(moveAction.delayAfterMS, 16)
+
+        let seq = MacroSequence(
+            name: "Drag Sequence",
+            packageName: "com.test.drag",
+            actions: [
+                MacroAction(type: .touchDown, normalizedX: 0.2, normalizedY: 0.2, delayAfterMS: 0),
+                moveAction,
+                MacroAction(type: .touchUp, normalizedX: 0.8, normalizedY: 0.8, delayAfterMS: 20)
+            ]
+        )
+        XCTAssertEqual(seq.actions.count, 3)
+        XCTAssertEqual(seq.actions[1].type, .touchMove)
+        let resolved = seq.resolvedCoordinate(action: moveAction, sourceWidth: 1000, sourceHeight: 1000)
+        XCTAssertNotNil(resolved)
+    }
+
+    /// GamepadButton enum must cover extended controllers including thumbstick clicks (L3/R3),
+    /// options, and menu buttons.
+    func testGamepadButtonsExhaustiveCases() {
+        let allCases = GamepadButton.allCases
+        XCTAssertTrue(allCases.contains(.leftThumbstickButton))
+        XCTAssertTrue(allCases.contains(.rightThumbstickButton))
+        XCTAssertTrue(allCases.contains(.options))
+        XCTAssertTrue(allCases.contains(.menu))
+        XCTAssertTrue(allCases.contains(.dpadUp))
+        XCTAssertTrue(allCases.contains(.dpadDown))
+        XCTAssertTrue(allCases.contains(.dpadLeft))
+        XCTAssertTrue(allCases.contains(.dpadRight))
+    }
+
+    /// Shooting mode configuration must support mouse aim, Left-Click Fire,
+    /// Right-Click ADS, and Gameloop-style Smart Cursor Release.
+    func testShootingModeMouseAimConfigurationAndDefaults() throws {
+        let aim = KeymapMouseAim()
+        XCTAssertEqual(aim.toggleKeyCode, 58)
+        XCTAssertEqual(aim.sensitivity, 1.0)
+        XCTAssertTrue(aim.leftClickFire)
+        XCTAssertTrue(aim.rightClickADS)
+        XCTAssertTrue(aim.smartCursorRelease)
+        XCTAssertEqual(aim.normalizedCenterX, 0.5)
+        XCTAssertEqual(aim.normalizedCenterY, 0.5)
+        XCTAssertEqual(aim.normalizedFireX, 0.85, accuracy: 0.01)
+        XCTAssertEqual(aim.normalizedFireY, 0.72, accuracy: 0.01)
+        XCTAssertEqual(aim.normalizedADSX, 0.88, accuracy: 0.01)
+        XCTAssertEqual(aim.normalizedADSY, 0.50, accuracy: 0.01)
+
+        // Test backward-compatible JSON decoding from legacy payloads
+        let legacyJSON = """
+        {
+            "toggleKeyCode": 50,
+            "sensitivity": 2.5,
+            "normalizedCenterX": 0.6,
+            "normalizedCenterY": 0.4
+        }
+        """
+        let decoded = try JSONDecoder().decode(KeymapMouseAim.self, from: Data(legacyJSON.utf8))
+        XCTAssertEqual(decoded.toggleKeyCode, 50)
+        XCTAssertEqual(decoded.sensitivity, 2.5)
+        XCTAssertEqual(decoded.normalizedCenterX, 0.6)
+        XCTAssertEqual(decoded.normalizedCenterY, 0.4)
+        XCTAssertTrue(decoded.leftClickFire)
+        XCTAssertTrue(decoded.rightClickADS)
+        XCTAssertTrue(decoded.smartCursorRelease)
+        XCTAssertEqual(decoded.normalizedFireX, 0.85, accuracy: 0.01)
+        XCTAssertEqual(decoded.normalizedFireY, 0.72, accuracy: 0.01)
+        XCTAssertEqual(decoded.normalizedADSX, 0.88, accuracy: 0.01)
+        XCTAssertEqual(decoded.normalizedADSY, 0.50, accuracy: 0.01)
+    }
+
+    /// Profile store and FPS presets must properly persist and load shooting mode mouse aim.
+    func testShootingModePresetPersistenceAndFPSConfiguration() {
+        let testPkg = "com.tencent.ig.test.\(UUID().uuidString)"
+        let fpsProfile = KeymapProfile.fpsPreset(package: testPkg, appName: "PUBG Mobile Test")
+        XCTAssertNotNil(fpsProfile.mouseAim)
+        XCTAssertEqual(fpsProfile.mouseAim?.sensitivity, 1.2)
+
+        KeymapProfileStore.saveProfile(fpsProfile)
+        defer { KeymapProfileStore.deleteProfile(for: testPkg) }
+
+        let loaded = KeymapProfileStore.loadProfile(for: testPkg, appName: "PUBG Mobile Test")
+        XCTAssertNotNil(loaded.mouseAim)
+        XCTAssertEqual(loaded.mouseAim?.sensitivity, 1.2)
+        XCTAssertTrue(loaded.mouseAim?.leftClickFire ?? false)
+        XCTAssertTrue(loaded.mouseAim?.rightClickADS ?? false)
+        XCTAssertTrue(loaded.mouseAim?.smartCursorRelease ?? false)
+    }
+
+    /// Validate Android 3-button navigation configurations and English localization defaults.
+    func testAndroidThreeButtonTitlebarNavigationAndEnglishDefaults() {
+        // English localization checks
+        XCTAssertEqual(EngineLaunchPolicy.alwaysBackground.displayName, "Always in Background (Warm)")
+        XCTAssertEqual(EngineLaunchPolicy.alwaysBackground.shortTitle, "Always Warm")
+        XCTAssertEqual(EngineLaunchPolicy.onDemand.displayName, "Launch on Demand")
+        XCTAssertEqual(EngineLaunchPolicy.onDemand.shortTitle, "On-Demand")
+        XCTAssertEqual(EngineCloseBehavior.keepWarm.displayName, "Keep Engine Warm")
+        XCTAssertEqual(EngineCloseBehavior.stopEngine.displayName, "Stop Engine on Close")
+
+        // Default IME must be English direct input (disabled) for both games and apps
+        let gameProfile = AppProfile.defaultProfile(for: "com.example.game", appName: "Game")
+        XCTAssertFalse(gameProfile.isVietnameseIMEEnabled)
+
+        let chatProfile = AppProfile.defaultProfile(for: "com.whatsapp", appName: "WhatsApp")
+        XCTAssertFalse(chatProfile.isVietnameseIMEEnabled)
+
+        // IdleSuspendTimeout English display names
+        XCTAssertEqual(IdleSuspendTimeout.immediately.displayName, "Immediately")
+        XCTAssertEqual(IdleSuspendTimeout.oneMinute.displayName, "After 1 minute")
+        XCTAssertEqual(IdleSuspendTimeout.fiveMinutes.displayName, "After 5 minutes (Recommended)")
+        XCTAssertEqual(IdleSuspendTimeout.fifteenMinutes.displayName, "After 15 minutes")
+        XCTAssertEqual(IdleSuspendTimeout.never.displayName, "Never")
+    }
+
+    /// Validate Google Play Games on PC in-game configurations, mouse aim models, and frame rate targets.
+    func testGooglePlayGamesPCOptimizationSuite() {
+        // 1. High Refresh Rate Targets (60 / 90 / 120 / 144 Hz)
+        XCTAssertEqual(AppFrameRate.fps60.maxFPS, 60)
+        XCTAssertEqual(AppFrameRate.fps90.maxFPS, 90)
+        XCTAssertEqual(AppFrameRate.fps120.maxFPS, 120)
+        XCTAssertEqual(AppFrameRate.fps144.maxFPS, 144)
+
+        // 2. Google Play Games PC Shooting Mode / Mouse Aim Keymap Profile
+        let pkg = "com.gpg.shooter.test"
+        let aimProfile = KeymapProfile.fpsPreset(package: pkg, appName: "GPG Shooter")
+        XCTAssertNotNil(aimProfile.mouseAim)
+        guard let aim = aimProfile.mouseAim else {
+            XCTFail("FPS preset must contain mouse aim configuration")
+            return
+        }
+        XCTAssertEqual(aim.sensitivity, 1.2, accuracy: 0.01)
+        XCTAssertTrue(aim.leftClickFire)
+        XCTAssertTrue(aim.rightClickADS)
+        XCTAssertTrue(aim.smartCursorRelease)
+
+        // 3. App profile defaults and resolution preservation
+        var profile = AppProfile.defaultProfile(for: pkg, appName: "GPG Shooter")
+        profile.targetFPS = .fps120
+        profile.effectiveResolution = .fhd1080p
+        XCTAssertEqual(profile.targetFPS.maxFPS, 120)
+        XCTAssertEqual(profile.effectiveDimensions, CGSize(width: 1920, height: 1080))
+        XCTAssertFalse(profile.isVietnameseIMEEnabled) // Default English direct key input
+
+        // 4. Viewport coordinate mapping for 1080p Fullscreen gaming
+        let mapper = ViewportMapper(
+            sourceSize: CGSize(width: 1920, height: 1080),
+            viewportSize: CGSize(width: 1920, height: 1080)
+        )
+        let center = mapper.sourcePoint(for: CGPoint(x: 960, y: 540))
+        XCTAssertNotNil(center)
+        XCTAssertEqual(center?.x ?? 0, 960, accuracy: 1.0)
+        XCTAssertEqual(center?.y ?? 0, 540, accuracy: 1.0)
+    }
+
+    func testMacroStoreSanitizesEmptyNameAndPersists() {
+        let pkg = "com.test.macro.\(UUID().uuidString)"
+        defer {
+            let dir = MacroStore.packageDirectory(for: pkg)
+            try? FileManager.default.removeItem(at: dir)
+        }
+
+        let emptyNameMacro = MacroSequence(
+            name: "   ",
+            packageName: pkg,
+            actions: [
+                MacroAction(type: .touchDown, normalizedX: 0.5, normalizedY: 0.5),
+                MacroAction(type: .touchUp, normalizedX: 0.5, normalizedY: 0.5)
+            ]
+        )
+        MacroStore.saveMacro(emptyNameMacro)
+
+        let loaded = MacroStore.listMacros(for: pkg)
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertEqual(loaded.first?.id, emptyNameMacro.id)
+    }
+
+    func testCombatLayerIdentitySupportsTFTAndGenericGames() {
+        let tftLayer = "fe46e7c SurfaceView[com.riotgames.league.teamfighttactics/com.epicgames.unreal.GameActivity](BLAST)#136"
+        XCTAssertEqual(
+            CombatLayerIdentity.comparable(tftLayer),
+            "SurfaceView[com.riotgames.league.teamfighttactics/com.epicgames.unreal.GameActivity]"
+        )
+
+        let freeFireLayer = "abcd123 SurfaceView[com.dts.freefireth/com.dts.freefireth.FFMainActivity]#55"
+        XCTAssertEqual(
+            CombatLayerIdentity.comparable(freeFireLayer),
+            "SurfaceView[com.dts.freefireth/com.dts.freefireth.FFMainActivity]"
+        )
+
+        let nonGameLayer = "NexusLauncher#1"
+        XCTAssertNil(CombatLayerIdentity.comparable(nonGameLayer))
+
+        let statusBarLayer = "StatusBar#0"
+        XCTAssertNil(CombatLayerIdentity.comparable(statusBarLayer))
+    }
+
+    func testNotificationMirroringPreferencesAndBaseline() {
+        let suiteName = "test.macrodroid.notifications.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertTrue(NotificationPreferences.isMirroringEnabled(defaults: defaults))
+        NotificationPreferences.setMirroringEnabled(false, defaults: defaults)
+        XCTAssertFalse(NotificationPreferences.isMirroringEnabled(defaults: defaults))
+        NotificationPreferences.setMirroringEnabled(true, defaults: defaults)
+        XCTAssertTrue(NotificationPreferences.isMirroringEnabled(defaults: defaults))
+    }
+
+    func testAppProfilePlaytimePersistenceAndFormatting() {
+        let pkg = "com.test.playtime.\(UUID().uuidString)"
+        defer { AppProfileStore.deleteProfile(for: pkg) }
+
+        var profile = AppProfile(packageName: pkg, appName: "Playtime Test")
+        XCTAssertEqual(profile.totalPlayTimeSeconds, 0)
+        XCTAssertNil(profile.lastPlayedDate)
+        XCTAssertEqual(profile.formattedPlayTime, "Not played yet")
+        XCTAssertEqual(profile.formattedLastPlayed, "Never")
+
+        // < 1 minute played
+        profile.totalPlayTimeSeconds = 45
+        XCTAssertEqual(profile.formattedPlayTime, "< 1m played")
+
+        // 15 minutes played
+        profile.totalPlayTimeSeconds = 900
+        XCTAssertEqual(profile.formattedPlayTime, "15m played")
+
+        // 2 hours 35 minutes played
+        profile.totalPlayTimeSeconds = 9300
+        XCTAssertEqual(profile.formattedPlayTime, "2h 35m played")
+
+        // Date formatting
+        let now = Date()
+        profile.lastPlayedDate = now
+        XCTAssertTrue(profile.formattedLastPlayed.contains("Today"))
+
+        // Save & load round-trip
+        AppProfileStore.saveProfile(profile)
+        let loaded = AppProfileStore.loadProfile(for: pkg, appName: "Playtime Test")
+        XCTAssertEqual(loaded.totalPlayTimeSeconds, 9300)
+        XCTAssertNotNil(loaded.lastPlayedDate)
+
+        // Backward compatibility: decode JSON without playtime keys
+        let legacyJSON = """
+        {
+            "packageName": "\(pkg)",
+            "appName": "Legacy App",
+            "orientation": "Auto Detect",
+            "resolution": "1080p Full HD",
+            "targetFPS": 60,
+            "vCPU": 6,
+            "ramMiB": 5120,
+            "isVietnameseIMEEnabled": false,
+            "isKeymapEnabled": true
+        }
+        """.data(using: .utf8)!
+        let legacyProfile = try? JSONDecoder().decode(AppProfile.self, from: legacyJSON)
+        XCTAssertNotNil(legacyProfile)
+        XCTAssertEqual(legacyProfile?.totalPlayTimeSeconds, 0)
+        XCTAssertNil(legacyProfile?.lastPlayedDate)
+    }
+
+    func testKeymapProfileResetToDefaultOrCommunityPreset() {
+        let pkg = "com.riotgames.league.wildrift"
+        defer { KeymapProfileStore.deleteProfile(for: pkg) }
+
+        // Default profile for Wild Rift must match Community Hub preset
+        let def = KeymapProfileStore.defaultProfile(for: pkg, appName: "Wild Rift")
+        XCTAssertFalse(def.buttons.isEmpty)
+
+        // Mutate and save custom profile
+        var custom = def
+        custom.buttons.removeAll()
+        KeymapProfileStore.saveProfile(custom)
+        let loadedCustom = KeymapProfileStore.loadProfile(for: pkg, appName: "Wild Rift")
+        XCTAssertTrue(loadedCustom.buttons.isEmpty)
+
+        // Reset to default should restore community preset
+        let resetProfile = KeymapProfileStore.resetToDefault(for: pkg, appName: "Wild Rift")
+        XCTAssertFalse(resetProfile.buttons.isEmpty)
     }
 }
 

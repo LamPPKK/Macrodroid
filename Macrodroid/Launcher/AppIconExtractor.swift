@@ -26,7 +26,7 @@ public struct APKMetadataExtractor {
     public static func extract(from apkURL: URL, sdkRoot: URL?) -> AppMetadata {
         var packageName = apkURL.deletingPathExtension().lastPathComponent
         var appName = apkURL.deletingPathExtension().lastPathComponent
-        let versionName = "1.0.0"
+        var versionName = "1.0.0"
         var iconPathInAPK: String?
 
         // 1. Try finding aapt in sdkRoot/build-tools/*/aapt
@@ -61,6 +61,17 @@ public struct APKMetadataExtractor {
                                 let remainder = dump[labelRange.upperBound...]
                                 if let endQuote = remainder.range(of: "'") {
                                     appName = String(remainder[..<endQuote.lowerBound])
+                                }
+                            }
+
+                            // Parse versionName:'...'
+                            if let verRange = dump.range(of: "versionName='") {
+                                let remainder = dump[verRange.upperBound...]
+                                if let endQuote = remainder.range(of: "'") {
+                                    let parsedVersion = String(remainder[..<endQuote.lowerBound]).trimmingCharacters(in: .whitespaces)
+                                    if !parsedVersion.isEmpty {
+                                        versionName = parsedVersion
+                                    }
                                 }
                             }
 

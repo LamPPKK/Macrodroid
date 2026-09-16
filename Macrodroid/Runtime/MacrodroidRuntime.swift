@@ -2335,6 +2335,11 @@ actor TFTMACRuntimeService {
         inputContinuation?.yield(.clipboard(text))
     }
 
+    func sendAndroidKeycode(_ keycode: Int32) {
+        guard let paths else { return }
+        _ = try? Self.adb(paths: paths, ["shell", "input", "keyevent", String(keycode)], timeout: 5)
+    }
+
     func suspendVM() {
         guard !isVMSuspended else { return }
         isVMSuspended = true
@@ -3121,6 +3126,7 @@ actor TFTMACRuntimeService {
         // Enable Android Freeform Windowing & ensure guest directories exist
         _ = try? Self.adb(paths: paths, ["shell", FreeformWindowConfig.enableFreeformScript], timeout: 10)
         _ = try? Self.adb(paths: paths, ["shell", "mkdir", "-p", "/sdcard/Download", "/sdcard/Macrodroid"], timeout: 10)
+        try await optimizeGuestGamingPerformance(paths: paths, telemetry: telemetry)
 
         let mode = ProcessInfo.processInfo.environment["MACRODROID_MODE"] ?? "PREWARM"
         let isAndroidHome = (mode == "ANDROID" || mode == "PREWARM" || mode == "NONE")
@@ -3277,6 +3283,53 @@ actor TFTMACRuntimeService {
         throw TFTMACRuntimeError(
             "Android did not confirm powered, stay-awake gameplay state before secure unlock."
         )
+    }
+
+    private func optimizeGuestGamingPerformance(
+        paths: TFTMACRuntimePaths,
+        telemetry: TFTMACNativeTelemetry
+    ) async throws {
+        // High performance PC gaming guest tuning matching Gameloop / Google Play Games PC
+        _ = try? Self.adb(paths: paths, ["shell", "setprop", "debug.sf.latch_unsignaled", "1"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "setprop", "debug.hwui.render_thread_priority", "-20"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "setprop", "windowsmgr.max_events_per_sec", "240"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "setprop", "debug.sf.enable_hwc_vds", "0"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "setprop", "debug.sf.early.app.duration", "16600000"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "setprop", "debug.sf.earlyGl.app.duration", "16600000"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "setprop", "debug.sf.high_fps_late_app_phase_offset_ns", "1000000"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "setprop", "debug.sf.high_fps_late_sf_phase_offset_ns", "1000000"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "setprop", "view.scroll_friction", "0.005"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "setprop", "debug.hwui.fps_divisor", "1"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "settings", "put", "global", "window_animation_scale", "0.5"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "settings", "put", "global", "transition_animation_scale", "0.5"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "settings", "put", "global", "animator_duration_scale", "0.5"], timeout: 10)
+
+        // Remove Android swipe gesture navigation: enable 3-button overlay, transparent navbar, navigation_mode=0, and immersive full screen
+        _ = try? Self.adb(paths: paths, ["shell", "cmd", "overlay", "enable", "--user", "0", "com.android.internal.systemui.navbar.threebutton"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "cmd", "overlay", "enable", "com.android.internal.systemui.navbar.transparent"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "settings", "put", "secure", "navigation_mode", "0"], timeout: 10)
+        _ = try? Self.adb(paths: paths, ["shell", "settings", "put", "global", "policy_control", "immersive.full=*"], timeout: 10)
+
+        // Disable status bar expansion (blocks notification shade & quick settings pull-down)
+        // Disable notification heads-up peek, notification icons, system icons, and clock so notifications exclusively route to macOS
+        _ = try? Self.adb(
+            paths: paths,
+            ["shell", "cmd", "statusbar", "send-disable-flag", "statusbar-expansion", "notification-peek", "notification-icons", "system-icons", "clock"],
+            timeout: 10
+        )
+
+        // Keep com.android.settings package enabled for system cryptographic user unlock
+        _ = try? Self.adb(paths: paths, ["shell", "pm", "enable", "com.android.settings"], timeout: 10)
+
+        telemetry.recordEvent("GUEST_GAMING_OPTIMIZATION_APPLIED", payload: [
+            "surfaceflinger_latch_unsignaled": true,
+            "hwui_render_priority": -20,
+            "max_events_per_sec": 240,
+            "scroll_friction": 0.005,
+            "animation_scales": "0.5x",
+            "navigation_mode": "three_button_immersive",
+            "statusbar_expansion_disabled": true
+        ])
     }
 
     private func sampleRuntime(paths: TFTMACRuntimePaths, telemetry: TFTMACNativeTelemetry, emulatorPID: Int32) async throws {
@@ -5257,6 +5310,13 @@ actor TFTMACRuntimeService {
             try await Task.sleep(for: .seconds(2))
         }
 
+        // Re-enforce statusbar disable flags to ensure notifications exclusively mirror to macOS
+        _ = try? Self.adb(
+            paths: paths,
+            ["shell", "cmd", "statusbar", "send-disable-flag", "statusbar-expansion", "notification-peek", "notification-icons", "system-icons", "clock"],
+            timeout: 5
+        )
+
         var seenKeys = Set<String>()
         // Initial prime so already active notifications are not spammed upon startup
         if let primeOut = try? Self.adb(paths: paths, ["shell", "cmd", "notification", "list"], timeout: 5).output {
@@ -5268,7 +5328,7 @@ actor TFTMACRuntimeService {
 
         while !stopping {
             try Task.checkCancellation()
-            try await Task.sleep(for: .seconds(2))
+            try await Task.sleep(for: .seconds(1))
             guard !stopping else { break }
 
             guard !isVMSuspended else { continue }
@@ -5544,6 +5604,10 @@ final class MacrodroidRuntimeController {
     func sendClipboard(_ text: String) {
         guard !text.isEmpty else { return }
         Task { await service.sendClipboard(text) }
+    }
+
+    func sendAndroidKeycode(_ keycode: Int32) {
+        Task { await service.sendAndroidKeycode(keycode) }
     }
 
     func recordPresentation(_ sample: PresentationSample) {

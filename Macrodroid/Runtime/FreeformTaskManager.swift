@@ -53,8 +53,21 @@ public enum FreeformTaskManager {
                             } else {
                                 pkg = component
                             }
+                        } else if let iRange = trimmed.range(of: "I=") {
+                            let afterI = trimmed[iRange.upperBound...]
+                            let component = String(afterI.prefix(while: { !$0.isWhitespace && $0 != "}" }))
+                            if component.contains("/") {
+                                let parts = component.components(separatedBy: "/")
+                                pkg = parts.first ?? ""
+                                act = parts.count > 1 ? parts[1] : ""
+                            } else {
+                                pkg = component
+                            }
+                        } else if let affRange = trimmed.range(of: "affinity=") {
+                            let afterAff = trimmed[affRange.upperBound...]
+                            pkg = String(afterAff.prefix(while: { !$0.isWhitespace && $0 != "}" }))
                         }
-                        if !pkg.isEmpty {
+                        if !pkg.isEmpty && pkg.contains(".") {
                             let isFreeform = trimmed.contains("windowingMode=freeform") || trimmed.contains("mode=5")
                             seenIds.insert(taskId)
                             tasks.append(AndroidTaskRecord(id: taskId, package: pkg, activity: act, isFreeform: isFreeform))

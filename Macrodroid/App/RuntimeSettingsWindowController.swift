@@ -11,6 +11,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
     private let closeBehaviorButton = NSPopUpButton()
     private let idleSuspendButton = NSPopUpButton()
     private let microphoneButton = NSButton(checkboxWithTitle: "Enable Host Microphone Input", target: nil, action: nil)
+    private let notificationMirroringButton = NSButton(checkboxWithTitle: "Forward Android Notifications to macOS", target: nil, action: nil)
     private let dataDiskButton = NSPopUpButton()
     private let hardwareTierField = NSTextField(labelWithString: "")
     private let healthCheckButton = NSButton(title: "Run Health Check…", target: nil, action: nil)
@@ -46,6 +47,7 @@ final class RuntimeSettingsWindowController: NSWindowController {
         select(EngineCloseBehavior.load(), in: closeBehaviorButton)
         select(IdleSuspendPreferences.loadTimeout(), in: idleSuspendButton)
         microphoneButton.state = originalProfile.microphoneEnabled ? .on : .off
+        notificationMirroringButton.state = NotificationPreferences.isMirroringEnabled() ? .on : .off
         select(originalProfile.dataDiskGB, in: dataDiskButton)
         hardwareTierField.stringValue = HardwareCapabilityProbe.current.tier.displayLabel
         resultLabel.stringValue = "Changes are validated, logged, and applied on the next app launch."
@@ -109,12 +111,15 @@ final class RuntimeSettingsWindowController: NSWindowController {
             [fieldLabel("When window closes"), closeBehaviorButton],
             [fieldLabel("Idle suspend (vCPU sleep)"), idleSuspendButton],
             [fieldLabel("Host microphone input"), microphoneButton],
+            [fieldLabel("macOS notification forwarding"), notificationMirroringButton],
             [fieldLabel("Launch experiment"), experimentButton],
             [fieldLabel("Virtual CPUs"), vCPUButton],
             [fieldLabel("Android RAM"), ramButton],
             [fieldLabel("Guest refresh target"), refreshButton],
             [fieldLabel("ASG draw flush interval"), flushButton],
-            [fieldLabel("Play surface"), fixedValue("1920 × 1080 @ 320 dpi")],
+            [fieldLabel("Play surface"), fixedValue("1920 × 1080 @ 320 dpi (Immersive Full)")],
+            [fieldLabel("Host networking"), fixedValue("Bridged host connection (NAT / DNS 1.1.1.1)")],
+            [fieldLabel("Quick settings & shade"), fixedValue("Disabled in guest · Managed via Macrodroid")],
             [fieldLabel("Graphics / audio"), fixedValue("Host GPU · CoreAudio")],
             [sectionLabel, NSTextField(labelWithString: "")],
             [fieldLabel("Host hardware tier"), hardwareTierField],
@@ -202,6 +207,8 @@ final class RuntimeSettingsWindowController: NSWindowController {
         select(EngineCloseBehavior.keepWarm, in: closeBehaviorButton)
         select(IdleSuspendTimeout.fiveMinutes, in: idleSuspendButton)
         microphoneButton.state = baseline.microphoneEnabled ? .on : .off
+        notificationMirroringButton.state = .on
+        select(baseline.dataDiskGB, in: dataDiskButton)
         resultLabel.stringValue = "Proven baseline values selected. Save to keep them."
     }
 
@@ -243,18 +250,22 @@ final class RuntimeSettingsWindowController: NSWindowController {
            let timeout = IdleSuspendTimeout.allCases.first(where: { $0.displayName == idleTitle }) {
             IdleSuspendPreferences.saveTimeout(timeout)
         }
+        NotificationPreferences.setMirroringEnabled(notificationMirroringButton.state == .on)
 
         guard let preset = selectedExperimentPreset() else { return }
         let micEnabled = microphoneButton.state == .on
+        let vCPU = selectedInteger(vCPUButton) ?? originalProfile.vCPU
+        let ramMiB = selectedInteger(ramButton) ?? originalProfile.ramMiB
+        let refreshHz = selectedInteger(refreshButton) ?? originalProfile.refreshHz
+        let asgDrawFlushInterval = selectedInteger(flushButton) ?? originalProfile.asgDrawFlushInterval
         let diskGB = selectedInteger(dataDiskButton) ?? originalProfile.dataDiskGB
         let next = MacrodroidRuntimeProfile.playable
             .with(experimentPreset: preset)
-            .with(microphoneEnabled: micEnabled)
             .with(
-                vCPU: originalProfile.vCPU,
-                ramMiB: originalProfile.ramMiB,
-                refreshHz: originalProfile.refreshHz,
-                asgDrawFlushInterval: originalProfile.asgDrawFlushInterval,
+                vCPU: vCPU,
+                ramMiB: ramMiB,
+                refreshHz: refreshHz,
+                asgDrawFlushInterval: asgDrawFlushInterval,
                 microphoneEnabled: micEnabled,
                 dataDiskGB: diskGB
             )
