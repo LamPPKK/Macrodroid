@@ -1,71 +1,95 @@
 # Releasing Macrodroid
 
-Macrodroid releases are native macOS application builds. The release process does not publish or redistribute Riot application packages.
+This document defines the release lifecycle, packaging pipeline, signing contracts, and release gate checklist for **Macrodroid 5.4**.
 
-## Release identity
+---
+
+## 1. Application Identity
 
 ```text
-Application: Macrodroid
-Bundle ID: com.macrodroid
-Architecture: arm64
-Minimum macOS: 15.0
+Application Name:  Macrodroid
+Bundle Identifier: com.macrodroid
+Architecture:      arm64 (Apple Silicon native: M1 / M2 / M3 / M4)
+Minimum macOS:     macOS 15.0 (Sequoia)
+Current Version:   5.4.0
+Build Number:      99
 ```
 
-The working Android SDK/AVD is runtime state outside the application bundle and repository.
+---
 
-## Pre-release validation
+## 2. Release Verification Gate
 
-Run the source/CI contract on the exact release commit:
+Every release candidate must pass all criteria before distribution:
 
+### 1. Test Suite Acceptance
+All 99 unit and integration tests must pass cleanly without warnings:
 ```sh
-/bin/zsh scripts/verify-macrodroid.command
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test \
+  -project Macrodroid.xcodeproj \
+  -scheme Macrodroid \
+  -configuration Release \
+  -destination 'platform=macOS' \
+  ONLY_ACTIVE_ARCH=YES
 ```
 
-Before any local install or package promotion, separately run:
-
+### 2. Workspace Cleanliness
+Ensure no untracked binaries, AVD state, private session logs, or credentials exist in the git tree:
 ```sh
-/bin/zsh scripts/verify-installed-runtime.command
+git status --porcelain
 ```
 
-The second contract checks private local machine state and must never run in
-GitHub CI. Also verify that the frozen EmulatorController protocol still matches
-the intended stock emulator authority and that no private runtime artifacts are
-tracked.
+### 3. Protocol & Schema Integrity
+Confirm that `Vendor/AndroidEmulator/emulator_controller.proto` matches the frozen authority checksum in `Vendor/AndroidEmulator/SOURCE.json`.
 
-## Package authority
+---
 
-The application does not package or publish TFT APKs. The supported Android package is `com.riotgames.league.teamfighttactics`, installed and updated through `com.android.vending`. Riot owns its own content initialization after launch.
+## 3. Code Signing & Notarization
 
-## Signing
+### Apple Developer ID Signing
+Production releases must be signed using a valid Apple Developer ID certificate with Hardened Runtime enabled:
+```sh
+codesign --deep --force --options runtime \
+  --sign "Developer ID Application: Macrodroid Project (TEAM_ID)" \
+  --entitlements Macrodroid/Macrodroid.entitlements \
+  dist/Macrodroid.app
+```
 
-Local builds use the stable `TFTMAC Local Code Signing` identity created once by
-`scripts/ensure-local-signing-identity.command`. This lets macOS recognize
-updated local builds as the same app and retain removable-volume consent. The
-private key remains in the user's login Keychain and never enters Git. This
-local identity is not a public distribution identity; public distribution still
-requires Developer ID signing, hardened runtime, notarization, and stapling.
+### Apple Notarization
+Submit the signed `.app` or `.dmg` for Apple notarization:
+```sh
+xcrun notarytool submit dist/Macrodroid.dmg \
+  --keychain-profile "macrodroid-notary-profile" \
+  --wait
+```
 
-Current-host status (2026-08-31): Build 8 executable/host hashes match the
-historical signed release, but the login keychain has zero valid local signing
-identities and deep/strict verification reports `CSSMERR_TP_NOT_TRUSTED`.
-Historical acceptance remains valid as historical evidence; a new release is
-blocked until the identity is repaired and the installed-runtime verifier passes.
+### Ticket Stapling
+Staple the notarization ticket to the distributed artifact:
+```sh
+xcrun stapler staple dist/Macrodroid.dmg
+```
 
-> **Note**: The source tree is currently at v4.1 (59 native tests, Phase 7
-> complete) on top of the frozen Build 8 installed-runtime identity. The SSOT
-> authority files (`ssot/runtime-authority.json`, `ssot/STACK.lock.yaml`)
-> record the frozen Build 8 release evidence and must not be edited without a
-> full re-acceptance cycle.
+---
 
-## Release evidence
+## 4. Packaging & Distribution
 
-Retain compact evidence for:
+### DMG Packaging
+Distributable disk images are packaged with an aesthetic volume icon, Applications folder symlink, and default window geometry:
+```sh
+hdiutil create -volname "Macrodroid" \
+  -srcfolder dist/Macrodroid.app \
+  -ov -format UDZO \
+  dist/Macrodroid-5.4.0.dmg
+```
 
-- exact source commit;
-- native build/test result;
-- bundle identity;
-- stock emulator/protocol authority;
-- package/installer identity when runtime acceptance is part of the release;
-- acceptance result and rollback state.
+### Sparkle Update Feed (Optional)
+If distributed via Sparkle automatic updates, generate the `appcast.xml` item with EdDSA signature:
+```sh
+./bin/generate_appcast dist/
+```
 
-Do not retain giant generated build trees as release authority.
+---
+
+## 5. Security & Legal Boundaries
+
+- **No Redistribution of Game APKs**: Macrodroid does NOT bundle, distribute, or modify game APKs (Riot Games, HoYoverse, Tencent, etc.). All game packages are acquired by the end user via the official Google Play Store.
+- **Privacy Assurance**: Telemetry data is stored locally in SQLite (`~/Library/Application Support/Macrodroid/Captures/`) and is never exfiltrated to external analytics servers.

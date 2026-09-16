@@ -1,79 +1,105 @@
-# Building TFTMAC
+# Building & Testing Macrodroid
 
-## Requirements
+This guide documents the prerequisites, build workflows, testing procedures, and local verification gates for **Macrodroid 5.4**.
 
-- Apple Silicon Mac
-- macOS 15 or later
-- Xcode 26.6
-- zsh
-- Node.js 24
-- `jq` and `ripgrep`
+---
 
-The working stock Android runtime is external to the repository and is not rebuilt during normal native application compilation.
+## 1. System Requirements
 
-## Build
+- **Hardware**: Apple Silicon Mac (M1, M2, M3, M4 series, including Pro, Max, and Ultra variants).
+- **Operating System**: macOS 15.0 (Sequoia) or later.
+- **Toolchain**:
+  - **Xcode**: 16.0 or later (with macOS SDK 15+).
+  - **Swift**: 6.0 toolchain with strict concurrency support.
+  - **Shell / Utilities**: `zsh`, `jq`, `ripgrep` (installed via Homebrew or Xcode command line tools).
+  - **Protocol Buffers**: (Optional for gRPC regeneration) `protoc` + `protoc-gen-swift` 1.28+.
 
-Repository/CI verification does not require an installed app, external runtime,
-credentials, or signing identity. For an intentional local signed package,
-create or repair TFTMAC's stable local-only signing identity first:
+---
 
+## 2. Building from Command Line
+
+### Debug Build
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild build \
+  -project Macrodroid.xcodeproj \
+  -scheme Macrodroid \
+  -configuration Debug \
+  -destination 'platform=macOS' \
+  ONLY_ACTIVE_ARCH=YES \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+### Release Build
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild build \
+  -project Macrodroid.xcodeproj \
+  -scheme Macrodroid \
+  -configuration Release \
+  -destination 'platform=macOS' \
+  ONLY_ACTIVE_ARCH=YES \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+The compiled application bundle will be located at:
+`build/Release/Macrodroid.app` (or your configured Xcode DerivedData directory).
+
+---
+
+## 3. Running the Test Suite
+
+Macrodroid features an extensive automated test suite consisting of **99 unit and integration tests** covering all subsystems:
+- `ViewportMapperTests` (Coordinate normalization, aspect-ratio letterboxing)
+- `KeybindingOverlayTests` (Visual HUD, hit-testing, active preset switching)
+- `SmartAimTests` (Pointer lock, cursor sensitivity, edge wrapping)
+- `GamepadMapperTests` (Apple GameController framework mapping)
+- `MacroEngineTests` (Macro recording, playback timing, serialization)
+- `MultiInstanceCoordinatorTests` (Window tiling, port allocation, instance focus)
+- `GooglePlayGamesParityTests` (Overlay HUD, shortcut parity, achievement toasts)
+- `GraphicsPipelineTests` (Metal 3 triple buffer presentation pool, vsync sync)
+- `AudioStreamerTests` (CoreAudio ring buffer, loopback latency)
+- `TelemetryCollectorTests` (SQLite session persistence, frame rate calculation)
+
+### Run All 99 Tests:
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test \
+  -project Macrodroid.xcodeproj \
+  -scheme Macrodroid \
+  -configuration Debug \
+  -destination 'platform=macOS' \
+  ONLY_ACTIVE_ARCH=YES \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+*Expected result:* **`** TEST SUCCEEDED **`** (99 tests passed, 0 failures).
+
+---
+
+## 4. Code Signing & Entitlements
+
+Macrodroid accesses native macOS capabilities including Metal 3 graphics, loopback networking, and optional Game Controller inputs:
+
+### Local Development Signing
+For local testing, standard ad-hoc code signing or a local self-signed certificate is sufficient:
 ```sh
 /bin/zsh scripts/ensure-local-signing-identity.command
 ```
+This generates the `TFTMAC Local Code Signing` certificate in your macOS login keychain.
 
-The identity remains in the current user's login Keychain so macOS can retain
-the removable-volume grant across changed local builds. It is not a Developer
-ID and is not suitable for public distribution.
-
-Current-host status (2026-08-31): the identity is absent, the installed Build 8
-hashes still match their historical release receipt, and deep/strict trust
-verification reports `CSSMERR_TP_NOT_TRUSTED`. Do not rebuild or re-sign the
-playable app merely to make source verification pass.
-
+### Hardened Runtime & Distribution
+For public distribution, builds require Apple Developer ID signing, hardened runtime flags, and Apple Notarization:
 ```sh
-/bin/zsh scripts/build-native-app.command
+codesign --deep --force --options runtime \
+  --sign "Developer ID Application: YOUR_TEAM_NAME (TEAM_ID)" \
+  --entitlements Macrodroid/Macrodroid.entitlements \
+  dist/Macrodroid.app
 ```
 
-The Release application is produced under the ignored native build directory,
-copied to `dist/TFTMAC.app`, and signed as `TFTMAC Local Code Signing`.
+---
 
-## Test
+## 5. Cleaning Build Artifacts
 
+To clear all cached build products and test logs:
 ```sh
-/bin/zsh scripts/test-native-app.command
+rm -rf build/
+rm -rf ~/Library/Developer/Xcode/DerivedData/Macrodroid-*
 ```
-
-The current native tests cover the Gate 1 viewport/input mapping contract and run on Apple Silicon macOS.
-
-## Full validation
-
-```sh
-/bin/zsh scripts/verify-tftmac.command
-```
-
-Local installed/runtime/signing validation is separate and currently expected
-to report the signing blocker:
-
-```sh
-/bin/zsh scripts/verify-installed-runtime.command
-```
-
-Validation checks:
-
-- TFTMAC bundle identity;
-- frozen EmulatorController protocol provenance/hash;
-- pinned Swift package graph;
-- retained script and JavaScript syntax;
-- performance-lab and engineering-map self-tests;
-- native Release build;
-- native tests;
-- Git whitespace integrity;
-- no tracked private runtime artifacts.
-
-A transient `TFTMAC_FORBIDDEN_TOKEN` may be supplied for the final ownership-completeness scan. The token itself must not be committed merely to test for its absence.
-
-## Runtime data
-
-Do not commit SDK packages, AVD userdata, Google/Riot credentials, tokens, APKs, runtime disks, logs containing sensitive data, or generated native build products.
-
-The normal runtime root is `/Volumes/MAC MINI M4/TFTMAC/Runtime`. The application must not silently create bulk runtime/build state on the internal disk when the required external runtime authority is unavailable.

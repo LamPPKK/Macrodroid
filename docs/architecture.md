@@ -1,59 +1,130 @@
-# TFTMAC Architecture
+# Macrodroid Architecture Specification
 
-TFTMAC is a native macOS application controlling a known-good stock Google Android Emulator runtime.
+**Product Line:** Macrodroid 5.4.0  
+**Target Architecture:** Apple Silicon (ARM64)  
+**Host Frameworks:** AppKit, SwiftUI, MetalKit, Metal 3, GameController, CoreGraphics  
+**Runtime Engine:** Headless Google Android Emulator (`-no-window`) with VirtIO-GPU ASG and MoltenVK
 
-## Product boundary
+---
+
+## 1. Architectural Overview
+
+Macrodroid replaces the traditional emulator experience with an integrated native macOS client. It couples a headless Android guest runtime to a native MetalKit presentation shell via an authenticated, ultra-low-latency loopback gRPC transport.
 
 ```text
-TFTMAC.app
-  -> AppKit application/window
-  -> Metal presentation
-  -> authenticated local EmulatorController client
-  -> stock Google Android Emulator
-  -> official Google Play ARM64 guest
-  -> official TFT package
+┌────────────────────────────────────────────────────────────────────────────┐
+│ macOS Application Layer (AppKit + SwiftUI)                                 │
+│                                                                            │
+│  [MacrodroidLauncher] ────> [AppCoordinator] ────> [MainWindowController] │
+│                                                          │                 │
+│                                                          ▼                 │
+│                                              [EmbeddedEmulatorView]        │
+│                                              • Metal MTKView Presenter     │
+│                                              • ViewportMapper Coordinate   │
+│                                              • Session Duration Tracker    │
+│                                              • Input Dispatcher            │
+│                                                          │                 │
+│                 ┌────────────────────────────────────────┼──────────────┐  │
+│                 ▼                                        ▼              ▼  │
+│    [GooglePlayGamesOverlayView]               [KeymappingOverlay] [Gamepad]│
+│    • Glassmorphism HUD (Shift+Tab)            • On-screen badges • Stick   │
+│    • Session time, Gamepad pill, Mute, Reset  • WASD D-Pad       • Buttons │
+└──────────────────────────────────────────────────────────┬─────────────────┘
+                                                           │
+                                   Local Loopback IPC      │
+                    ┌──────────────────────────────────────┴──────────────┐
+                    │  Authenticated EmulatorController gRPC (Port 5582)  │
+                    │  • sendTouch(TouchInput)                            │
+                    │  • sendMouse(MouseInput)                            │
+                    │  • sendKeyboard(KeyboardInput)                      │
+                    │  • sendClipboard(String)                            │
+                    │  • streamScreenshot(RGBA8888 1920x1080)             │
+                    └──────────────────────────────────────┬──────────────┘
+                                                           │
+┌──────────────────────────────────────────────────────────▼─────────────────┐
+│ Headless Guest Runtime (Google Android Emulator ARM64, -no-window)         │
+│                                                                            │
+│  [Guest Android Application (e.g. TFT, Wild Rift, Free Fire, Genshin)]     │
+│                             │                                              │
+│                             ▼                                              │
+│               [SurfaceFlinger Compositor]                                  │
+│                             │                                              │
+│                             ▼                                              │
+│         [ANGLE (OpenGL ES 3.2 → Vulkan 1.3 Translator)]                    │
+│                             │                                              │
+│                             ▼                                              │
+│      [VirtIO-GPU ASG (Address Space Graphics Transport)]                   │
+│                             │                                              │
+│                             ▼                                              │
+│         [MoltenVK (Vulkan 1.3 → Apple Metal 3 Driver)]                     │
+│                             │                                              │
+│                             ▼                                              │
+│         [Hardware CoreAudio & AudioFlinger Subsystem]                      │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The runtime root is external to the repository so application source changes do not replace AVD userdata, Google Play state, Riot sign-in, or installed game data.
+---
 
-## Native application
+## 2. Host Presentation Pipeline (MetalKit & Metal 3)
 
-`tftmac/App/` owns application lifecycle and the main window.
-`tftmac/Presentation/` owns the Metal presentation shell and viewport mapping.
-The source target is Apple Silicon and the application bundle identifier is
-`com.macrodroid`.
+The display presentation is owned by `EmbeddedEmulatorView` (an `MTKView` subclass):
 
-The presentation layer maintains the game aspect ratio and maps native viewport coordinates into the 1920x1080 Android source coordinate space while rejecting input in letterbox regions.
+1. **Triple-Buffered Texture Pool**: A thread-safe `PresenterGPUState` manages a pool of 3 Metal texture buffers (`MTLTexture`). While buffer 0 is scanned out by the display, buffer 1 is written with new guest frame data, and buffer 2 remains queued to eliminate frame tearing.
+2. **Dynamic Resolution Handling**: When the game orientation or resolution changes (e.g., from 1080p landscape to 1080×1920 portrait), the Metal texture cache is automatically reallocated, avoiding GPU memory assertion faults.
+3. **Pacing & Refresh Rates**: Supports selectable framerate targets up to 144 FPS (`.fps30`, `.fps60`, `.fps90`, `.fps120`, `.fps144`). When throttled to the background, the view dynamically drops to 15 FPS to conserve battery and CPU resources.
 
-## Emulator control
+---
 
-TFTMAC uses the exact EmulatorController protocol shipped by the installed stock emulator. The protocol snapshot and provenance live under `Vendor/AndroidEmulator/`. Production control must be authenticated and local; an unauthenticated fixed gRPC control endpoint is not an accepted architecture.
+## 3. Viewport Mapping & Coordinate Normalization
 
-## Android/package authority
+Touch and mouse interactions on macOS are normalized through `ViewportMapper`:
 
-The normal guest is an official Google Play ARM64 image. TFT application installation and updates are owned by Google Play. Riot's application owns Riot authentication and content initialization.
+- **Aspect Ratio Preservation**: Games are letterboxed or pillarboxed to maintain their native aspect ratio (e.g. 16:9 or 9:16) regardless of macOS window dimensions.
+- **Letterbox Guard**: Coordinates falling outside the active game content rect are rejected immediately, preventing unintentional off-screen touches.
+- **Dynamic Resolution Normalization**: Translates normalized coordinates `(0.0...1.0, 0.0...1.0)` into guest pixel coordinates `(0...width, 0...height)` using the runtime resolution rather than hardcoded dimensions.
 
-TFTMAC does not mirror, bundle, patch, re-sign, or privately update Riot binaries.
+---
 
-## Runtime storage
+## 4. In-Game Dashboard HUD (`GooglePlayGamesOverlayView`)
 
-Bulk runtime state is outside Git under `/Volumes/MAC MINI M4/TFTMAC/Runtime`. Repository source contains only code, tests, protocol snapshots, compact evidence, and configuration that is safe to version.
+Inspired by the Google Play Games on PC HUD overlay:
 
-The source-built emulator development tree is not part of normal product
-architecture. The stock Build 8 runtime is the only normal-play authority. An
-isolated source-built `tftmac-runtime` at `c8aa26e` is eligible solely for future
-source-level causal diagnostics; it cannot replace or be performance-compared
-with the stock runtime until separate parity and correctness gates pass.
+1. **Summon / Dismiss Mechanism**: Triggered globally via `Shift + Tab` or `Escape`.
+2. **Event Shielding**: When active, all keyboard presses, mouse clicks, drags, scroll events, and trackpad gestures are consumed by the overlay, preventing leakage into the underlying guest game.
+3. **Smart Mouse Aim Lock Preservation**: If Mouse Aim Lock is active when the overlay opens, it is automatically suspended and the macOS cursor is revealed. Resuming the game automatically re-engages Mouse Aim Lock.
+4. **Real-Time Telemetry & Controller Monitoring**:
+   - Session duration is measured via a monotonic timer and displayed alongside total cumulative playtime.
+   - Controller status listens directly to `GamepadManager` notifications, showing connected models (DualSense, Xbox, etc.).
+   - Audio mute sends keycode 164 (`KEYCODE_VOLUME_MUTE`) through ADB/gRPC with visual toast confirmation.
 
-## Diagnostics
+---
 
-Raw runtime telemetry is captured append-only, then normalized for analysis.
-Build 8 identifies exact SurfaceFlinger degradation but cannot identify an
-internal graphics root because no work ID crosses its guest/host pipeline.
-Source-level causal instrumentation is planned; current measurements must leave
-that owner `UNKNOWN`. Performance changes are one-variable, reversible A/B
-experiments with explicit KEEP/REJECT decisions.
+## 5. Storage Hierarchy & State Management
 
-## Failure boundaries
+All persistent user data is isolated cleanly under macOS `Application Support`:
 
-TFTMAC fails closed when the expected runtime, protocol authority, package identity, installer authority, or protected external storage is missing or inconsistent. Unknown effects are not replayed blindly. User-required Google/Riot authentication is surfaced through official UI rather than automated around.
+```text
+~/Library/Application Support/Macrodroid/
+├── Profiles/                     # Per-app settings (JSON)
+│   ├── com.riotgames.league.wildrift.json
+│   └── com.dts.freefireth.json
+├── Keymaps/                      # Custom user keymappings (JSON)
+│   ├── com.riotgames.league.wildrift.json
+│   └── com.dts.freefireth.json
+├── Icons/                        # High-resolution application icons extracted via ADB
+│   ├── com.riotgames.league.wildrift.png
+│   └── com.dts.freefireth.png
+├── Macros/                       # Recorded automated macro sequences (JSON)
+│   └── AutoFarm_com.dts.freefireth.json
+├── Shared/                       # Bidirectional host-guest file sharing folder
+├── Screenshots/                  # Lossless PNG game screenshots (⌘S)
+└── telemetry.sqlite              # Continuous graphics and combat performance metrics database
+```
+
+---
+
+## 6. Failure Boundaries & Recovery
+
+- **AVD Transaction Safety**: Handled by `AVDTransactionGuard` to prevent corrupted guest state during abrupt host restarts.
+- **Lease Lock Enforcement**: Only one active Macrodroid process may hold the runtime lease for an AVD instance.
+- **Graceful Window Teardown**: Closing a game window automatically disengages mouse locks, saves playtime increments, invalidates timers safely under Swift 6 strict concurrency, and returns the guest to the home state.
