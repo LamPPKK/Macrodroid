@@ -1,5 +1,46 @@
 import AppKit
 
+// MARK: - FrametimeGraphView
+private final class FrametimeGraphView: NSView {
+    private let maxSamples = 60
+    private var samples: [Double] = []
+
+    override var isFlipped: Bool { true }
+
+    func addSample(_ fps: Double) {
+        samples.append(fps)
+        if samples.count > maxSamples { samples.removeFirst() }
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard !samples.isEmpty else { return }
+        let barW = bounds.width / CGFloat(maxSamples)
+        let maxH = bounds.height
+        for (i, fps) in samples.enumerated() {
+            let ratio = min(fps / 60.0, 1.5)
+            let barH = CGFloat(ratio) * maxH * 0.85
+            let x = CGFloat(i) * barW
+            let y = maxH - barH
+            let color: NSColor
+            if fps >= 55 { color = NSColor(calibratedRed: 0.0, green: 0.9, blue: 0.45, alpha: 0.85) }
+            else if fps >= 40 { color = NSColor.systemYellow.withAlphaComponent(0.85) }
+            else { color = NSColor.systemRed.withAlphaComponent(0.85) }
+            color.setFill()
+            NSBezierPath(roundedRect: NSRect(x: x + 1, y: y, width: max(barW - 2, 1), height: barH),
+                         xRadius: 1.5, yRadius: 1.5).fill()
+        }
+        let lineY = maxH - (maxH * 0.85)
+        NSColor.white.withAlphaComponent(0.25).setStroke()
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: 0, y: lineY))
+        path.line(to: NSPoint(x: bounds.width, y: lineY))
+        path.lineWidth = 0.5
+        path.setLineDash([4, 3], count: 2, phase: 0)
+        path.stroke()
+    }
+}
+
 @MainActor
 final class GooglePlayGamesOverlayView: NSVisualEffectView {
     // MARK: - Callbacks
@@ -47,6 +88,14 @@ final class GooglePlayGamesOverlayView: NSVisualEffectView {
     private var currentPackage: String?
     private var isMouseAimLocked: Bool = false
 
+    // MARK: - Telemetry graph
+    private let frametimeGraph = FrametimeGraphView()
+    private let avgFpsLabel     = NSTextField(labelWithString: "Avg: — FPS")
+    private let frameDropLabel  = NSTextField(labelWithString: "Frame Drops: 0")
+    private let gpuLoadLabel    = NSTextField(labelWithString: "GPU Metal: —%")
+    private var frameSamples: [Double] = []
+    private var frameDropCount: Int = 0
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setupView()
@@ -81,8 +130,8 @@ final class GooglePlayGamesOverlayView: NSVisualEffectView {
         NSLayoutConstraint.activate([
             cardContainer.centerXAnchor.constraint(equalTo: centerXAnchor),
             cardContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
-            cardContainer.widthAnchor.constraint(equalToConstant: 580),
-            cardContainer.heightAnchor.constraint(equalToConstant: 480)
+            cardContainer.widthAnchor.constraint(equalToConstant: 780),
+            cardContainer.heightAnchor.constraint(equalToConstant: 540)
         ])
     }
 
@@ -171,8 +220,14 @@ final class GooglePlayGamesOverlayView: NSVisualEffectView {
     }
 
     private func setupContentGrid() {
-        let leftSection = makeSectionBox(title: "CONTROLS & AIM")
-        let rightSection = makeSectionBox(title: "DISPLAY & SYSTEM")
+        // Three columns: Left (Controls & Aim), Centre (Live Telemetry), Right (Quick Tune)
+        let leftSection   = makeSectionBox(title: "CONTROLS & AIM")
+        let centreSection = makeSectionBox(title: "LIVE FRAMETIME")
+        let rightSection  = makeSectionBox(title: "QUICK TUNE")
+
+        cardContainer.addSubview(leftSection)
+        cardContainer.addSubview(centreSection)
+        cardContainer.addSubview(rightSection)
 
         cardContainer.addSubview(leftSection)
         cardContainer.addSubview(rightSection)
@@ -280,16 +335,60 @@ final class GooglePlayGamesOverlayView: NSVisualEffectView {
             refreshRateSegment.trailingAnchor.constraint(equalTo: fullscreenButton.trailingAnchor)
         ])
 
-        NSLayoutConstraint.activate([
-            leftSection.leadingAnchor.constraint(equalTo: cardContainer.leadingAnchor, constant: 20),
-            leftSection.topAnchor.constraint(equalTo: cardContainer.topAnchor, constant: 88),
-            leftSection.widthAnchor.constraint(equalToConstant: 260),
-            leftSection.heightAnchor.constraint(equalToConstant: 305),
+        // Wire up centre telemetry section
+        frametimeGraph.wantsLayer = true
+        frametimeGraph.layer?.cornerRadius = 6
+        frametimeGraph.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.30).cgColor
+        frametimeGraph.translatesAutoresizingMaskIntoConstraints = false
+        centreSection.addSubview(frametimeGraph)
 
-            rightSection.trailingAnchor.constraint(equalTo: cardContainer.trailingAnchor, constant: -20),
+        avgFpsLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        avgFpsLabel.textColor = NSColor(calibratedRed: 0.0, green: 0.92, blue: 0.50, alpha: 1.0)
+        avgFpsLabel.translatesAutoresizingMaskIntoConstraints = false
+        centreSection.addSubview(avgFpsLabel)
+
+        frameDropLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        frameDropLabel.textColor = NSColor.systemOrange
+        frameDropLabel.translatesAutoresizingMaskIntoConstraints = false
+        centreSection.addSubview(frameDropLabel)
+
+        gpuLoadLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        gpuLoadLabel.textColor = NSColor.white.withAlphaComponent(0.75)
+        gpuLoadLabel.translatesAutoresizingMaskIntoConstraints = false
+        centreSection.addSubview(gpuLoadLabel)
+
+        NSLayoutConstraint.activate([
+            frametimeGraph.topAnchor.constraint(equalTo: centreSection.topAnchor, constant: 30),
+            frametimeGraph.leadingAnchor.constraint(equalTo: centreSection.leadingAnchor, constant: 10),
+            frametimeGraph.trailingAnchor.constraint(equalTo: centreSection.trailingAnchor, constant: -10),
+            frametimeGraph.heightAnchor.constraint(equalToConstant: 120),
+
+            avgFpsLabel.topAnchor.constraint(equalTo: frametimeGraph.bottomAnchor, constant: 8),
+            avgFpsLabel.leadingAnchor.constraint(equalTo: frametimeGraph.leadingAnchor),
+
+            frameDropLabel.topAnchor.constraint(equalTo: avgFpsLabel.bottomAnchor, constant: 4),
+            frameDropLabel.leadingAnchor.constraint(equalTo: frametimeGraph.leadingAnchor),
+
+            gpuLoadLabel.topAnchor.constraint(equalTo: frameDropLabel.bottomAnchor, constant: 4),
+            gpuLoadLabel.leadingAnchor.constraint(equalTo: frametimeGraph.leadingAnchor)
+        ])
+
+        // 3-column section placement
+        NSLayoutConstraint.activate([
+            leftSection.leadingAnchor.constraint(equalTo: cardContainer.leadingAnchor, constant: 16),
+            leftSection.topAnchor.constraint(equalTo: cardContainer.topAnchor, constant: 88),
+            leftSection.widthAnchor.constraint(equalToConstant: 210),
+            leftSection.heightAnchor.constraint(equalToConstant: 340),
+
+            centreSection.leadingAnchor.constraint(equalTo: leftSection.trailingAnchor, constant: 12),
+            centreSection.topAnchor.constraint(equalTo: leftSection.topAnchor),
+            centreSection.widthAnchor.constraint(equalToConstant: 280),
+            centreSection.heightAnchor.constraint(equalToConstant: 340),
+
+            rightSection.leadingAnchor.constraint(equalTo: centreSection.trailingAnchor, constant: 12),
+            rightSection.trailingAnchor.constraint(equalTo: cardContainer.trailingAnchor, constant: -16),
             rightSection.topAnchor.constraint(equalTo: leftSection.topAnchor),
-            rightSection.widthAnchor.constraint(equalToConstant: 260),
-            rightSection.heightAnchor.constraint(equalToConstant: 305)
+            rightSection.heightAnchor.constraint(equalToConstant: 340)
         ])
     }
 
@@ -438,6 +537,26 @@ final class GooglePlayGamesOverlayView: NSVisualEffectView {
 
     func updateFPS(_ fps: Double) {
         fpsBadge.stringValue = fps > 0.5 ? String(format: "%.0f FPS", fps) : "— FPS"
+        guard fps > 0.5 else { return }
+        frametimeGraph.addSample(fps)
+        frameSamples.append(fps)
+        if frameSamples.count > 360 { frameSamples.removeFirst() }
+        if fps < 50 { frameDropCount += 1 }
+        frameDropLabel.stringValue = "Frame Drops: \(frameDropCount)"
+        let avg = frameSamples.reduce(0, +) / Double(frameSamples.count)
+        avgFpsLabel.stringValue = String(format: "Avg: %.0f FPS", avg)
+    }
+
+    func updateGPULoad(_ percent: Double) {
+        gpuLoadLabel.stringValue = String(format: "GPU Metal: %.0f%%", percent)
+        gpuLoadLabel.textColor = percent > 85
+            ? NSColor.systemOrange : NSColor.white.withAlphaComponent(0.75)
+    }
+
+    /// Show a game achievement toast banner in the overlay.
+    func showAchievementToast(icon: String = "🏆", title: String, body: String) {
+        let toast = MacrodroidAchievementToastView()
+        toast.show(icon: icon, title: title, body: body, in: self)
     }
 
     func updateMouseLockState(_ locked: Bool) {
@@ -557,3 +676,131 @@ final class GooglePlayGamesOverlayView: NSVisualEffectView {
     }
 }
 
+
+// MARK: - MacrodroidAchievementToastView
+/// Glassmorphic achievement banner. Slides in from top-right, auto-dismisses after 5s.
+@MainActor
+final class MacrodroidAchievementToastView: NSView {
+
+    private let displayDuration: TimeInterval = 5.0
+    nonisolated(unsafe) private var dismissTimer: Timer?
+
+    private let background = NSVisualEffectView()
+    private let iconLabel   = NSTextField(labelWithString: "🏆")
+    private let titleLabel  = NSTextField(labelWithString: "Achievement Unlocked!")
+    private let bodyLabel   = NSTextField(labelWithString: "")
+    private let progressBar = NSView()
+    private var progressWidthConstraint: NSLayoutConstraint!
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        buildUI()
+    }
+    required init?(coder: NSCoder) { nil }
+
+    private func buildUI() {
+        wantsLayer = true
+        translatesAutoresizingMaskIntoConstraints = false
+
+        background.material = .hudWindow
+        background.blendingMode = .withinWindow
+        background.state = .active
+        background.wantsLayer = true
+        background.layer?.cornerRadius = 14
+        background.layer?.masksToBounds = true
+        background.layer?.borderWidth = 1.0
+        background.layer?.borderColor = NSColor(calibratedRed: 1.0, green: 0.82, blue: 0.0, alpha: 0.45).cgColor
+        background.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(background)
+
+        NSLayoutConstraint.activate([
+            background.leadingAnchor.constraint(equalTo: leadingAnchor),
+            background.trailingAnchor.constraint(equalTo: trailingAnchor),
+            background.topAnchor.constraint(equalTo: topAnchor),
+            background.bottomAnchor.constraint(equalTo: bottomAnchor),
+            widthAnchor.constraint(equalToConstant: 320),
+            heightAnchor.constraint(equalToConstant: 68)
+        ])
+
+        iconLabel.font = .systemFont(ofSize: 24)
+        iconLabel.translatesAutoresizingMaskIntoConstraints = false
+        background.addSubview(iconLabel)
+
+        titleLabel.font = .systemFont(ofSize: 12, weight: .bold)
+        titleLabel.textColor = NSColor(calibratedRed: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        background.addSubview(titleLabel)
+
+        bodyLabel.font = .systemFont(ofSize: 11, weight: .regular)
+        bodyLabel.textColor = NSColor.white.withAlphaComponent(0.85)
+        bodyLabel.lineBreakMode = .byTruncatingTail
+        bodyLabel.translatesAutoresizingMaskIntoConstraints = false
+        background.addSubview(bodyLabel)
+
+        progressBar.wantsLayer = true
+        progressBar.layer?.backgroundColor = NSColor(calibratedRed: 1.0, green: 0.82, blue: 0.0, alpha: 0.7).cgColor
+        progressBar.layer?.cornerRadius = 2
+        progressBar.translatesAutoresizingMaskIntoConstraints = false
+        background.addSubview(progressBar)
+
+        progressWidthConstraint = progressBar.widthAnchor.constraint(equalToConstant: 296)
+        NSLayoutConstraint.activate([
+            iconLabel.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 14),
+            iconLabel.centerYAnchor.constraint(equalTo: background.centerYAnchor, constant: -4),
+
+            titleLabel.leadingAnchor.constraint(equalTo: iconLabel.trailingAnchor, constant: 10),
+            titleLabel.topAnchor.constraint(equalTo: background.topAnchor, constant: 12),
+            titleLabel.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -14),
+
+            bodyLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            bodyLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
+            bodyLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+
+            progressBar.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 12),
+            progressBar.bottomAnchor.constraint(equalTo: background.bottomAnchor, constant: -6),
+            progressBar.heightAnchor.constraint(equalToConstant: 3),
+            progressWidthConstraint
+        ])
+    }
+
+    func show(icon: String = "🏆", title: String, body: String, in parentView: NSView) {
+        iconLabel.stringValue = icon
+        titleLabel.stringValue = title
+        bodyLabel.stringValue = body
+
+        parentView.addSubview(self)
+        NSLayoutConstraint.activate([
+            trailingAnchor.constraint(equalTo: parentView.trailingAnchor, constant: -16),
+            topAnchor.constraint(equalTo: parentView.topAnchor, constant: 12)
+        ])
+
+        alphaValue = 0
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.35
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            self.animator().alphaValue = 1.0
+        }
+
+        progressWidthConstraint.constant = 296
+        layoutSubtreeIfNeeded()
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = displayDuration
+            ctx.timingFunction = CAMediaTimingFunction(name: .linear)
+            self.progressWidthConstraint.animator().constant = 0
+        }
+
+        dismissTimer?.invalidate()
+        dismissTimer = Timer.scheduledTimer(withTimeInterval: displayDuration, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.dismiss() }
+        }
+    }
+
+    func dismiss() {
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.25
+            self.animator().alphaValue = 0
+        }, completionHandler: { self.removeFromSuperview() })
+    }
+
+    deinit { dismissTimer?.invalidate() }
+}

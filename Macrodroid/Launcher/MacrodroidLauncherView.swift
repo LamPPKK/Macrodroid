@@ -150,41 +150,49 @@ enum LaunchMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-// MARK: - PlayCover Design System Theme
+// MARK: - Macrodroid & PlayCover Design System Theme
 
-enum PlayCoverTheme {
-    static let accent = Color(red: 0.0, green: 0.82, blue: 0.60) // PlayCover Mint Cyan
-    static let accentGreen = Color(red: 0.18, green: 0.86, blue: 0.44) // Vibrant PlayCover Green
-    static let accentBlue = Color(red: 0.25, green: 0.62, blue: 1.00) // Electric Blue
-    static let accentGlow = Color(red: 0.0, green: 0.82, blue: 0.60).opacity(0.35)
+enum MacrodroidTheme {
+    static let accent = Color(red: 0.0, green: 0.85, blue: 0.55) // Macrodroid Emerald Accent
+    static let accentGreen = Color(red: 0.10, green: 0.90, blue: 0.45) // Vibrant Emerald Green
+    static let accentBlue = Color(red: 0.20, green: 0.65, blue: 1.00) // Electric Blue
+    static let accentPurple = Color(red: 0.65, green: 0.35, blue: 0.95) // MOBA Purple
+    static let accentOrange = Color(red: 1.00, green: 0.55, blue: 0.15) // FPS Orange
+    static let accentGlow = Color(red: 0.0, green: 0.85, blue: 0.55).opacity(0.35)
 
-    static let darkBackground = Color(red: 0.06, green: 0.07, blue: 0.09)
-    static let sidebarBackground = Color(red: 0.08, green: 0.10, blue: 0.13)
-    static let cardBackground = Color(red: 0.11, green: 0.13, blue: 0.17)
-    static let cardHoverBackground = Color(red: 0.14, green: 0.17, blue: 0.22)
-    static let borderSubtle = Color.white.opacity(0.08)
+    static let darkBackground = Color(red: 0.05, green: 0.07, blue: 0.09) // Deep Midnight Obsidian
+    static let sidebarBackground = Color(red: 0.07, green: 0.09, blue: 0.12)
+    static let cardBackground = Color(red: 0.10, green: 0.12, blue: 0.16)
+    static let cardHoverBackground = Color(red: 0.13, green: 0.16, blue: 0.21)
+    static let borderSubtle = Color.white.opacity(0.10)
     static let textMuted = Color(red: 0.60, green: 0.65, blue: 0.70)
 }
 
-// Backward compatibility alias
-typealias JoyTheme = PlayCoverTheme
+typealias PlayCoverTheme = MacrodroidTheme
+typealias JoyTheme = MacrodroidTheme
 
-// MARK: - PlayCover Navigation Tabs
+// MARK: - Macrodroid Navigation Tabs
 
 enum PlayCoverSidebarTab: Int, CaseIterable, Identifiable {
     case appLibrary = 1
-    case keymapping = 2
-    case graphics = 3
-    case hardware = 4
-    case sideload = 5
-    case about = 6
+    case community = 2
+    case keymapping = 3
+    case macro = 4
+    case multiInstance = 5
+    case graphics = 6
+    case hardware = 7
+    case sideload = 8
+    case about = 9
 
     var id: Int { rawValue }
 
     var title: String {
         switch self {
         case .appLibrary: return "App Library"
+        case .community: return "Community Presets"
         case .keymapping: return "Keymapping"
+        case .macro: return "Macro Studio"
+        case .multiInstance: return "Multi-Instance"
         case .graphics: return "Graphics & Display"
         case .hardware: return "Engine & Hardware"
         case .sideload: return "Sideload APK"
@@ -195,7 +203,10 @@ enum PlayCoverSidebarTab: Int, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .appLibrary: return "square.grid.2x2.fill"
+        case .community: return "sparkles.rectangle.stack.fill"
         case .keymapping: return "gamecontroller.fill"
+        case .macro: return "bolt.fill"
+        case .multiInstance: return "square.on.square.fill"
         case .graphics: return "display"
         case .hardware: return "cpu.fill"
         case .sideload: return "arrow.down.doc.fill"
@@ -891,8 +902,14 @@ struct MacrodroidLauncherView: View {
                                 selectedBackgroundColor: $selectedBackgroundColor,
                                 selectedTextColor: $selectedTextColor
                             )
+                        case PlayCoverSidebarTab.community.rawValue:
+                            MacrodroidCommunityHubView(viewModel: viewModel)
                         case PlayCoverSidebarTab.keymapping.rawValue:
                             PlayCoverKeymappingView(viewModel: viewModel)
+                        case PlayCoverSidebarTab.macro.rawValue:
+                            MacrodroidMacroStudioView(viewModel: viewModel)
+                        case PlayCoverSidebarTab.multiInstance.rawValue:
+                            MacrodroidMultiInstanceView(viewModel: viewModel)
                         case PlayCoverSidebarTab.graphics.rawValue:
                             PlayCoverGraphicsView(viewModel: viewModel)
                         case PlayCoverSidebarTab.hardware.rawValue:
@@ -1054,7 +1071,7 @@ struct PlayCoverSidebarView: View {
             Divider()
                 .background(PlayCoverTheme.borderSubtle)
 
-            // PlayCover Categorized Navigation
+            // Macrodroid Categorized Navigation
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     // SECTION 1: LIBRARY
@@ -1066,17 +1083,20 @@ struct PlayCoverSidebarView: View {
                             .padding(.bottom, 2)
 
                         sidebarRow(tab: .appLibrary, count: viewModel.apps.isEmpty ? nil : viewModel.apps.count)
+                        sidebarRow(tab: .community, count: CommunityHub.curatedPresets.count)
                     }
 
-                    // SECTION 2: CONTROLS
+                    // SECTION 2: CONTROLS & AUTOMATION
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("CONTROLS")
+                        Text("CONTROLS & AUTOMATION")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundColor(PlayCoverTheme.textMuted.opacity(0.8))
                             .padding(.horizontal, 14)
                             .padding(.bottom, 2)
 
                         sidebarRow(tab: .keymapping, count: nil)
+                        sidebarRow(tab: .macro, count: nil)
+                        sidebarRow(tab: .multiInstance, count: nil)
                     }
 
                     // SECTION 3: SETTINGS
@@ -1091,7 +1111,7 @@ struct PlayCoverSidebarView: View {
                         sidebarRow(tab: .hardware, count: nil)
                     }
 
-                    // SECTION 4: TOOLS
+                    // SECTION 4: TOOLS & SYSTEM
                     VStack(alignment: .leading, spacing: 3) {
                         Text("TOOLS & SYSTEM")
                             .font(.system(size: 9, weight: .bold))
@@ -1404,7 +1424,23 @@ struct PlayCoverAppLibraryView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                if viewModel.isList {
+                VStack(spacing: 0) {
+                    if let heroApp = viewModel.selectedApp ?? viewModel.filteredApps.first {
+                        MacrodroidHeroBannerView(
+                            app: heroApp,
+                            onLaunch: {
+                                viewModel.launchApp(heroApp)
+                            },
+                            onOpenSettings: {
+                                viewModel.inspectingApp = heroApp
+                            },
+                            onKeymap: {
+                                viewModel.selectedSidebarItem = PlayCoverSidebarTab.keymapping.rawValue
+                            }
+                        )
+                    }
+
+                    if viewModel.isList {
                     LazyVStack(spacing: 4) {
                         ForEach(viewModel.filteredApps) { app in
                             PlayCoverAppListRow(
@@ -1456,6 +1492,7 @@ struct PlayCoverAppLibraryView: View {
             }
         }
     }
+}
 }
 
 // MARK: - PlayCover Squircle App Grid Tile
@@ -3379,5 +3416,841 @@ struct PlayCoverAboutView: View {
             Spacer()
         }
         .padding(32)
+    }
+}
+
+// MARK: - Macrodroid Hero Banner View
+
+struct MacrodroidHeroBannerView: View {
+    @ObservedObject var app: PlayApp
+    let onLaunch: () -> Void
+    let onOpenSettings: () -> Void
+    let onKeymap: () -> Void
+
+    @State private var isHovered: Bool = false
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            MacrodroidTheme.cardBackground,
+                            MacrodroidTheme.cardHoverBackground.opacity(0.85),
+                            MacrodroidTheme.accent.opacity(0.12)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(
+                    isHovered
+                        ? MacrodroidTheme.accent.opacity(0.4)
+                        : MacrodroidTheme.borderSubtle,
+                    lineWidth: 1.2
+                )
+
+            HStack(spacing: 18) {
+                // Game Large Icon
+                ZStack {
+                    if let icon = app.customIcon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 68, height: 68)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    } else {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [MacrodroidTheme.accent.opacity(0.3), MacrodroidTheme.accentGreen.opacity(0.2)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 68, height: 68)
+                            .overlay(
+                                Image(systemName: "gamecontroller.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(MacrodroidTheme.accent)
+                            )
+                    }
+                }
+                .shadow(color: Color.black.opacity(0.35), radius: 8, x: 0, y: 4)
+
+                // Info Column
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(app.name)
+                            .font(.system(size: 19, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+
+                        if app.isFavorite {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.yellow)
+                        }
+                    }
+
+                    Text(app.bundleIdentifier)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(MacrodroidTheme.textMuted)
+                        .lineLimit(1)
+
+                    // Badges row
+                    HStack(spacing: 8) {
+                        FeaturePill(icon: "display", text: "\(app.targetFPS) FPS")
+                        FeaturePill(icon: "bolt.fill", text: "Metal 3")
+                        FeaturePill(icon: "clock.fill", text: app.formattedPlayTime)
+                        if app.lastPlayedDate != nil {
+                            FeaturePill(icon: "calendar", text: app.formattedLastPlayed)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                // Actions Column
+                HStack(spacing: 10) {
+                    Button(action: onKeymap) {
+                        Image(systemName: "keyboard.fill")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .frame(width: 34, height: 34)
+                            .background(Color.white.opacity(0.08))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Edit Keybindings")
+
+                    Button(action: onOpenSettings) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .frame(width: 34, height: 34)
+                            .background(Color.white.opacity(0.08))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("App Settings")
+
+                    Button(action: onLaunch) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("Play Now")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(
+                            LinearGradient(
+                                colors: [MacrodroidTheme.accent, MacrodroidTheme.accentGreen],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .shadow(color: MacrodroidTheme.accentGlow, radius: 8, x: 0, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(16)
+        }
+        .frame(height: 104)
+        .padding(.horizontal, 28)
+        .padding(.top, 16)
+        .padding(.bottom, 6)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Macrodroid Community Hub View
+
+struct MacrodroidCommunityHubView: View {
+    @ObservedObject var viewModel: LauncherViewModel
+    @State private var appliedPresetId: String? = nil
+    @State private var selectedGenre: String = "All"
+
+    private let genres = ["All", "Auto-Battler", "MOBA", "Action RPG", "FPS", "Casual"]
+
+    var filteredPresets: [CommunityGamePreset] {
+        if selectedGenre == "All" {
+            return CommunityHub.curatedPresets
+        } else {
+            return CommunityHub.curatedPresets.filter { $0.genre == selectedGenre }
+        }
+    }
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "sparkles.rectangle.stack.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(MacrodroidTheme.accent)
+                        Text("Community Presets Hub")
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+
+                    Text("Curated 1-click profiles with optimal graphics, keybindings, and resolution tuned for Apple Silicon.")
+                        .font(.system(size: 13))
+                        .foregroundColor(MacrodroidTheme.textMuted)
+                }
+                .padding(.horizontal, 28)
+                .padding(.top, 24)
+
+                // Genre Filter Chips
+                HStack(spacing: 8) {
+                    ForEach(genres, id: \.self) { genre in
+                        Button {
+                            selectedGenre = genre
+                        } label: {
+                            Text(genre)
+                                .font(.system(size: 12, weight: selectedGenre == genre ? .bold : .medium))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                                .background(selectedGenre == genre ? MacrodroidTheme.accent.opacity(0.25) : Color.white.opacity(0.06))
+                                .foregroundColor(selectedGenre == genre ? MacrodroidTheme.accent : MacrodroidTheme.textMuted)
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule().stroke(selectedGenre == genre ? MacrodroidTheme.accent.opacity(0.5) : Color.clear, lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 28)
+
+                // Preset Cards Grid
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 340, maximum: 460), spacing: 20)], spacing: 20) {
+                    ForEach(filteredPresets) { preset in
+                        communityPresetCard(preset)
+                    }
+                }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 36)
+            }
+        }
+    }
+
+    private func communityPresetCard(_ preset: CommunityGamePreset) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(preset.title)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    Text(preset.packageName)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(MacrodroidTheme.textMuted)
+                }
+                Spacer()
+                Text(preset.genre)
+                    .font(.system(size: 10, weight: .bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(genreColor(preset.genre).opacity(0.2))
+                    .foregroundColor(genreColor(preset.genre))
+                    .clipShape(Capsule())
+            }
+
+            // Specs badges
+            HStack(spacing: 8) {
+                FeaturePill(icon: "display", text: "\(preset.recommendedResolution.rawValue) · \(preset.recommendedFPS.rawValue) FPS")
+                FeaturePill(icon: "rectangle.portrait.rotate", text: preset.recommendedOrientation.rawValue)
+            }
+
+            // Keybindings preview
+            VStack(alignment: .leading, spacing: 6) {
+                Text("KEYBINDINGS:")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(MacrodroidTheme.textMuted)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(preset.keymapProfile.buttons.prefix(6)) { btn in
+                            HStack(spacing: 4) {
+                                Text(btn.key)
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Color.black.opacity(0.4))
+                                    .cornerRadius(4)
+                                Text(btn.label)
+                                    .font(.system(size: 10))
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.white.opacity(0.06))
+                            .cornerRadius(6)
+                            .foregroundColor(.white)
+                        }
+                    }
+                }
+            }
+
+            Divider().background(MacrodroidTheme.borderSubtle)
+
+            // Actions
+            HStack {
+                Text("\(preset.keymapProfile.buttons.count) keys bound")
+                    .font(.system(size: 11))
+                    .foregroundColor(MacrodroidTheme.textMuted)
+
+                Spacer()
+
+                Button {
+                    KeymapProfileStore.saveProfile(preset.keymapProfile)
+                    appliedPresetId = preset.id
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                        if appliedPresetId == preset.id {
+                            appliedPresetId = nil
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        if appliedPresetId == preset.id {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("Applied")
+                                .font(.system(size: 11, weight: .bold))
+                        } else {
+                            Image(systemName: "arrow.down.circle.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Apply Preset")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(appliedPresetId == preset.id ? Color.green.opacity(0.3) : MacrodroidTheme.accent.opacity(0.2))
+                    .foregroundColor(appliedPresetId == preset.id ? Color.green : MacrodroidTheme.accent)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(appliedPresetId == preset.id ? Color.green.opacity(0.5) : MacrodroidTheme.accent.opacity(0.4), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(18)
+        .background(MacrodroidTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(MacrodroidTheme.borderSubtle, lineWidth: 1)
+        )
+    }
+
+    private func genreColor(_ genre: String) -> Color {
+        switch genre {
+        case "Auto-Battler": return MacrodroidTheme.accentGreen
+        case "MOBA": return MacrodroidTheme.accentPurple
+        case "Action RPG": return MacrodroidTheme.accentBlue
+        case "FPS": return MacrodroidTheme.accentOrange
+        default: return MacrodroidTheme.accent
+        }
+    }
+}
+
+// MARK: - Macrodroid Macro Studio View
+
+struct MacrodroidMacroStudioView: View {
+    @ObservedObject var viewModel: LauncherViewModel
+    @State private var selectedPackage: String = "com.riotgames.league.teamfighttactics"
+    @State private var savedMacros: [MacroSequence] = []
+    @State private var selectedMacro: MacroSequence? = nil
+    @State private var repeatCount: Int = 1
+    @State private var speedMultiplier: Double = 1.0
+    @State private var enableJitter: Bool = true
+    @State private var toastMessage: String? = nil
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(MacrodroidTheme.accent)
+                        Text("Macro Automation Studio")
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+
+                    Text("Record, edit, and automate complex touch sequences with anti-detection human variance jitter.")
+                        .font(.system(size: 13))
+                        .foregroundColor(MacrodroidTheme.textMuted)
+                }
+                .padding(.horizontal, 28)
+                .padding(.top, 24)
+
+                // Package Filter / Selector
+                HStack(spacing: 12) {
+                    Text("Target App:")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+
+                    Picker("", selection: $selectedPackage) {
+                        Text("Teamfight Tactics (TFT)").tag("com.riotgames.league.teamfighttactics")
+                        Text("Wild Rift").tag("com.riotgames.league.wildrift")
+                        Text("Genshin Impact").tag("com.miHoYo.GenshinImpact")
+                        Text("PUBG Mobile").tag("com.tencent.ig")
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 240)
+                    .onChange(of: selectedPackage) { _, _ in
+                        reloadMacros()
+                    }
+
+                    Spacer()
+
+                    Button {
+                        let newSeq = MacroSequence(
+                            name: "Macro \(savedMacros.count + 1)",
+                            packageName: selectedPackage,
+                            actions: [
+                                MacroAction(type: .touchDown, normalizedX: 0.5, normalizedY: 0.5),
+                                MacroAction(type: .delay, delayAfterMS: 200),
+                                MacroAction(type: .touchUp, normalizedX: 0.5, normalizedY: 0.5)
+                            ]
+                        )
+                        MacroStore.saveMacro(newSeq)
+                        reloadMacros()
+                        selectedMacro = newSeq
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus")
+                            Text("New Macro")
+                        }
+                        .font(.system(size: 12, weight: .semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(MacrodroidTheme.accent)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 28)
+
+                // Main Content: Split List and Editor
+                HStack(alignment: .top, spacing: 20) {
+                    // Macro List
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("SAVED MACROS (\(savedMacros.count))")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(MacrodroidTheme.textMuted)
+
+                        if savedMacros.isEmpty {
+                            VStack(spacing: 8) {
+                                Text("No macros saved yet")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(MacrodroidTheme.textMuted)
+                                Text("Click '+ New Macro' to create your first sequence")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(MacrodroidTheme.textMuted.opacity(0.7))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 32)
+                            .background(MacrodroidTheme.cardBackground)
+                            .cornerRadius(10)
+                        } else {
+                            VStack(spacing: 4) {
+                                ForEach(savedMacros) { macro in
+                                    Button {
+                                        selectedMacro = macro
+                                        repeatCount = macro.repeatCount
+                                        speedMultiplier = macro.speedMultiplier
+                                        enableJitter = macro.enableHumanJitter
+                                    } label: {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(macro.name)
+                                                    .font(.system(size: 13, weight: .semibold))
+                                                    .foregroundColor(selectedMacro?.id == macro.id ? .white : MacrodroidTheme.textMuted)
+                                                Text("\(macro.actions.count) actions · \(macro.repeatCount == 0 ? "Loop" : "\(macro.repeatCount)x")")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(MacrodroidTheme.textMuted.opacity(0.8))
+                                            }
+                                            Spacer()
+                                            if selectedMacro?.id == macro.id {
+                                                Image(systemName: "chevron.right")
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(MacrodroidTheme.accent)
+                                            }
+                                        }
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                        .background(selectedMacro?.id == macro.id ? MacrodroidTheme.cardHoverBackground : MacrodroidTheme.cardBackground)
+                                        .cornerRadius(8)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                    .frame(width: 240)
+
+                    // Macro Inspector & Settings
+                    if let macro = selectedMacro {
+                        VStack(alignment: .leading, spacing: 16) {
+                            HStack {
+                                Text(macro.name)
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                                Spacer()
+                                Button {
+                                    MacroStore.deleteMacro(name: macro.name, for: macro.packageName)
+                                    selectedMacro = nil
+                                    reloadMacros()
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red.opacity(0.8))
+                                }
+                                .buttonStyle(.plain)
+                                .help("Delete Macro")
+                            }
+
+                            // Actions Timeline Preview
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("ACTION TIMELINE")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(MacrodroidTheme.textMuted)
+
+                                ScrollView(.vertical, showsIndicators: true) {
+                                    VStack(spacing: 4) {
+                                        ForEach(Array(macro.actions.enumerated()), id: \.offset) { idx, act in
+                                            HStack(spacing: 8) {
+                                                Text("#\(idx + 1)")
+                                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                                    .foregroundColor(MacrodroidTheme.textMuted)
+                                                    .frame(width: 24, alignment: .leading)
+
+                                                actionBadge(act)
+
+                                                Spacer()
+
+                                                if let x = act.normalizedX, let y = act.normalizedY {
+                                                    Text(String(format: "(%.2f, %.2f)", x, y))
+                                                        .font(.system(size: 10, design: .monospaced))
+                                                        .foregroundColor(MacrodroidTheme.textMuted)
+                                                }
+                                                if let delay = act.delayAfterMS {
+                                                    Text("+\(delay)ms")
+                                                        .font(.system(size: 10, weight: .medium))
+                                                        .foregroundColor(MacrodroidTheme.accent)
+                                                }
+                                            }
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(Color.white.opacity(0.04))
+                                            .cornerRadius(6)
+                                        }
+                                    }
+                                }
+                                .frame(maxHeight: 180)
+                            }
+
+                            // Anti-Ban & Playback Controls
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("PLAYBACK & ANTI-DETECTION")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(MacrodroidTheme.textMuted)
+
+                                Toggle("Enable Human Variance Jitter (±2px anti-ban)", isOn: $enableJitter)
+                                    .toggleStyle(.checkbox)
+                                    .font(.system(size: 12))
+
+                                HStack {
+                                    Text("Speed: \(String(format: "%.1fx", speedMultiplier))")
+                                        .font(.system(size: 12))
+                                        .frame(width: 90, alignment: .leading)
+                                    Slider(value: $speedMultiplier, in: 0.5...4.0, step: 0.25)
+                                }
+
+                                HStack {
+                                    Text("Repeat:")
+                                        .font(.system(size: 12))
+                                        .frame(width: 90, alignment: .leading)
+                                    Stepper("\(repeatCount == 0 ? "Infinite Loop" : "\(repeatCount) times")", value: $repeatCount, in: 0...100)
+                                }
+                            }
+
+                            Button {
+                                var updated = macro
+                                updated.enableHumanJitter = enableJitter
+                                updated.speedMultiplier = speedMultiplier
+                                updated.repeatCount = repeatCount
+                                MacroStore.saveMacro(updated)
+                                reloadMacros()
+                                toastMessage = "Macro saved successfully!"
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                    toastMessage = nil
+                                }
+                            } label: {
+                                HStack {
+                                    Spacer()
+                                    Text(toastMessage ?? "Save Changes")
+                                        .font(.system(size: 12, weight: .bold))
+                                    Spacer()
+                                }
+                                .padding(.vertical, 9)
+                                .background(toastMessage != nil ? Color.green : MacrodroidTheme.accent)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(18)
+                        .background(MacrodroidTheme.cardBackground)
+                        .cornerRadius(12)
+                    } else {
+                        VStack(spacing: 8) {
+                            Image(systemName: "cursorarrow.click.2")
+                                .font(.system(size: 28))
+                                .foregroundColor(MacrodroidTheme.textMuted)
+                            Text("Select a macro on the left to edit")
+                                .font(.system(size: 12))
+                                .foregroundColor(MacrodroidTheme.textMuted)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(40)
+                        .background(MacrodroidTheme.cardBackground)
+                        .cornerRadius(12)
+                    }
+                }
+                .padding(.horizontal, 28)
+                .padding(.bottom, 36)
+            }
+        }
+        .onAppear {
+            reloadMacros()
+        }
+    }
+
+    private func reloadMacros() {
+        savedMacros = MacroStore.listMacros(for: selectedPackage)
+        if selectedMacro == nil, let first = savedMacros.first {
+            selectedMacro = first
+            repeatCount = first.repeatCount
+            speedMultiplier = first.speedMultiplier
+            enableJitter = first.enableHumanJitter
+        }
+    }
+
+    private func actionBadge(_ action: MacroAction) -> some View {
+        let (name, color): (String, Color) = {
+            switch action.type {
+            case .touchDown: return ("Touch Down", MacrodroidTheme.accentGreen)
+            case .touchMove: return ("Move", MacrodroidTheme.accentBlue)
+            case .touchUp: return ("Touch Up", MacrodroidTheme.textMuted)
+            case .keyPress: return ("Key (\(action.keyString ?? "?"))", MacrodroidTheme.accentPurple)
+            case .delay: return ("Delay", MacrodroidTheme.accentOrange)
+            }
+        }()
+        return Text(name)
+            .font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.2))
+            .foregroundColor(color)
+            .cornerRadius(4)
+    }
+}
+
+// MARK: - Macrodroid Multi-Instance View
+
+struct MacrodroidMultiInstanceView: View {
+    @ObservedObject var viewModel: LauncherViewModel
+    @State private var isInputSyncEnabled: Bool = false
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "square.on.square.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(MacrodroidTheme.accent)
+                        Text("Multi-Instance & Window Manager")
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+
+                    Text("Coordinate multiple Android instances simultaneously, organize layouts, and synchronize input.")
+                        .font(.system(size: 13))
+                        .foregroundColor(MacrodroidTheme.textMuted)
+                }
+                .padding(.horizontal, 28)
+                .padding(.top, 24)
+
+                // Layout Presets Card
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("WINDOW TILING & LAYOUTS")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(MacrodroidTheme.textMuted)
+
+                    HStack(spacing: 14) {
+                        layoutButton(title: "Side by Side", icon: "rectangle.split.2x1.fill", description: "Split screen 50/50") {
+                            tileWindowsSideBySide()
+                        }
+
+                        layoutButton(title: "2x2 Grid", icon: "rectangle.split.2x2.fill", description: "Tile 4 quadrants") {
+                            tileWindowsGrid()
+                        }
+
+                        layoutButton(title: "Cascade", icon: "square.stack.fill", description: "Diagonal stack") {
+                            cascadeWindows()
+                        }
+                    }
+                }
+                .padding(18)
+                .background(MacrodroidTheme.cardBackground)
+                .cornerRadius(12)
+                .padding(.horizontal, 28)
+
+                // Input Synchronizer Card
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("INPUT SYNCHRONIZER (SYNC CLICK & KEYS)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(MacrodroidTheme.textMuted)
+                            Text("Broadcast touch taps and keystrokes from Master window across all running instances.")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $isInputSyncEnabled)
+                            .toggleStyle(.switch)
+                    }
+
+                    if isInputSyncEnabled {
+                        HStack(spacing: 8) {
+                            Circle().fill(Color.green).frame(width: 8, height: 8)
+                            Text("Input synchronizer active: All secondary instances will receive synchronized input.")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(Color.green)
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+                .padding(18)
+                .background(MacrodroidTheme.cardBackground)
+                .cornerRadius(12)
+                .padding(.horizontal, 28)
+
+                // Instance Port Map Card
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("INSTANCE PORT MAP")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(MacrodroidTheme.textMuted)
+
+                    VStack(spacing: 8) {
+                        instanceRow(name: "Instance 1 (Master)", grpc: "5582", adb: "5038", status: viewModel.isEngineRunning ? "Running" : "Idle")
+                        instanceRow(name: "Instance 2", grpc: "5584", adb: "5040", status: "Standby")
+                        instanceRow(name: "Instance 3", grpc: "5586", adb: "5042", status: "Standby")
+                    }
+                }
+                .padding(18)
+                .background(MacrodroidTheme.cardBackground)
+                .cornerRadius(12)
+                .padding(.horizontal, 28)
+                .padding(.bottom, 36)
+            }
+        }
+    }
+
+    private func layoutButton(title: String, icon: String, description: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(.system(size: 16))
+                        .foregroundColor(MacrodroidTheme.accent)
+                    Text(title)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                Text(description)
+                    .font(.system(size: 11))
+                    .foregroundColor(MacrodroidTheme.textMuted)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func instanceRow(name: String, grpc: String, adb: String, status: String) -> some View {
+        HStack {
+            Text(name)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white)
+            Spacer()
+            Text("gRPC: \(grpc) · ADB: \(adb)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(MacrodroidTheme.textMuted)
+            Text(status)
+                .font(.system(size: 10, weight: .bold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(status == "Running" ? Color.green.opacity(0.2) : Color.gray.opacity(0.2))
+                .foregroundColor(status == "Running" ? Color.green : Color.gray)
+                .cornerRadius(4)
+        }
+        .padding(10)
+        .background(Color.white.opacity(0.03))
+        .cornerRadius(6)
+    }
+
+    private func tileWindowsSideBySide() {
+        let windows = NSApp.windows.filter { $0.isVisible && !$0.title.isEmpty && $0.title.contains("Macrodroid") }
+        guard let screen = NSScreen.main, windows.count >= 2 else { return }
+        let visibleFrame = screen.visibleFrame
+        let halfWidth = visibleFrame.width / 2
+        windows[0].setFrame(NSRect(x: visibleFrame.minX, y: visibleFrame.minY, width: halfWidth, height: visibleFrame.height), display: true, animate: true)
+        windows[1].setFrame(NSRect(x: visibleFrame.minX + halfWidth, y: visibleFrame.minY, width: halfWidth, height: visibleFrame.height), display: true, animate: true)
+    }
+
+    private func tileWindowsGrid() {
+        let windows = NSApp.windows.filter { $0.isVisible && !$0.title.isEmpty && $0.title.contains("Macrodroid") }
+        guard let screen = NSScreen.main, !windows.isEmpty else { return }
+        let visibleFrame = screen.visibleFrame
+        let halfWidth = visibleFrame.width / 2
+        let halfHeight = visibleFrame.height / 2
+        for (i, win) in windows.prefix(4).enumerated() {
+            let col = CGFloat(i % 2)
+            let row = CGFloat(1 - (i / 2))
+            let x = visibleFrame.minX + col * halfWidth
+            let y = visibleFrame.minY + row * halfHeight
+            win.setFrame(NSRect(x: x, y: y, width: halfWidth, height: halfHeight), display: true, animate: true)
+        }
+    }
+
+    private func cascadeWindows() {
+        let windows = NSApp.windows.filter { $0.isVisible && !$0.title.isEmpty && $0.title.contains("Macrodroid") }
+        guard let screen = NSScreen.main, !windows.isEmpty else { return }
+        var origin = NSPoint(x: screen.visibleFrame.minX + 40, y: screen.visibleFrame.maxY - 500)
+        for win in windows {
+            win.setFrameOrigin(origin)
+            origin.x += 35
+            origin.y -= 35
+        }
     }
 }
