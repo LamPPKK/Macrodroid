@@ -230,8 +230,10 @@ public enum AppProfileStore {
 
     public static func loadProfile(for package: String, appName: String = "") -> AppProfile {
         let url = profileURL(for: package)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
         if let data = try? Data(contentsOf: url),
-           let profile = try? JSONDecoder().decode(AppProfile.self, from: data) {
+           let profile = try? decoder.decode(AppProfile.self, from: data) {
             return profile
         }
         return AppProfile.defaultProfile(for: package, appName: appName)
@@ -241,6 +243,7 @@ public enum AppProfileStore {
         let url = profileURL(for: profile.packageName)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
         if let data = try? encoder.encode(profile) {
             try? data.write(to: url, options: .atomic)
         }
