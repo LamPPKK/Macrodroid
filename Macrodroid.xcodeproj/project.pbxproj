@@ -248,6 +248,7 @@
 			productName = MacrodroidTests;
 			productReference = 200000000000000000000013 /* MacrodroidTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+			packageProductDependencies = (D00000000000000000000001 /* GRPCCore */, D00000000000000000000002 /* GRPCNIOTransportHTTP2Posix */, D00000000000000000000003 /* GRPCProtobuf */, D00000000000000000000004 /* SwiftProtobuf */);
 		};
 /* End PBXNativeTarget section */
 
