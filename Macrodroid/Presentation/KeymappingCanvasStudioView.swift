@@ -154,7 +154,7 @@ final class KeyNodeView: NSView {
         loc.x -= dragOffset.x
         loc.y -= dragOffset.y
         // Clamp within canvas
-        loc.x = max(0, min(sv.bounds.width  - frame.width,  loc.x))
+        loc.x = max(0, min(sv.bounds.width - frame.width, loc.x))
         loc.y = max(0, min(sv.bounds.height - frame.height, loc.y))
         setFrameOrigin(loc)
         // Update normalized position
@@ -376,7 +376,7 @@ final class NodeInspectorPanel: NSView {
     }
 
     @objc private func keyFieldChanged() { onKeyLabelChanged?(keyField.stringValue) }
-    @objc private func deleteClicked()   { onDelete?() }
+    @objc private func deleteClicked() { onDelete?() }
 }
 
 // MARK: - CanvasGridView
@@ -636,7 +636,7 @@ final class KeymappingCanvasStudioView: NSView {
         backdropEffect.addSubview(inspectorPanel)
         NSLayoutConstraint.activate([
             inspectorPanel.trailingAnchor.constraint(equalTo: backdropEffect.trailingAnchor),
-            inspectorPanel.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 16),
+            inspectorPanel.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 16)
         ])
     }
 
@@ -692,7 +692,9 @@ final class KeymappingCanvasStudioView: NSView {
             ctx.duration = 0.18
             node.animator().alphaValue = 0
         }, completionHandler: {
-            node.removeFromSuperview()
+            MainActor.assumeIsolated {
+                node.removeFromSuperview()
+            }
         })
         nodes.removeAll { $0 === node }
         if selectedNode === node { selectedNode = nil }

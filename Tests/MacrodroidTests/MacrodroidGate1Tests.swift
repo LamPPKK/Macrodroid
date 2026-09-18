@@ -1984,8 +1984,9 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
             "isVietnameseIMEEnabled": false,
             "isKeymapEnabled": true
         }
-        """.data(using: .utf8)!
-        let legacyProfile = try? JSONDecoder().decode(AppProfile.self, from: legacyJSON)
+        """
+        let legacyData = Data(legacyJSON.utf8)
+        let legacyProfile = try? JSONDecoder().decode(AppProfile.self, from: legacyData)
         XCTAssertNotNil(legacyProfile)
         XCTAssertEqual(legacyProfile?.totalPlayTimeSeconds, 0)
         XCTAssertNil(legacyProfile?.lastPlayedDate)

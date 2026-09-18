@@ -12,22 +12,22 @@ struct InstanceInfo: Identifiable {
     var cpuPercent: Double  // 0…100
     var ramMB: Int
     var isRunning: Bool
-    var isMaster: Bool      // chỉ instance 0 là master
+    var isPrimary: Bool     // chỉ instance 0 là primary
 
     static func defaultInstances() -> [InstanceInfo] {
         [
-            InstanceInfo(id: 0, name: "Instance 1 (Master)", grpcPort: 5582, adbPort: 5038,
+            InstanceInfo(id: 0, name: "Instance 1 (Primary)", grpcPort: 5582, adbPort: 5038,
                          adbSerial: "emulator-5582", runningApp: nil,
-                         cpuPercent: 0, ramMB: 0, isRunning: false, isMaster: true),
+                         cpuPercent: 0, ramMB: 0, isRunning: false, isPrimary: true),
             InstanceInfo(id: 1, name: "Instance 2", grpcPort: 5584, adbPort: 5040,
                          adbSerial: "emulator-5584", runningApp: nil,
-                         cpuPercent: 0, ramMB: 0, isRunning: false, isMaster: false),
+                         cpuPercent: 0, ramMB: 0, isRunning: false, isPrimary: false),
             InstanceInfo(id: 2, name: "Instance 3", grpcPort: 5586, adbPort: 5042,
                          adbSerial: "emulator-5586", runningApp: nil,
-                         cpuPercent: 0, ramMB: 0, isRunning: false, isMaster: false),
+                         cpuPercent: 0, ramMB: 0, isRunning: false, isPrimary: false),
             InstanceInfo(id: 3, name: "Instance 4", grpcPort: 5588, adbPort: 5044,
                          adbSerial: "emulator-5588", runningApp: nil,
-                         cpuPercent: 0, ramMB: 0, isRunning: false, isMaster: false)
+                         cpuPercent: 0, ramMB: 0, isRunning: false, isPrimary: false)
         ]
     }
 }
@@ -38,15 +38,15 @@ struct InstanceInfo: Identifiable {
 final class InstanceCardView: NSView {
     var instance: InstanceInfo { didSet { refresh() } }
 
-    var onStart:  (() -> Void)?
-    var onStop:   (() -> Void)?
+    var onStart: (() -> Void)?
+    var onStop: (() -> Void)?
     var onSelect: (() -> Void)?
 
     private(set) var isSelectedCard = false
 
     // Sub-views
     private let background   = NSVisualEffectView()
-    private let masterBadge  = NSTextField(labelWithString: "MASTER")
+    private let primaryBadge = NSTextField(labelWithString: "PRIMARY")
     private let nameLbl      = NSTextField(labelWithString: "")
     private let statusDot    = NSView()
     private let appLbl       = NSTextField(labelWithString: "")
@@ -86,16 +86,16 @@ final class InstanceCardView: NSView {
             background.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
 
-        // Master badge
-        masterBadge.font = .systemFont(ofSize: 9, weight: .heavy)
-        masterBadge.textColor = .black
-        masterBadge.alignment = .center
-        masterBadge.wantsLayer = true
-        masterBadge.layer?.backgroundColor = NSColor(
+        // Primary badge
+        primaryBadge.font = .systemFont(ofSize: 9, weight: .heavy)
+        primaryBadge.textColor = .black
+        primaryBadge.alignment = .center
+        primaryBadge.wantsLayer = true
+        primaryBadge.layer?.backgroundColor = NSColor(
             calibratedRed: 0.0, green: 0.85, blue: 0.45, alpha: 1.0).cgColor
-        masterBadge.layer?.cornerRadius = 5
-        masterBadge.translatesAutoresizingMaskIntoConstraints = false
-        background.addSubview(masterBadge)
+        primaryBadge.layer?.cornerRadius = 5
+        primaryBadge.translatesAutoresizingMaskIntoConstraints = false
+        background.addSubview(primaryBadge)
 
         // Status dot
         statusDot.wantsLayer = true
@@ -158,10 +158,10 @@ final class InstanceCardView: NSView {
             widthAnchor.constraint(equalToConstant: 200),
             heightAnchor.constraint(equalToConstant: 150),
 
-            masterBadge.topAnchor.constraint(equalTo: background.topAnchor, constant: 10),
-            masterBadge.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -10),
-            masterBadge.widthAnchor.constraint(equalToConstant: 52),
-            masterBadge.heightAnchor.constraint(equalToConstant: 16),
+            primaryBadge.topAnchor.constraint(equalTo: background.topAnchor, constant: 10),
+            primaryBadge.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -10),
+            primaryBadge.widthAnchor.constraint(equalToConstant: 54),
+            primaryBadge.heightAnchor.constraint(equalToConstant: 16),
 
             statusDot.topAnchor.constraint(equalTo: background.topAnchor, constant: 14),
             statusDot.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 14),
@@ -170,7 +170,7 @@ final class InstanceCardView: NSView {
 
             nameLbl.leadingAnchor.constraint(equalTo: statusDot.trailingAnchor, constant: 8),
             nameLbl.centerYAnchor.constraint(equalTo: statusDot.centerYAnchor),
-            nameLbl.trailingAnchor.constraint(lessThanOrEqualTo: masterBadge.leadingAnchor, constant: -6),
+            nameLbl.trailingAnchor.constraint(lessThanOrEqualTo: primaryBadge.leadingAnchor, constant: -6),
 
             appLbl.topAnchor.constraint(equalTo: nameLbl.bottomAnchor, constant: 4),
             appLbl.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 14),
@@ -207,7 +207,7 @@ final class InstanceCardView: NSView {
         nameLbl.stringValue = instance.name
         appLbl.stringValue  = instance.runningApp.map { "▶ \($0)" } ?? "No app running"
         portLbl.stringValue = "gRPC:\(instance.grpcPort)  ADB:\(instance.adbSerial)"
-        masterBadge.isHidden = !instance.isMaster
+        primaryBadge.isHidden = !instance.isPrimary
 
         // Status dot color
         statusDot.layer?.backgroundColor = instance.isRunning
@@ -271,24 +271,24 @@ enum WindowArrangementPreset: String, CaseIterable {
 }
 
 // MARK: - MultiInstanceManagerView
-/// Panel quản lý đa máy ảo với instance cards, window arrangement presets, và Input Sync Master.
+/// Panel quản lý đa máy ảo với instance cards, window arrangement presets, và Input Sync.
 @MainActor
 final class MultiInstanceManagerView: NSView {
 
     // MARK: - Callbacks
-    var onStartInstance:  ((Int) -> Void)?
-    var onStopInstance:   ((Int) -> Void)?
-    var onStartAll:       (() -> Void)?
-    var onStopAll:        (() -> Void)?
-    var onArrange:        ((WindowArrangementPreset) -> Void)?
-    var onSyncMasterToggled: ((Bool) -> Void)?
-    var onClose:          (() -> Void)?
+    var onStartInstance: ((Int) -> Void)?
+    var onStopInstance: ((Int) -> Void)?
+    var onStartAll: (() -> Void)?
+    var onStopAll: (() -> Void)?
+    var onArrange: ((WindowArrangementPreset) -> Void)?
+    var onInputSyncToggled: ((Bool) -> Void)?
+    var onClose: (() -> Void)?
 
     // MARK: - State
     private(set) var instances: [InstanceInfo] = InstanceInfo.defaultInstances()
     private var selectedIndex: Int = 0
-    private var isSyncMasterEnabled = false
-    nonisolated(unsafe) private var refreshTimer: Timer?
+    private var isInputSyncEnabled = false
+    private var refreshTask: Task<Void, Never>?
 
     // MARK: - Sub-views
     private let backdropEffect   = NSVisualEffectView()
@@ -297,9 +297,9 @@ final class MultiInstanceManagerView: NSView {
     private let startAllBtn      = NSButton()
     private let stopAllBtn       = NSButton()
     private let closeBtn         = NSButton()
-    private let syncMasterToggle = NSButton()
+    private let inputSyncToggle  = NSButton()
     private let syncStatusLabel  = NSTextField(labelWithString: "Input Sync: OFF")
-    private var cardViews:        [InstanceCardView] = []
+    private var cardViews: [InstanceCardView] = []
     private let cardStack        = NSView()
     private let arrangeSection   = NSView()
     private let infoPanel        = NSVisualEffectView()
@@ -361,7 +361,7 @@ final class MultiInstanceManagerView: NSView {
         configBtn(stopAllBtn, title: "⏹ Stop All", action: #selector(stopAllClicked))
         stopAllBtn.contentTintColor = NSColor.systemRed.withAlphaComponent(0.90)
 
-        configBtn(syncMasterToggle, title: "🔗 Input Sync: OFF", action: #selector(syncToggled))
+        configBtn(inputSyncToggle, title: "🔗 Input Sync: OFF", action: #selector(syncToggled))
 
         syncStatusLabel.font = .systemFont(ofSize: 10.5, weight: .medium)
         syncStatusLabel.textColor = NSColor.white.withAlphaComponent(0.45)
@@ -394,12 +394,12 @@ final class MultiInstanceManagerView: NSView {
             startAllBtn.widthAnchor.constraint(equalToConstant: 100),
             startAllBtn.heightAnchor.constraint(equalToConstant: 28),
 
-            syncMasterToggle.trailingAnchor.constraint(equalTo: startAllBtn.leadingAnchor, constant: -16),
-            syncMasterToggle.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor),
-            syncMasterToggle.widthAnchor.constraint(equalToConstant: 152),
-            syncMasterToggle.heightAnchor.constraint(equalToConstant: 28),
+            inputSyncToggle.trailingAnchor.constraint(equalTo: startAllBtn.leadingAnchor, constant: -16),
+            inputSyncToggle.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor),
+            inputSyncToggle.widthAnchor.constraint(equalToConstant: 152),
+            inputSyncToggle.heightAnchor.constraint(equalToConstant: 28),
 
-            syncStatusLabel.trailingAnchor.constraint(equalTo: syncMasterToggle.leadingAnchor, constant: -8),
+            syncStatusLabel.trailingAnchor.constraint(equalTo: inputSyncToggle.leadingAnchor, constant: -8),
             syncStatusLabel.centerYAnchor.constraint(equalTo: toolbar.centerYAnchor)
         ])
     }
@@ -412,7 +412,7 @@ final class MultiInstanceManagerView: NSView {
 
         NSLayoutConstraint.activate([
             cardStack.leadingAnchor.constraint(equalTo: backdropEffect.leadingAnchor, constant: 24),
-            cardStack.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 24),
+            cardStack.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 24)
         ])
 
         for (i, instance) in instances.enumerated() {
@@ -563,7 +563,7 @@ final class MultiInstanceManagerView: NSView {
         App:       \(inst.runningApp ?? "—")
         CPU:       \(inst.isRunning ? String(format: "%.0f%%", inst.cpuPercent) : "—")
         RAM:       \(inst.isRunning ? "\(inst.ramMB) MB" : "—")
-        Role:      \(inst.isMaster ? "Master (Input Source)" : "Slave (Sync Target)")
+        Role:      \(inst.isPrimary ? "Primary (Input Source)" : "Replica (Sync Target)")
         """
     }
 
@@ -585,7 +585,7 @@ final class MultiInstanceManagerView: NSView {
 
     // MARK: - Public API
     func updateInstance(_ info: InstanceInfo) {
-        guard info.id < instances.count else { return }
+        guard info.id >= 0, info.id < instances.count else { return }
         instances[info.id] = info
         cardViews[info.id].instance = info
         if info.id == selectedIndex { refreshInfoPanel() }
@@ -593,10 +593,13 @@ final class MultiInstanceManagerView: NSView {
 
     // MARK: - Refresh timer (simulated telemetry update cadence)
     private func startRefreshTimer() {
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+        refreshTask?.cancel()
+        refreshTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self else { break }
                 // In production: fetch real CPU/RAM via ADB or gRPC health probe
-                self?.cardViews.forEach { _ in } // placeholder — real data pumped via updateInstance(_:)
+                self.cardViews.forEach { _ in } // placeholder — real data pumped via updateInstance(_:)
             }
         }
     }
@@ -611,14 +614,14 @@ final class MultiInstanceManagerView: NSView {
         onStopAll?()
     }
     @objc private func syncToggled() {
-        isSyncMasterEnabled.toggle()
-        syncMasterToggle.title = isSyncMasterEnabled ? "🔗 Input Sync: ON" : "🔗 Input Sync: OFF"
-        syncMasterToggle.contentTintColor = isSyncMasterEnabled
+        isInputSyncEnabled.toggle()
+        inputSyncToggle.title = isInputSyncEnabled ? "🔗 Input Sync: ON" : "🔗 Input Sync: OFF"
+        inputSyncToggle.contentTintColor = isInputSyncEnabled
             ? NSColor(calibratedRed: 0.0, green: 0.9, blue: 0.48, alpha: 1.0) : .white
-        syncStatusLabel.stringValue = isSyncMasterEnabled
+        syncStatusLabel.stringValue = isInputSyncEnabled
             ? "Broadcasting to \(instances.filter(\.isRunning).count - 1) targets"
             : "Input Sync: OFF"
-        onSyncMasterToggled?(isSyncMasterEnabled)
+        onInputSyncToggled?(isInputSyncEnabled)
     }
     @objc private func arrangeClicked(_ sender: NSButton) {
         guard let preset = WindowArrangementPreset(rawValue: sender.identifier?.rawValue ?? "") else { return }
@@ -626,5 +629,5 @@ final class MultiInstanceManagerView: NSView {
     }
     @objc private func closeTapped() { onClose?() }
 
-    deinit { refreshTimer?.invalidate() }
+    deinit { refreshTask?.cancel() }
 }

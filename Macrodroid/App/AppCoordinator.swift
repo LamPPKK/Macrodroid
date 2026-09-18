@@ -248,7 +248,7 @@ final class AppCoordinator: NSObject, NSApplicationDelegate, UNUserNotificationC
             controller.onOpenSettingsRequested = { [weak self] in
                 self?.showSettings(nil)
             }
-            controller.onAudioMuteToggleRequested = { [weak self] isMuted in
+            controller.onAudioMuteToggleRequested = { [weak self] _ in
                 self?.runtimeController?.sendAndroidKeycode(164)
             }
 

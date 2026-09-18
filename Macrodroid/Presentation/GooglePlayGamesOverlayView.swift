@@ -676,14 +676,13 @@ final class GooglePlayGamesOverlayView: NSVisualEffectView {
     }
 }
 
-
 // MARK: - MacrodroidAchievementToastView
 /// Glassmorphic achievement banner. Slides in from top-right, auto-dismisses after 5s.
 @MainActor
 final class MacrodroidAchievementToastView: NSView {
 
     private let displayDuration: TimeInterval = 5.0
-    nonisolated(unsafe) private var dismissTimer: Timer?
+    private var dismissTask: Task<Void, Never>?
 
     private let background = NSVisualEffectView()
     private let iconLabel   = NSTextField(labelWithString: "🏆")
@@ -789,18 +788,26 @@ final class MacrodroidAchievementToastView: NSView {
             self.progressWidthConstraint.animator().constant = 0
         }
 
-        dismissTimer?.invalidate()
-        dismissTimer = Timer.scheduledTimer(withTimeInterval: displayDuration, repeats: false) { [weak self] _ in
-            Task { @MainActor in self?.dismiss() }
+        let duration = displayDuration
+        dismissTask?.cancel()
+        dismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled, let self else { return }
+            self.dismiss()
         }
     }
 
     func dismiss() {
+        dismissTask?.cancel()
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = 0.25
             self.animator().alphaValue = 0
-        }, completionHandler: { self.removeFromSuperview() })
+        }, completionHandler: {
+            MainActor.assumeIsolated {
+                self.removeFromSuperview()
+            }
+        })
     }
 
-    deinit { dismissTimer?.invalidate() }
+    deinit { dismissTask?.cancel() }
 }

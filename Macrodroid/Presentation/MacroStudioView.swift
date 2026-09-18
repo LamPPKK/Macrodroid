@@ -135,15 +135,15 @@ final class MacroStudioView: NSView {
 
     // MARK: - Callbacks
     var onStartRecording: (() -> Void)?
-    var onStopRecording:  (() -> Void)?
-    var onPlayMacro:      ((MacroSequence) -> Void)?
-    var onSaveMacro:      ((MacroSequence) -> Void)?
-    var onClose:          (() -> Void)?
+    var onStopRecording: (() -> Void)?
+    var onPlayMacro: ((MacroSequence) -> Void)?
+    var onSaveMacro: ((MacroSequence) -> Void)?
+    var onClose: (() -> Void)?
 
     // MARK: - State
     private var sequence = MacroSequence(name: "New Macro", packageName: "", actions: [])
     private var isRecording = false
-    nonisolated(unsafe) private var recordTimer: Timer?
+    private var recordTask: Task<Void, Never>?
     private var recordElapsed: Int = 0
 
     // MARK: - UI
@@ -163,7 +163,7 @@ final class MacroStudioView: NSView {
     // Config controls
     private let repeatField      = NSTextField()
     private let speedSegment     = NSSegmentedControl(
-        labels: ["0.5×","1×","2×","4×"], trackingMode: .selectOne, target: nil, action: nil)
+        labels: ["0.5×", "1×", "2×", "4×"], trackingMode: .selectOne, target: nil, action: nil)
     private let jitterToggle     = NSButton()
     private let jitterSlider     = NSSlider(value: 2.0, minValue: 0, maxValue: 5.0, target: nil, action: nil)
     private let jitterValueLabel = NSTextField(labelWithString: "±2px")
@@ -504,20 +504,23 @@ final class MacroStudioView: NSView {
     // MARK: - Recording timer
     private func startRecordTimer() {
         recordElapsed = 0
-        recordTimer = Timer.scheduledTimer(withTimeInterval: 0.01, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.recordElapsed += 10
-                let ms = (self?.recordElapsed ?? 0)
+        recordTask?.cancel()
+        recordTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(10))
+                guard let self else { break }
+                self.recordElapsed += 10
+                let ms = self.recordElapsed
                 let min = ms / 60000
                 let sec = (ms % 60000) / 1000
                 let centisec = (ms % 1000) / 10
-                self?.timerLabel.stringValue = String(format: "%02d:%02d.%03d", min, sec, centisec)
+                self.timerLabel.stringValue = String(format: "%02d:%02d.%03d", min, sec, centisec)
             }
         }
     }
     private func stopRecordTimer() {
-        recordTimer?.invalidate()
-        recordTimer = nil
+        recordTask?.cancel()
+        recordTask = nil
     }
 
     // MARK: - Actions
@@ -535,8 +538,8 @@ final class MacroStudioView: NSView {
             onStopRecording?()
         }
     }
-    @objc private func playTapped()  { onPlayMacro?(sequence) }
-    @objc private func saveTapped()  {
+    @objc private func playTapped() { onPlayMacro?(sequence) }
+    @objc private func saveTapped() {
         sequence.name = macroNameField.stringValue.isEmpty ? "Macro" : macroNameField.stringValue
         sequence.repeatCount = Int(repeatField.stringValue) ?? 1
         onSaveMacro?(sequence)
@@ -549,11 +552,11 @@ final class MacroStudioView: NSView {
         let speeds: [Double] = [0.5, 1.0, 2.0, 4.0]
         sequence.speedMultiplier = speeds[speedSegment.selectedSegment]
     }
-    @objc private func jitterToggled()  { sequence.enableHumanJitter = jitterToggle.state == .on }
+    @objc private func jitterToggled() { sequence.enableHumanJitter = jitterToggle.state == .on }
     @objc private func jitterSliderChanged() {
         let v = jitterSlider.doubleValue
         jitterValueLabel.stringValue = String(format: "±%.0fpx", v)
     }
 
-    deinit { recordTimer?.invalidate() }
+    deinit { recordTask?.cancel() }
 }

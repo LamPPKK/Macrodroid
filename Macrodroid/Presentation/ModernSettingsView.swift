@@ -313,11 +313,11 @@ final class ModernSettingsView: NSView {
     }
 
     private func buildDisplayContent() {
-        let resSegment = NSSegmentedControl(labels: ["720p","1080p","1440p","4K"], trackingMode: .selectOne, target: nil, action: nil)
+        let resSegment = NSSegmentedControl(labels: ["720p", "1080p", "1440p", "4K"], trackingMode: .selectOne, target: nil, action: nil)
         resSegment.selectedSegment = 1
         resSegment.translatesAutoresizingMaskIntoConstraints = false
 
-        let fpsSegment = NSSegmentedControl(labels: ["30 Hz","60 Hz","90 Hz","120 Hz","144 Hz"], trackingMode: .selectOne, target: nil, action: nil)
+        let fpsSegment = NSSegmentedControl(labels: ["30 Hz", "60 Hz", "90 Hz", "120 Hz", "144 Hz"], trackingMode: .selectOne, target: nil, action: nil)
         fpsSegment.selectedSegment = 1
         fpsSegment.translatesAutoresizingMaskIntoConstraints = false
 
@@ -352,11 +352,11 @@ final class ModernSettingsView: NSView {
         cpuSlider.allowsTickMarkValuesOnly = true
         cpuSlider.translatesAutoresizingMaskIntoConstraints = false
 
-        let ramSegment = NSSegmentedControl(labels: ["2 GB","4 GB","6 GB","8 GB","12 GB"], trackingMode: .selectOne, target: nil, action: nil)
+        let ramSegment = NSSegmentedControl(labels: ["2 GB", "4 GB", "6 GB", "8 GB", "12 GB"], trackingMode: .selectOne, target: nil, action: nil)
         ramSegment.selectedSegment = 2
         ramSegment.translatesAutoresizingMaskIntoConstraints = false
 
-        let launchSegment = NSSegmentedControl(labels: ["Always BG","On-Demand"], trackingMode: .selectOne, target: nil, action: nil)
+        let launchSegment = NSSegmentedControl(labels: ["Always BG", "On-Demand"], trackingMode: .selectOne, target: nil, action: nil)
         launchSegment.selectedSegment = 1
         launchSegment.translatesAutoresizingMaskIntoConstraints = false
 
@@ -411,7 +411,7 @@ final class ModernSettingsView: NSView {
         micToggle.state = .off
         micToggle.translatesAutoresizingMaskIntoConstraints = false
 
-        let bufferSegment = NSSegmentedControl(labels: ["Low","Med","High"], trackingMode: .selectOne, target: nil, action: nil)
+        let bufferSegment = NSSegmentedControl(labels: ["Low", "Med", "High"], trackingMode: .selectOne, target: nil, action: nil)
         bufferSegment.selectedSegment = 1
         bufferSegment.translatesAutoresizingMaskIntoConstraints = false
 

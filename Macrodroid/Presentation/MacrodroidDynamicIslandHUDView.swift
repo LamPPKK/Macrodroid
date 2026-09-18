@@ -20,8 +20,8 @@ final class MacrodroidDynamicIslandHUDView: NSView {
     private var isMuted: Bool = false
     private var isMouseLocked: Bool = false
     private var isExpanded: Bool = false
-    nonisolated(unsafe) private var hideTimer: Timer?
-    nonisolated(unsafe) private var sessionTimer: Timer?
+    private var hideTask: Task<Void, Never>?
+    private var sessionTask: Task<Void, Never>?
 
     // MARK: - Layout constants
     private let collapsedHeight: CGFloat = 32
@@ -195,9 +195,11 @@ final class MacrodroidDynamicIslandHUDView: NSView {
 
     // MARK: - Session Timer
     private func startSessionTimer() {
-        sessionTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in
+        sessionTask?.cancel()
+        sessionTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self else { break }
                 self.sessionSeconds += 1
                 self.refreshSessionLabel()
             }
@@ -283,15 +285,16 @@ final class MacrodroidDynamicIslandHUDView: NSView {
         if expand {
             scheduleAutoHide()
         } else {
-            hideTimer?.invalidate()
+            hideTask?.cancel()
         }
     }
 
     private func scheduleAutoHide() {
-        hideTimer?.invalidate()
-        hideTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { [weak self] _ in
-            guard let self, self.isExpanded else { return }
-            Task { @MainActor in self.setExpanded(false, animated: true) }
+        hideTask?.cancel()
+        hideTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled, let self, self.isExpanded else { return }
+            self.setExpanded(false, animated: true)
         }
     }
 
@@ -314,8 +317,7 @@ final class MacrodroidDynamicIslandHUDView: NSView {
     @objc private func overlayTapped() { onOverlayRequested?(); setExpanded(false, animated: true) }
 
     deinit {
-        sessionTimer?.invalidate()
-        hideTimer?.invalidate()
+        sessionTask?.cancel()
+        hideTask?.cancel()
     }
 }
-
