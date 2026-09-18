@@ -1440,13 +1440,16 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
 
     func testCommunityHubCuratedPresetsIntegrity() {
         let presets = CommunityHub.curatedPresets
-        XCTAssertTrue(presets.count >= 5, "Must contain at least 5 curated game presets")
+        XCTAssertTrue(presets.count >= 8, "Must contain at least 8 curated game presets")
 
         let packages = presets.map(\.packageName)
         XCTAssertTrue(packages.contains("com.riotgames.league.teamfighttactics"))
+        XCTAssertTrue(packages.contains("com.riotgames.league.teamfighttacticsvn"))
         XCTAssertTrue(packages.contains("com.riotgames.league.wildrift"))
         XCTAssertTrue(packages.contains("com.miHoYo.GenshinImpact"))
         XCTAssertTrue(packages.contains("com.tencent.ig"))
+        XCTAssertTrue(packages.contains("com.dts.freefireth"))
+        XCTAssertTrue(packages.contains("com.mobile.legends"))
         XCTAssertTrue(packages.contains("com.zhiliaoapp.musically"))
 
         for preset in presets {
@@ -1683,11 +1686,11 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
     }
 
     /// CommunityHub.preset(for:) must correctly resolve regional variant package names
-    /// to their corresponding curated presets for TFT, Wild Rift, Genshin, PUBG, and TikTok.
+    /// to their corresponding curated presets for TFT, TFT VN, Wild Rift, Genshin, PUBG, Free Fire, MLBB, and TikTok.
     func testCommunityHubRegionalVariantResolution() {
         let tftVN = CommunityHub.preset(for: "com.riotgames.league.teamfighttacticsvn")
         XCTAssertNotNil(tftVN)
-        XCTAssertEqual(tftVN?.id, "tft_pro")
+        XCTAssertEqual(tftVN?.id, "tft_vn_pro")
 
         let genshinGlobal = CommunityHub.preset(for: "com.cognosphere.genshinimpact")
         XCTAssertNotNil(genshinGlobal)
@@ -1704,6 +1707,14 @@ NotificationRecord(0|com.riotgames.league.teamfighttactics|2002|null|10200: pkg=
         let wildRiftVN = CommunityHub.preset(for: "com.riotgames.league.wildriftvn")
         XCTAssertNotNil(wildRiftVN)
         XCTAssertEqual(wildRiftVN?.id, "wildrift_moba")
+
+        let freeFire = CommunityHub.preset(for: "com.dts.freefireth")
+        XCTAssertNotNil(freeFire)
+        XCTAssertEqual(freeFire?.id, "freefire_pro")
+
+        let mlbb = CommunityHub.preset(for: "com.mobile.legends")
+        XCTAssertNotNil(mlbb)
+        XCTAssertEqual(mlbb?.id, "mlbb_moba")
     }
 
     /// KeymapProfileStore must automatically fall back to CommunityHub preset

@@ -3804,9 +3804,12 @@ struct MacrodroidMacroStudioView: View {
 
                     Picker("", selection: $selectedPackage) {
                         Text("Teamfight Tactics (TFT)").tag("com.riotgames.league.teamfighttactics")
+                        Text("Đấu Trường Chân Lý (VN)").tag("com.riotgames.league.teamfighttacticsvn")
                         Text("Wild Rift").tag("com.riotgames.league.wildrift")
                         Text("Genshin Impact").tag("com.miHoYo.GenshinImpact")
                         Text("PUBG Mobile").tag("com.tencent.ig")
+                        Text("Free Fire").tag("com.dts.freefireth")
+                        Text("Mobile Legends").tag("com.mobile.legends")
                     }
                     .pickerStyle(.menu)
                     .frame(width: 240)

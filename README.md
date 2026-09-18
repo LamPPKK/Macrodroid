@@ -362,6 +362,7 @@ Thay thế giao tiếp dòng lệnh ADB truyền thống bằng một tiến tr�
 | Tựa Game | Package ID | Định Dạng Chuẩn | Cấu Hình Nút Bấm & Chế Độ | Tần Số Quét |
 |---|---|---|---|:---:|
 | **Teamfight Tactics (TFT)** | `com.riotgames.league.teamfighttactics` | Landscape (16:9) | Chạm cảm ứng đa điểm mượt, phím tắt 1–5 mua tướng, D reroll, F lên cấp | **120 FPS** |
+| **Đấu Trường Chân Lý (TFT VN)** | `com.riotgames.league.teamfighttacticsvn` | Landscape (16:9) | Phiên bản VNG: Phím tắt 1–5 mua tướng, D reroll, F lên cấp, tối ưu hoá Unreal Engine | **120 FPS** |
 | **League of Legends: Wild Rift** | `com.riotgames.league.wildrift` | Landscape (16:9) | MOBA Smart Cast: Chiêu Q/W/E/R theo trỏ chuột, D/F phép bổ trợ, Space đánh | **120 FPS** |
 | **Free Fire / Free Fire MAX** | `com.dts.freefireth` | Landscape (16:9) | FPS Shooting: WASD di chuyển, Chuột Trái bắn, Chuột Phải ngắm, F10 khoá tâm | **90 FPS** |
 | **PUBG Mobile** | `com.tencent.ig` / `com.vng.pubgmobile` | Landscape (16:9) | Battle Royale: WASD di chuyển, F10 Aim Lock, R nạp đạn, C ngồi, Z nằm, Shift chạy | **90 FPS** |

@@ -43,9 +43,12 @@ public struct CommunityGamePreset: Sendable, Identifiable {
 public enum CommunityHub {
     public static let curatedPresets: [CommunityGamePreset] = [
         tftPreset,
+        tftVNPreset,
         wildRiftPreset,
         genshinPreset,
         pubgPreset,
+        freeFirePreset,
+        mobileLegendsPreset,
         tiktokPreset
     ]
 
@@ -76,6 +79,38 @@ public enum CommunityHub {
             genre: "Auto-Battler",
             recommendedResolution: .p1080,
             recommendedFPS: .fps60,
+            recommendedOrientation: .landscape,
+            keymapProfile: profile
+        )
+    }
+
+    public static var tftVNPreset: CommunityGamePreset {
+        let pkg = "com.riotgames.league.teamfighttacticsvn"
+        let buttons = [
+            KeymapButton(key: "1", keyCode: 18, normalizedX: 0.28, normalizedY: 0.90, label: "Slot 1"),
+            KeymapButton(key: "2", keyCode: 19, normalizedX: 0.40, normalizedY: 0.90, label: "Slot 2"),
+            KeymapButton(key: "3", keyCode: 20, normalizedX: 0.52, normalizedY: 0.90, label: "Slot 3"),
+            KeymapButton(key: "4", keyCode: 21, normalizedX: 0.64, normalizedY: 0.90, label: "Slot 4"),
+            KeymapButton(key: "5", keyCode: 23, normalizedX: 0.76, normalizedY: 0.90, label: "Slot 5"),
+            KeymapButton(key: "D", keyCode: 2, normalizedX: 0.12, normalizedY: 0.85, label: "Reroll"),
+            KeymapButton(key: "F", keyCode: 3, normalizedX: 0.12, normalizedY: 0.72, label: "Level Up"),
+            KeymapButton(key: "E", keyCode: 14, normalizedX: 0.88, normalizedY: 0.85, label: "Sell")
+        ]
+        let profile = KeymapProfile(
+            packageName: pkg,
+            appName: "Đấu Trường Chân Lý",
+            buttons: buttons,
+            dpad: nil,
+            mouseAim: nil,
+            overlayOpacity: 0.75
+        )
+        return CommunityGamePreset(
+            id: "tft_vn_pro",
+            packageName: pkg,
+            title: "Đấu Trường Chân Lý (TFT VN)",
+            genre: "Auto-Battler",
+            recommendedResolution: .p1080,
+            recommendedFPS: .fps120,
             recommendedOrientation: .landscape,
             keymapProfile: profile
         )
@@ -199,12 +234,75 @@ public enum CommunityHub {
         )
     }
 
+    public static var freeFirePreset: CommunityGamePreset {
+        let pkg = "com.dts.freefireth"
+        let buttons = [
+            KeymapButton(key: "SPACE", keyCode: 49, normalizedX: 0.92, normalizedY: 0.80, label: "Jump"),
+            KeymapButton(key: "C", keyCode: 8, normalizedX: 0.84, normalizedY: 0.88, label: "Crouch"),
+            KeymapButton(key: "Z", keyCode: 6, normalizedX: 0.92, normalizedY: 0.92, label: "Prone"),
+            KeymapButton(key: "R", keyCode: 15, normalizedX: 0.82, normalizedY: 0.70, label: "Reload"),
+            KeymapButton(key: "F", keyCode: 3, normalizedX: 0.75, normalizedY: 0.55, label: "Loot / Use"),
+            KeymapButton(key: "SHIFT", keyCode: 56, normalizedX: 0.18, normalizedY: 0.55, label: "Sprint")
+        ]
+        let profile = KeymapProfile(
+            packageName: pkg,
+            appName: "Free Fire",
+            buttons: buttons,
+            dpad: KeymapDPad(normalizedCenterX: 0.18, normalizedCenterY: 0.72, radius: 65.0),
+            mouseAim: KeymapMouseAim(toggleKeyCode: 58, sensitivity: 1.4),
+            overlayOpacity: 0.65
+        )
+        return CommunityGamePreset(
+            id: "freefire_pro",
+            packageName: pkg,
+            title: "Free Fire / Free Fire MAX",
+            genre: "Battle Royale",
+            recommendedResolution: .p1080,
+            recommendedFPS: .fps90,
+            recommendedOrientation: .landscape,
+            keymapProfile: profile
+        )
+    }
+
+    public static var mobileLegendsPreset: CommunityGamePreset {
+        let pkg = "com.mobile.legends"
+        let buttons = [
+            KeymapButton(key: "Q", keyCode: 12, normalizedX: 0.76, normalizedY: 0.84, label: "Skill 1"),
+            KeymapButton(key: "W", keyCode: 13, normalizedX: 0.82, normalizedY: 0.70, label: "Skill 2"),
+            KeymapButton(key: "E", keyCode: 14, normalizedX: 0.88, normalizedY: 0.58, label: "Skill 3"),
+            KeymapButton(key: "SPACE", keyCode: 49, normalizedX: 0.90, normalizedY: 0.85, label: "Basic Attack"),
+            KeymapButton(key: "D", keyCode: 2, normalizedX: 0.70, normalizedY: 0.72, label: "Regen"),
+            KeymapButton(key: "F", keyCode: 3, normalizedX: 0.66, normalizedY: 0.84, label: "Battle Spell"),
+            KeymapButton(key: "B", keyCode: 11, normalizedX: 0.56, normalizedY: 0.92, label: "Recall")
+        ]
+        let profile = KeymapProfile(
+            packageName: pkg,
+            appName: "Mobile Legends: Bang Bang",
+            buttons: buttons,
+            dpad: KeymapDPad(normalizedCenterX: 0.18, normalizedCenterY: 0.75, radius: 65.0),
+            mouseAim: nil,
+            overlayOpacity: 0.70
+        )
+        return CommunityGamePreset(
+            id: "mlbb_moba",
+            packageName: pkg,
+            title: "Mobile Legends: Bang Bang",
+            genre: "MOBA",
+            recommendedResolution: .p1080,
+            recommendedFPS: .fps120,
+            recommendedOrientation: .landscape,
+            keymapProfile: profile
+        )
+    }
+
     public static func preset(for package: String) -> CommunityGamePreset? {
         if let direct = curatedPresets.first(where: { $0.packageName == package }) {
             return direct
         }
         let lower = package.lowercased()
-        if lower.contains("teamfighttactics") || lower.contains("tft") {
+        if lower.contains("teamfighttacticsvn") {
+            return tftVNPreset
+        } else if lower.contains("teamfighttactics") || lower.contains("tft") {
             return tftPreset
         } else if lower.contains("wildrift") {
             return wildRiftPreset
@@ -212,6 +310,10 @@ public enum CommunityHub {
             return genshinPreset
         } else if lower.contains("pubg") || lower.contains("tencent.ig") {
             return pubgPreset
+        } else if lower.contains("freefire") || lower.contains("dts.freefire") {
+            return freeFirePreset
+        } else if lower.contains("mobile.legends") || lower.contains("mlbb") {
+            return mobileLegendsPreset
         } else if lower.contains("tiktok") || lower.contains("musically") || lower.contains("trill") {
             return tiktokPreset
         }
